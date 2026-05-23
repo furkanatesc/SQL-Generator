@@ -4,7 +4,7 @@ import re
 import logging
 import math
 from typing import Dict, Any, List, Set, Tuple, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from app.schema_manager import SchemaManager
 from app.synonym_repository import SQLiteSynonymRepository, SynonymRule
 from app.schema_lexicon import SchemaLexiconBuilder
@@ -12,21 +12,62 @@ from app.nlp.text_normalizer import TextNormalizer
 
 logger = logging.getLogger("schema_pruner")
 
+SOURCE_CAPS = {
+    "exact_table_match": 1.00,
+    "exact_table_qualifier": 1.00,
+    "synonym_table_match": 0.90,
+    "subset_table_match": 0.90,
+    "schema_lexicon": 0.85,
+    "value_index": 0.90,
+    "rag": 0.65,
+    "exact_column_match": 0.60,
+    "keyword_table_match": 0.50,
+    "keyword_column_match": 0.30,
+}
+
 @dataclass
-class Candidate:
-    table: str
-    score: float
+class CandidateSignal:
     source: str
+    score: float
     reason: str
     trace_data: Dict[str, Any] = None
+    token: str = None
 
-    def __hash__(self):
-        return hash(self.table)
+@dataclass
+class CandidateAggregate:
+    table: str
+    signals: List[CandidateSignal] = field(default_factory=list)
     
-    def __eq__(self, other):
-        if not isinstance(other, Candidate):
-            return False
-        return self.table == other.table
+    @property
+    def score(self) -> float:
+        by_source = {}
+        for s in self.signals:
+            by_source.setdefault(s.source, 0.0)
+            by_source[s.source] = max(by_source[s.source], s.score)
+            
+        total = 0.0
+        for source, max_score in by_source.items():
+            cap = SOURCE_CAPS.get(source, 1.0)
+            total += min(max_score, cap)
+            
+        return min(total, 1.0)
+        
+    def add_signal(self, signal: CandidateSignal):
+        self.signals.append(signal)
+
+    def to_dict(self):
+        return {
+            "table": self.table,
+            "final_score": self.score,
+            "signals": [
+                {
+                    "source": s.source,
+                    "score": s.score,
+                    "reason": s.reason,
+                    "trace_data": s.trace_data
+                } for s in self.signals
+            ]
+        }
 
 @dataclass
 class TraversalPolicy:
@@ -161,8 +202,8 @@ class SchemaPruner:
         cost += len(table_meta.get("foreign_keys", [])) * 4
         return cost
 
-    def resolve_entities(self, aqr: Dict[str, Any], schema: Dict[str, Any]) -> List[Candidate]:
-        candidates: Dict[str, Candidate] = {}
+    def resolve_entities(self, aqr: Dict[str, Any], schema: Dict[str, Any]) -> List[CandidateAggregate]:
+        candidates: Dict[str, CandidateAggregate] = {}
         all_tables = list(schema["tables"].keys())
         query_text = aqr.get("natural_query", "")
         
@@ -171,14 +212,22 @@ class SchemaPruner:
         
         def add_candidate(table: str, score: float, source: str, reason: str, trace_data: Dict[str, Any] = None):
             if table in self.HUB_TABLES:
-                score -= 0.3
+                # Apply hub penalty immediately to the signal score, or should it be on final score?
+                # The user's prompt suggested subtracting 0.3 from candidate.score. Let's do it on the signal.
+                score = max(score - 0.3, 0.0)
             
-            if table in candidates:
-                if score > candidates[table].score:
-                    candidates[table] = Candidate(table, score, source, reason, trace_data)
-            else:
-                if score > 0.0:
-                    candidates[table] = Candidate(table, score, source, reason, trace_data)
+            if score <= 0.0:
+                return
+                
+            if table not in candidates:
+                candidates[table] = CandidateAggregate(table=table)
+                
+            candidates[table].add_signal(CandidateSignal(
+                source=source,
+                score=score,
+                reason=reason,
+                trace_data=trace_data
+            ))
 
         # 0. Layer: RAG Embedding Retrieval
         if query_text:
@@ -406,7 +455,7 @@ class SchemaPruner:
             "estimated_tokens": current_cost,
             "debug_trace": {
                 "rag_matches": getattr(self, 'rag_traces', []),
-                "seed_candidates": [{"table": c.table, "score": c.score, "reason": c.reason, "trace_data": c.trace_data} for c in candidates],
+                "candidate_signals": [c.to_dict() for c in candidates],
                 "selected_tables": list(selected_tables)
             },
             "tables": {},
