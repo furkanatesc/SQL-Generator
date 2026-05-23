@@ -108,3 +108,27 @@ def test_sqlite_trace_store_round_trips_all_json_fields(tmp_path):
     assert loaded.sql_validation_errors == trace.sql_validation_errors
     assert loaded.latency_ms == trace.latency_ms
     assert loaded.metadata == trace.metadata
+
+def test_sqlite_trace_store_creates_parent_directory(tmp_path):
+    db_path = tmp_path / "nested" / "trace" / "traces.db"
+
+    store = SQLiteTraceStore(str(db_path))
+    store.save(NL2SQLTrace(trace_id="trace-1", raw_query="test"))
+
+    assert db_path.exists()
+    assert store.get("trace-1") is not None
+
+    store.close()
+
+def test_sqlite_trace_store_reconnects_after_close(tmp_path):
+    store = SQLiteTraceStore(str(tmp_path / "traces.db"))
+
+    store.save(NL2SQLTrace(trace_id="trace-1", raw_query="first"))
+    store.close()
+
+    loaded = store.get("trace-1")
+
+    assert loaded is not None
+    assert loaded.raw_query == "first"
+
+    store.close()

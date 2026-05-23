@@ -1,22 +1,56 @@
 import json
 import sqlite3
+import threading
 from pathlib import Path
 from typing import List, Optional
 
 from app.trace.models import NL2SQLTrace
 from app.trace.store import TraceStore
 
+
 class SQLiteTraceStore(TraceStore):
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, timeout: float = 5.0):
         self.db_path = str(db_path)
+        self.timeout = timeout
+        self._lock = threading.RLock()
+        self._conn: sqlite3.Connection | None = None
+
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
-    def _connect(self):
-        return sqlite3.connect(self.db_path)
+    def _connect(self) -> sqlite3.Connection:
+        if self._conn is None:
+            self._conn = sqlite3.connect(
+                self.db_path,
+                timeout=self.timeout,
+                check_same_thread=False,
+            )
+            self._conn.row_factory = sqlite3.Row
+            self._configure_connection(self._conn)
+
+        return self._conn
+
+    def _configure_connection(self, conn: sqlite3.Connection) -> None:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA busy_timeout=5000")
+
+    def close(self) -> None:
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
+
+    def __enter__(self):
+        self._connect()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
 
     def _init_db(self) -> None:
-        with self._connect() as conn:
+        with self._lock:
+            conn = self._connect()
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS nl2sql_traces (
                     trace_id TEXT PRIMARY KEY,
@@ -60,7 +94,8 @@ class SQLiteTraceStore(TraceStore):
             return default
 
     def save(self, trace: NL2SQLTrace) -> None:
-        with self._connect() as conn:
+        with self._lock:
+            conn = self._connect()
             conn.execute("""
                 INSERT OR REPLACE INTO nl2sql_traces (
                     trace_id,
@@ -106,8 +141,8 @@ class SQLiteTraceStore(TraceStore):
             conn.commit()
 
     def get(self, trace_id: str) -> Optional[NL2SQLTrace]:
-        with self._connect() as conn:
-            conn.row_factory = sqlite3.Row
+        with self._lock:
+            conn = self._connect()
             row = conn.execute(
                 "SELECT * FROM nl2sql_traces WHERE trace_id = ?",
                 (trace_id,)
@@ -119,8 +154,8 @@ class SQLiteTraceStore(TraceStore):
         return self._row_to_trace(row)
 
     def list_recent(self, limit: int = 50) -> List[NL2SQLTrace]:
-        with self._connect() as conn:
-            conn.row_factory = sqlite3.Row
+        with self._lock:
+            conn = self._connect()
             rows = conn.execute(
                 """
                 SELECT * FROM nl2sql_traces
