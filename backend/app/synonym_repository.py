@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 from app.database import get_db_connection
+from app.nlp.text_normalizer import TextNormalizer
 
 @dataclass
 class SynonymRule:
@@ -14,7 +15,10 @@ class SynonymRule:
 
 
 class SynonymRepository:
-    def lookup(self, normalized_term: str) -> List[SynonymRule]:
+    def __init__(self, normalizer: TextNormalizer = None):
+        self.normalizer = normalizer or TextNormalizer()
+
+    def lookup(self, term: str) -> List[SynonymRule]:
         raise NotImplementedError
 
 
@@ -22,7 +26,8 @@ class StaticSynonymRepository(SynonymRepository):
     """
     Hızlı başlangıç ve bootstrap için veritabanı bağlantısı olmayan statik depo.
     """
-    def __init__(self):
+    def __init__(self, normalizer: TextNormalizer = None):
+        super().__init__(normalizer)
         self.rules = [
             SynonymRule('hekim', 'hekim', 'concept', 'doktor', 0.95, 'manual', 10),
             SynonymRule('doktor', 'doktor', 'concept', 'doktor', 0.95, 'manual', 10),
@@ -52,8 +57,9 @@ class StaticSynonymRepository(SynonymRepository):
             SynonymRule('ortalama', 'ortalama', 'ignore', 'ignore:agg_intent', 1.00, 'manual', 1),
         ]
 
-    def lookup(self, normalized_term: str) -> List[SynonymRule]:
-        results = [r for r in self.rules if r.normalized_term == normalized_term]
+    def lookup(self, term: str) -> List[SynonymRule]:
+        normalized = self.normalizer.normalize(term)
+        results = [r for r in self.rules if r.normalized_term == normalized]
         # Sort by priority ascending, then confidence descending
         results.sort(key=lambda x: (x.priority, -x.confidence))
         return results
@@ -63,7 +69,8 @@ class SQLiteSynonymRepository(SynonymRepository):
     """
     Production v1: SQLite veritabanı tabanlı eş anlamlılar ve override kuralları deposu.
     """
-    def lookup(self, normalized_term: str) -> List[SynonymRule]:
+    def lookup(self, term: str) -> List[SynonymRule]:
+        normalized = self.normalizer.normalize(term)
         rules = []
         try:
             with get_db_connection() as conn:
@@ -75,7 +82,7 @@ class SQLiteSynonymRepository(SynonymRepository):
                     WHERE normalized_term = ? AND enabled = 1
                     ORDER BY priority ASC, confidence DESC
                     """,
-                    (normalized_term,)
+                    (normalized,)
                 )
                 rows = cursor.fetchall()
                 for row in rows:

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from app.schema_manager import SchemaManager
 from app.synonym_repository import SQLiteSynonymRepository, SynonymRule
 from app.schema_lexicon import SchemaLexiconBuilder
+from app.nlp.text_normalizer import TextNormalizer
 
 logger = logging.getLogger("schema_pruner")
 
@@ -134,16 +135,17 @@ class NetworkXGraphBackend(SchemaGraphBackend):
 
 
 class SchemaPruner:
-    def __init__(self, schema_manager: SchemaManager = None, synonym_repository = None):
+    def __init__(self, schema_manager: SchemaManager = None, synonym_repository = None, normalizer: TextNormalizer = None):
         self.schema_manager = schema_manager or SchemaManager()
         self.graph_backend = NetworkXGraphBackend()
         self.synonym_repository = synonym_repository or SQLiteSynonymRepository()
-        self.lexicon_builder = SchemaLexiconBuilder()
+        self.normalizer = normalizer or TextNormalizer()
+        self.lexicon_builder = SchemaLexiconBuilder(normalizer=self.normalizer)
         
         self.HUB_TABLES = {"KULLANICI", "HASTANE", "KURUM", "PERSONEL", "BIRIM", "LOG", "PARAMETRE", "TANIM", "YETKI"}
         
     def _get_tokens(self, text: str) -> Set[str]:
-        return self.lexicon_builder.tokenize(text)
+        return self.normalizer.tokenize(text)
 
     def _jaccard_similarity(self, set1: Set[str], set2: Set[str]) -> float:
         if not set1 or not set2:
@@ -210,7 +212,7 @@ class SchemaPruner:
                         ignore = True
                         break
                     elif rule.target_type in ['concept', 'table']:
-                        expanded_tokens.add(self.lexicon_builder.normalize_text(rule.target_name))
+                        expanded_tokens.add(self.normalizer.normalize(rule.target_name))
                 
                 if not ignore:
                     expanded_tokens.add(t)
