@@ -87,3 +87,30 @@ def test_ver_does_not_select_per_vergiiade(mock_rag):
     
     # PER_VERGIIADE should not be selected
     assert not any(c.table == "PER_VERGIIADE" for c in candidates)
+
+@patch('app.rag_manager.RAGManager')
+def test_doktor_selected_without_rag(mock_rag):
+    pruner = SchemaPruner()
+    mock_rag_instance = MagicMock()
+    mock_rag_instance.search_ddl.return_value = []
+    mock_rag.return_value = mock_rag_instance
+    
+    mock_schema = {
+        "tables": {
+            "HST_DOKTOR": {
+                "columns": [{"name": "doktor_id"}],
+                "foreign_keys": []
+            }
+        }
+    }
+    
+    aqr = {
+        "natural_query": "doktor listele",
+        "entities": ["doktor listele"]
+    }
+    
+    candidates, _ = pruner.resolve_entities(aqr, mock_schema)
+    
+    doktor_cand = next((c for c in candidates if c.table == "HST_DOKTOR"), None)
+    assert doktor_cand is not None
+    assert "schema_lexicon" in [s.source for s in doktor_cand.signals]

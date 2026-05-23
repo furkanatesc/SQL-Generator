@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def test_embedding(model_name):
+def run_embedding_check(model_name):
     from backend.app.llm_client import get_nvidia_api_key
     api_key = get_nvidia_api_key()
         
@@ -33,4 +33,5 @@ def test_embedding(model_name):
     except Exception as e:
         print(f"Exception: {e}")
 
-test_embedding("nvidia/llama-nemotron-embed-1b-v2")
+if __name__ == "__main__":
+    run_embedding_check("nvidia/llama-nemotron-embed-1b-v2")
