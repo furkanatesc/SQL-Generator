@@ -63,6 +63,13 @@ def test_pipeline_trace_capture_success(mock_schema_manager, mock_nvidia_client)
     assert trace.metadata["job_id"] == "job123"
     assert trace.metadata["dialect"] == "postgres"
     assert "total" in trace.latency_ms
+    
+    # Assert prune_schema was called correctly (without token_budget kwargs)
+    mock_prune.assert_called_once()
+    _, kwargs = mock_prune.call_args
+    assert "token_budget" not in kwargs
+    assert "policy" in kwargs
+    assert kwargs["policy"].token_budget == 8000
 
 def test_pipeline_trace_store_none(mock_schema_manager, mock_nvidia_client):
     pipeline = SQLGenerationPipeline(
@@ -111,6 +118,7 @@ def test_pipeline_trace_capture_failure(mock_schema_manager, mock_nvidia_client)
     assert len(store.saved) == 1
     trace = store.saved[0]
     assert trace.error_message == "Failed to prune"
+    assert trace.error_type == "schema_pruning_error"
     assert trace.generated_sql is None
 
 def test_pipeline_trace_save_error_does_not_break_flow(mock_schema_manager, mock_nvidia_client):

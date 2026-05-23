@@ -15,6 +15,7 @@ logger = logging.getLogger("sql_pipeline")
 from app.sql_validator import SQLValidator
 from app.trace.builders import build_trace_from_pruned_schema
 from app.trace.store import TraceStore
+from app.schema_graph import TraversalPolicy
 
 import time
 
@@ -123,7 +124,8 @@ class SQLGenerationPipeline:
                     natural_query=natural_query or "",
                     pruned_schema={"error": result["error"]},
                     generated_sql=None,
-                    error_message=result["error"]
+                    error_message=result["error"],
+                    error_type="excel_parse_error"
                 )
                 return result
         elif natural_query:
@@ -153,7 +155,8 @@ class SQLGenerationPipeline:
                 natural_query=natural_query or "",
                 pruned_schema={"error": result["error"]},
                 generated_sql=None,
-                error_message=result["error"]
+                error_message=result["error"],
+                error_type="input_error"
             )
             return result
 
@@ -161,7 +164,7 @@ class SQLGenerationPipeline:
         try:
             if log_callback:
                 log_callback("Veritabanı şeması analiz ediliyor ve akıllı budama (Schema Pruning) tetikleniyor...", 2)
-            pruned_schema = self.schema_pruner.prune_schema(aqr, token_budget=8000)
+            pruned_schema = self.schema_pruner.prune_schema(aqr, policy=TraversalPolicy(token_budget=8000))
             if pruned_schema.get("error"):
                 result["error"] = pruned_schema["error"]
                 if log_callback:
@@ -174,7 +177,8 @@ class SQLGenerationPipeline:
                     natural_query=natural_query or aqr.get("natural_query", ""),
                     pruned_schema=pruned_schema,
                     generated_sql=None,
-                    error_message=result["error"]
+                    error_message=result["error"],
+                    error_type="schema_pruning_error"
                 )
                 return result
 
@@ -193,7 +197,8 @@ class SQLGenerationPipeline:
                 natural_query=natural_query or aqr.get("natural_query", ""),
                 pruned_schema={"error": result["error"]},
                 generated_sql=None,
-                error_message=result["error"]
+                error_message=result["error"],
+                error_type="schema_pruning_exception"
             )
             return result
 
@@ -320,7 +325,8 @@ class SQLGenerationPipeline:
             natural_query=natural_query or aqr.get("natural_query", ""),
             pruned_schema=pruned_schema_ref,
             generated_sql=result["generated_sql"] if result["success"] else None,
-            error_message=result.get("error") if not result["success"] else None
+            error_message=result.get("error") if not result["success"] else None,
+            error_type=None if result["success"] else "sql_generation_failed"
         )
                 
         return result
@@ -333,7 +339,8 @@ class SQLGenerationPipeline:
         natural_query: str,
         pruned_schema: Dict[str, Any],
         generated_sql: Optional[str] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
+        error_type: Optional[str] = None
     ):
         if not self.trace_store:
             return
@@ -345,6 +352,7 @@ class SQLGenerationPipeline:
             pruned_schema=pruned_schema,
             generated_sql=generated_sql,
             error_message=error_message,
+            error_type=error_type,
             latency_ms={"total": total_ms},
             metadata={
                 "job_id": job_id,
