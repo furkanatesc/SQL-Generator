@@ -65,13 +65,29 @@ class NetworkXGraphBackend(SchemaGraphBackend):
             logger.error(f"PPR calculation failed: {e}")
             return {}
 
-    def shortest_path(self, source: str, target: str, weight: str = "cost") -> List[str]:
+    def shortest_path(self, source: str, target: str, weight: str = "cost", mode: str = "undirected_weighted") -> List[str]:
         if not self.G:
             return []
         try:
-            undirected_G = self.G.to_undirected()
-            return self.nx.shortest_path(undirected_G, source=source, target=target, weight=weight)
+            if mode == "directed_weighted":
+                graph = self.G
+                selected_weight = weight
+            elif mode == "undirected_weighted":
+                graph = self.G.to_undirected()
+                selected_weight = weight
+            elif mode == "directed_unweighted":
+                graph = self.G
+                selected_weight = None
+            elif mode == "undirected_unweighted":
+                graph = self.G.to_undirected()
+                selected_weight = None
+            else:
+                raise ValueError(f"Unsupported path mode: {mode}")
+
+            return self.nx.shortest_path(graph, source=source, target=target, weight=selected_weight)
         except self.nx.NetworkXNoPath:
+            return []
+        except self.nx.NodeNotFound:
             return []
         except Exception as e:
             logger.error(f"Shortest path failed: {e}")

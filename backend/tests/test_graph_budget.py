@@ -45,7 +45,7 @@ def test_schema_pruner_respects_max_tables():
     assert "TABLE_C" not in result["tables"]
     
     trace = result["debug_trace"]["graph_trace"]
-    assert "TABLE_C" in trace["skipped_max_tables"]
+    assert any(s["table"] == "TABLE_C" for s in trace["skipped_max_tables"])
 
 def test_schema_pruner_integration_uses_detectors():
     pruner = SchemaPruner()
@@ -54,7 +54,7 @@ def test_schema_pruner_integration_uses_detectors():
     assert isinstance(pruner.hub_detector, HubDetector)
     
     # Mock methods to verify they are called
-    pruner.hub_detector.detect_hubs = MagicMock(return_value={"HUB_TABLE"})
+    pruner.hub_detector.detect_hub_reasons = MagicMock(return_value={"HUB_TABLE": ["degree_p95"]})
     pruner.budget_estimator.estimate_table_cost = MagicMock(return_value=10)
     pruner.budget_estimator.can_add = MagicMock(return_value=True)
     
@@ -78,8 +78,8 @@ def test_schema_pruner_integration_uses_detectors():
     policy = TraversalPolicy(min_candidate_score=0.45)
     result = pruner.prune_schema(aqr, policy=policy)
     
-    pruner.hub_detector.detect_hubs.assert_called_once_with(schema)
+    pruner.hub_detector.detect_hub_reasons.assert_called_once_with(schema)
     pruner.budget_estimator.estimate_table_cost.assert_called_with("TABLE_A", schema["tables"]["TABLE_A"])
     
     trace = result["debug_trace"]["graph_trace"]
-    assert "HUB_TABLE" in trace["hub_tables"]
+    assert any(h["table"] == "HUB_TABLE" for h in trace["hub_tables"])

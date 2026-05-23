@@ -11,7 +11,7 @@ class SchemaGraphBackend(ABC):
         pass
 
     @abstractmethod
-    def shortest_path(self, source: str, target: str, weight: str = "cost") -> List[str]:
+    def shortest_path(self, source: str, target: str, weight: str = "cost", mode: str = "undirected_weighted") -> List[str]:
         pass
 
     @abstractmethod

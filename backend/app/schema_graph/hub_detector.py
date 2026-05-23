@@ -1,4 +1,4 @@
-from typing import Dict, Any, Set
+from typing import Dict, Any, Set, List
 from app.nlp.text_normalizer import TextNormalizer
 
 class HubDetector:
@@ -16,12 +16,18 @@ class HubDetector:
         self.p95_threshold_multiplier = p95_threshold_multiplier
         self.normalizer = normalizer or TextNormalizer()
 
+    def detect_hub_reasons(self, schema: Dict[str, Any]) -> Dict[str, List[str]]:
+        reasons = {}
+        for table in self._known_name_hubs(schema):
+            reasons.setdefault(table, []).append("known_name")
+        for table in self._token_hubs(schema):
+            reasons.setdefault(table, []).append("token_match")
+        for table in self._degree_hubs(schema):
+            reasons.setdefault(table, []).append("degree_p95")
+        return reasons
+
     def detect_hubs(self, schema: Dict[str, Any]) -> Set[str]:
-        hubs = set()
-        hubs |= self._known_name_hubs(schema)
-        hubs |= self._token_hubs(schema)
-        hubs |= self._degree_hubs(schema)
-        return hubs
+        return set(self.detect_hub_reasons(schema).keys())
 
     def is_hub(self, table_name: str, schema: Dict[str, Any], cached_hubs: Set[str] = None) -> bool:
         if cached_hubs is not None:

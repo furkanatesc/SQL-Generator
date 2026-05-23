@@ -1,12 +1,8 @@
-import os
-import json
-import re
 import logging
-import math
-from typing import Dict, Any, List, Set, Tuple, Optional
+from typing import Dict, Any, List, Set, Tuple
 from dataclasses import dataclass, field
 from app.schema_manager import SchemaManager
-from app.synonym_repository import HybridSynonymRepository, SynonymRule
+from app.synonym_repository import HybridSynonymRepository
 from app.schema_lexicon import SchemaLexiconBuilder
 from app.nlp.text_normalizer import TextNormalizer
 
@@ -277,7 +273,8 @@ class SchemaPruner:
             
         self.graph_backend.build_graph(schema)
         
-        hub_tables = self.hub_detector.detect_hubs(schema)
+        hub_reasons = self.hub_detector.detect_hub_reasons(schema)
+        hub_tables = set(hub_reasons.keys())
         skipped_budget = []
         skipped_hubs = []
         skipped_max_tables = []
@@ -294,14 +291,26 @@ class SchemaPruner:
             tbl = c.table
             if tbl in schema["tables"] and tbl not in selected_tables:
                 if len(selected_tables) >= policy.max_tables:
-                    skipped_max_tables.append(tbl)
+                    skipped_max_tables.append({
+                        "table": tbl,
+                        "phase": "seed_selection",
+                        "max_tables": policy.max_tables,
+                        "reason": "max_tables_reached"
+                    })
                     continue
                 cost = self.budget_estimator.estimate_table_cost(tbl, schema["tables"][tbl])
                 if self.budget_estimator.can_add(current_cost, cost, policy.token_budget):
                     selected_tables.add(tbl)
                     current_cost += cost
                 else:
-                    skipped_budget.append(tbl)
+                    skipped_budget.append({
+                        "table": tbl,
+                        "phase": "seed_selection",
+                        "cost": cost,
+                        "current_cost": current_cost,
+                        "budget": policy.token_budget,
+                        "reason": "token_budget_exceeded"
+                    })
 
         # 2. Bounded BFS Expansion
         queue = [(c.table, 0) for c in seeds if c.table in selected_tables] # (table, depth)
@@ -323,12 +332,21 @@ class SchemaPruner:
                     continue
                     
                 if policy.exclude_hubs and nbr in hub_tables:
-                    skipped_hubs.append(nbr)
+                    skipped_hubs.append({
+                        "table": nbr,
+                        "phase": "expansion",
+                        "reason": "hub_expansion_blocked"
+                    })
                     continue
                     
                 if nbr in schema["tables"]:
                     if len(selected_tables) >= policy.max_tables:
-                        skipped_max_tables.append(nbr)
+                        skipped_max_tables.append({
+                            "table": nbr,
+                            "phase": "expansion",
+                            "max_tables": policy.max_tables,
+                            "reason": "max_tables_reached"
+                        })
                         continue
                     cost = self.budget_estimator.estimate_table_cost(nbr, schema["tables"][nbr])
                     if self.budget_estimator.can_add(current_cost, cost, policy.token_budget):
@@ -336,29 +354,55 @@ class SchemaPruner:
                         current_cost += cost
                         queue.append((nbr, depth + 1))
                     else:
-                        skipped_budget.append(nbr)
+                        skipped_budget.append({
+                            "table": nbr,
+                            "phase": "expansion",
+                            "cost": cost,
+                            "current_cost": current_cost,
+                            "budget": policy.token_budget,
+                            "reason": "token_budget_exceeded"
+                        })
                         
         # 3. Ensure shortest paths between disconnected selected tables
         selected_list = list(selected_tables)
         for i in range(len(selected_list)):
             for j in range(i+1, len(selected_list)):
                 src, tgt = selected_list[i], selected_list[j]
-                path = self.graph_backend.shortest_path(src, tgt)
+                path = self.graph_backend.shortest_path(src, tgt, weight="cost", mode=policy.path_mode)
                 if path:
                     for p_node in path:
                         if p_node not in selected_tables:
-                            if policy.exclude_hubs and p_node in hub_tables:
-                                skipped_hubs.append(p_node)
-                                continue # Don't connect through hubs if excluded
+                            if p_node in hub_tables:
+                                if policy.allow_hubs_as_connectors:
+                                    pass
+                                elif policy.exclude_hubs:
+                                    skipped_hubs.append({
+                                        "table": p_node,
+                                        "phase": "path_repair",
+                                        "reason": "hub_connector_not_allowed"
+                                    })
+                                    continue
                             if len(selected_tables) >= policy.max_tables:
-                                skipped_max_tables.append(p_node)
+                                skipped_max_tables.append({
+                                    "table": p_node,
+                                    "phase": "path_repair",
+                                    "max_tables": policy.max_tables,
+                                    "reason": "max_tables_reached"
+                                })
                                 continue
                             cost = self.budget_estimator.estimate_table_cost(p_node, schema["tables"][p_node])
                             if self.budget_estimator.can_add(current_cost, cost, policy.token_budget):
                                 selected_tables.add(p_node)
                                 current_cost += cost
                             else:
-                                skipped_budget.append(p_node)
+                                skipped_budget.append({
+                                    "table": p_node,
+                                    "phase": "path_repair",
+                                    "cost": cost,
+                                    "current_cost": current_cost,
+                                    "budget": policy.token_budget,
+                                    "reason": "token_budget_exceeded"
+                                })
         
         pruned_schema = {
             "pruned": True,
@@ -371,7 +415,8 @@ class SchemaPruner:
                 "selected_tables": list(selected_tables),
                 "graph_trace": {
                     "policy": policy.__dict__,
-                    "hub_tables": list(hub_tables),
+                    "path_mode": policy.path_mode,
+                    "hub_tables": [{"table": k, "reasons": v} for k, v in hub_reasons.items()],
                     "skipped_hubs": skipped_hubs,
                     "skipped_budget": skipped_budget,
                     "skipped_max_tables": skipped_max_tables
