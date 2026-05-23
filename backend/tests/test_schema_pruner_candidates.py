@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from app.schema_pruner import SchemaPruner, CandidateAggregate, CandidateSignal
+from app.schema_pruner import SchemaPruner
+from app.schema_candidates import CandidateAggregate, CandidateSignal
 
 def test_rag_score_threshold_rejects_low_score():
     pruner = SchemaPruner()
