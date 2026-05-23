@@ -1,0 +1,182 @@
+Sprint 2 PR sıralaması
+
+Bu sprint’i 3 PR’a bölmeni istiyorum. Tek büyük PR yapma.
+
+PR 2.1 — Graph module extraction
+
+Kapsam:
+
+schema_graph/backend.py
+schema_graph/networkx_backend.py
+schema_graph/traversal_policy.py
+schema_pruner imports update
+existing tests pass
+
+Bu PR davranış değiştirmemeli. Sadece taşıma/refactor.
+
+Kabul:
+
+cd backend
+pytest
+
+geçmeli.
+
+PR 2.2 — Budget + HubDetector
+
+Kapsam:
+
+token_budget.py
+hub_detector.py
+known hub + token hub + degree hub
+basic tests
+debug trace hub_tables
+
+Kabul:
+
+Hub tablolar expansion’dan dışlanıyor.
+Budget aşılmıyor.
+PR 2.3 — GraphPruner + trace + tests
+
+Kapsam:
+
+graph_pruner.py
+bounded expansion
+path repair
+graph_trace
+test_graph_pruner.py
+schema_pruner sadeleştirme
+
+Kabul:
+
+Graph traversal kararları trace’te görünüyor.
+Path repair çalışıyor.
+Budget ve hub policy çalışıyor.
+Sprint 2 kabul kriterleri
+
+Sprint 2 tamam demem için şunların hepsi olmalı:
+
+1. schema_pruner.py graph implementation’dan arınmış olmalı.
+2. NetworkX sadece networkx_backend.py içinde kullanılmalı.
+3. TraversalPolicy min_candidate_score ve min_edge_weight ayrımına sahip olmalı.
+4. Hardcoded min_weight=0.1 kalkmalı.
+5. HubDetector çalışmalı.
+6. TokenBudgetEstimator kullanılmalı.
+7. GraphPruner bounded expansion yapmalı.
+8. Path repair trace edilmeli.
+9. Graph trace selected/skipped/expanded kararlarını göstermeli.
+10. pytest temiz geçmeli.
+Sprint 2 sonunda ne kazanacağız?
+
+Sprint 2 sonunda sistem şu sorulara cevap verecek:
+
+Bu tablo neden seed oldu?
+Bu tablo neden graph komşusu olarak eklendi?
+Bu tablo neden hub diye atlandı?
+Bu tablo neden budget yüzünden atlandı?
+Bu ara tablo neden join path için eklendi?
+Toplam schema token tahmini kaç?
+Traversal hangi policy ile çalıştı?
+
+Bu production için çok önemli.
+
+Sprint 3 ne olacak?
+
+Sprint 2 bitince Sprint 3’e geçeceğiz:
+
+Sprint 3 — Trace, Debug ve SQL Validation
+
+Sprint 3 işleri:
+
+TraceStore interface
+SQLiteTraceStore
+query_traces geniş schema
+/api/debug/traces endpoints
+SQLValidator
+sqlglot SELECT-only guardrails
+schema existence validation
+missing table / missing column error classification
+
+Sprint 3 sonunda sistem sadece pruning yapmayacak; aynı zamanda üretilen SQL’i güvenlik ve doğruluk açısından kontrol edecek.
+
+Sprint 4 ne olacak?
+
+Sprint 4:
+
+Sprint 4 — v1 Production Hardening
+
+İşler:
+
+End-to-end NL2SQL pipeline tests
+Docker/dev setup cleanup
+config separation
+error handling
+timeouts
+read-only SQL execution policy
+basic API contract
+v1 release checklist
+
+Sprint 4 sonunda:
+
+v1 production baseline çıkar.
+
+Bu, dış kullanıcıya kontrollü şekilde açılabilecek ilk sürüm demek.
+
+v1’den sonra ne olacak?
+
+v1’den sonra artık elimizde trace ve test altyapısı olacak. O yüzden v2’ye geçeceğiz.
+
+Sprint 5 — Feedback Mining
+Trace kayıtlarından düşük confidence sorgular
+wrong table / missing table analizleri
+pending synonym rule suggestion
+manual approval flow
+Sprint 6 — Value Index
+lookup/value tablolarından distinct value index
+"kardiyoloji" → BRANS.brans_adi
+"nöroloji" → BRANS.brans_adi
+"aktif" → status/value columns
+
+Bunlar v2 olacak.
+
+v3 ne zaman?
+
+v3’e ancak v1 ve v2 sağlamken geçeceğiz.
+
+Sprint 7 — Directed Weighted Graph
+edge metadata
+FK confidence
+cardinality
+historical join success
+weighted graph
+Sprint 8 — Personalized PageRank
+candidate seed vector
+PPR score
+dynamic subgraph ranking
+Sprint 9 — Column-level Pruning
+tablo değil kolon budama
+PK/FK/display/filter/aggregation columns
+multi-candidate subgraph
+execution-guided repair
+
+Bu v3 olur.
+
+v4 ne zaman?
+
+v4 kurumsal platform aşaması.
+
+Sprint 10 — Permission & PII
+permission-aware schema pruning
+PII/PHI redaction
+audit trail
+Sprint 11 — Observability & Governance
+OpenTelemetry
+Prometheus/Grafana
+model/prompt/schema versioning
+cost dashboard
+Sprint 12 — Multi-tenant & Human Review
+tenant bazlı schema/synonym/value index
+A/B testing
+human-in-the-loop review
+enterprise workflow
+
+Bu v4 olur.

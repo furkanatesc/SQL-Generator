@@ -53,6 +53,24 @@ def enforce_oracle_case(sql: str, dialect: str = "oracle") -> str:
         # Fallback: Basit regex ile keyword'ler dışındakileri uppercase yap
         return sql.upper()
 
+def classify_sql_error(error_message: str, stage: str) -> Dict[str, Any]:
+    error_lower = (error_message or "").lower()
+
+    if "missing column" in error_lower or "column" in error_lower:
+        error_type = "missing_column"
+    elif "missing table" in error_lower or "table" in error_lower:
+        error_type = "missing_table"
+    elif "parse" in error_lower or "syntax" in error_lower:
+        error_type = "syntax_error"
+    else:
+        error_type = "validation_error"
+
+    return {
+        "type": error_type,
+        "stage": stage,
+        "message": error_message,
+    }
+
 class SQLGenerationPipeline:
     def __init__(self, schema_manager: SchemaManager = None, nvidia_client: NVIDIAClient = None, trace_store: TraceStore | None = None):
         self.schema_manager = schema_manager or SchemaManager()
@@ -124,6 +142,10 @@ class SQLGenerationPipeline:
                     natural_query=natural_query or "",
                     pruned_schema={"error": result["error"]},
                     generated_sql=None,
+                    last_generated_sql=None,
+                    sql_valid=None,
+                    sql_validation_errors=[],
+                    attempts=[],
                     error_message=result["error"],
                     error_type="excel_parse_error"
                 )
@@ -155,6 +177,10 @@ class SQLGenerationPipeline:
                 natural_query=natural_query or "",
                 pruned_schema={"error": result["error"]},
                 generated_sql=None,
+                last_generated_sql=None,
+                sql_valid=None,
+                sql_validation_errors=[],
+                attempts=[],
                 error_message=result["error"],
                 error_type="input_error"
             )
@@ -177,6 +203,10 @@ class SQLGenerationPipeline:
                     natural_query=natural_query or aqr.get("natural_query", ""),
                     pruned_schema=pruned_schema,
                     generated_sql=None,
+                    last_generated_sql=None,
+                    sql_valid=None,
+                    sql_validation_errors=[],
+                    attempts=[],
                     error_message=result["error"],
                     error_type="schema_pruning_error"
                 )
@@ -197,6 +227,10 @@ class SQLGenerationPipeline:
                 natural_query=natural_query or aqr.get("natural_query", ""),
                 pruned_schema={"error": result["error"]},
                 generated_sql=None,
+                last_generated_sql=None,
+                sql_valid=None,
+                sql_validation_errors=[],
+                attempts=[],
                 error_message=result["error"],
                 error_type="schema_pruning_exception"
             )
@@ -206,6 +240,8 @@ class SQLGenerationPipeline:
         natural_query = aqr.get("natural_query", "")
         current_sql = ""
         last_error = "Syntax error in SQL query"
+        validation_errors = []
+        last_generated_sql = None
         
         for attempt in range(1, max_attempts + 1):
             attempt_info = {
@@ -241,6 +277,7 @@ class SQLGenerationPipeline:
                 # API Çağrısı ile SQL üret
                 generated_sql = self.nvidia_client.generate_sql(prompt, api_key=api_key)
                 current_sql = generated_sql
+                last_generated_sql = current_sql
                 attempt_info["sql"] = current_sql
                 
                 if log_callback:
@@ -259,6 +296,7 @@ class SQLGenerationPipeline:
                     attempt_info["valid"] = False
                     attempt_info["error"] = last_error
                     result["attempts"].append(attempt_info)
+                    validation_errors.append(classify_sql_error(last_error, stage="ast_parse"))
                     if log_callback:
                         log_callback(f"AST doğrulaması BAŞARISIZ: {last_error}", 4)
                     continue
@@ -275,6 +313,7 @@ class SQLGenerationPipeline:
                     attempt_info["valid"] = False
                     attempt_info["error"] = last_error
                     result["attempts"].append(attempt_info)
+                    validation_errors.append(classify_sql_error(last_error, stage="semantic_validation"))
                     if log_callback:
                         log_callback(f"Semantik doğrulama BAŞARISIZ (Critic döngüsüne yönlendiriliyor): {last_error}", 4)
                     continue
@@ -284,6 +323,7 @@ class SQLGenerationPipeline:
                     # SQL'i formatla (Pretty Print)
                     parsed_tree = sqlglot.parse_one(current_sql, read=dialect)
                     current_sql = parsed_tree.sql(dialect=dialect, pretty=True)
+                    last_generated_sql = current_sql
                 except Exception:
                     pass  # Formatlama başarısız olursa orijinal haliyle bırak
                 
@@ -301,6 +341,11 @@ class SQLGenerationPipeline:
                 attempt_info["valid"] = False
                 attempt_info["error"] = last_error
                 result["attempts"].append(attempt_info)
+                validation_errors.append({
+                    "type": "llm_api_error",
+                    "stage": "llm_generation",
+                    "message": last_error,
+                })
                 if log_callback:
                     log_callback(f"LLM API Çağrı Hatası: {str(e)}", 3)
                 continue
@@ -325,6 +370,10 @@ class SQLGenerationPipeline:
             natural_query=natural_query or aqr.get("natural_query", ""),
             pruned_schema=pruned_schema_ref,
             generated_sql=result["generated_sql"] if result["success"] else None,
+            last_generated_sql=last_generated_sql,
+            sql_valid=result["success"] if result.get("attempts") else None,
+            sql_validation_errors=validation_errors,
+            attempts=result.get("attempts", []),
             error_message=result.get("error") if not result["success"] else None,
             error_type=None if result["success"] else "sql_generation_failed"
         )
@@ -339,6 +388,10 @@ class SQLGenerationPipeline:
         natural_query: str,
         pruned_schema: Dict[str, Any],
         generated_sql: Optional[str] = None,
+        last_generated_sql: Optional[str] = None,
+        sql_valid: Optional[bool] = None,
+        sql_validation_errors: Optional[List[Dict[str, Any]]] = None,
+        attempts: Optional[List[Dict[str, Any]]] = None,
         error_message: Optional[str] = None,
         error_type: Optional[str] = None
     ):
@@ -351,6 +404,10 @@ class SQLGenerationPipeline:
             raw_query=natural_query,
             pruned_schema=pruned_schema,
             generated_sql=generated_sql,
+            last_generated_sql=last_generated_sql,
+            sql_valid=sql_valid,
+            sql_validation_errors=sql_validation_errors or [],
+            attempts=attempts or [],
             error_message=error_message,
             error_type=error_type,
             latency_ms={"total": total_ms},

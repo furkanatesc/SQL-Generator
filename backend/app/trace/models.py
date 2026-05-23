@@ -23,8 +23,10 @@ class NL2SQLTrace:
     confidence: Optional[float] = None
 
     generated_sql: Optional[str] = None
+    last_generated_sql: Optional[str] = None
     sql_valid: Optional[bool] = None
     sql_validation_errors: List[Dict[str, Any]] = field(default_factory=list)
+    attempts: List[Dict[str, Any]] = field(default_factory=list)
 
     error_type: Optional[str] = None
     error_message: Optional[str] = None

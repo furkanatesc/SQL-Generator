@@ -61,3 +61,20 @@ def test_build_trace_from_pruned_schema_includes_sql_error_latency_metadata():
     assert trace.error_type == "SyntaxError"
     assert trace.latency_ms == {"total": 1200}
     assert trace.metadata == {"job_id": "job-123"}
+
+def test_build_trace_includes_validation_fields():
+    trace = build_trace_from_pruned_schema(
+        raw_query="q",
+        pruned_schema={"estimated_tokens": 12},
+        generated_sql="SELECT 1",
+        last_generated_sql="SELECT 1",
+        sql_valid=True,
+        sql_validation_errors=[],
+        attempts=[{"attempt": 1, "valid": True}],
+    )
+
+    assert trace.generated_sql == "SELECT 1"
+    assert trace.last_generated_sql == "SELECT 1"
+    assert trace.sql_valid is True
+    assert trace.sql_validation_errors == []
+    assert trace.attempts == [{"attempt": 1, "valid": True}]

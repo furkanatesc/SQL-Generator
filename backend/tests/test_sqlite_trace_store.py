@@ -92,6 +92,9 @@ def test_sqlite_trace_store_round_trips_all_json_fields(tmp_path):
         graph_trace={"path_mode": "undirected_weighted"},
         selected_tables=["HST_DOKTOR"],
         dropped_tables=["LOG"],
+        last_generated_sql="SELECT broken",
+        attempts=[{"attempt": 1, "valid": False}],
+        sql_valid=False,
         sql_validation_errors=[{"type": "missing_column", "column": "x"}],
         latency_ms={"total": 123, "llm": 90},
         metadata={"env": "test"},
@@ -105,6 +108,9 @@ def test_sqlite_trace_store_round_trips_all_json_fields(tmp_path):
     assert loaded.graph_trace == trace.graph_trace
     assert loaded.selected_tables == trace.selected_tables
     assert loaded.dropped_tables == trace.dropped_tables
+    assert loaded.last_generated_sql == trace.last_generated_sql
+    assert loaded.attempts == trace.attempts
+    assert loaded.sql_valid is False
     assert loaded.sql_validation_errors == trace.sql_validation_errors
     assert loaded.latency_ms == trace.latency_ms
     assert loaded.metadata == trace.metadata
@@ -132,3 +138,44 @@ def test_sqlite_trace_store_reconnects_after_close(tmp_path):
     assert loaded.raw_query == "first"
 
     store.close()
+
+def test_sqlite_trace_store_migrates_existing_trace_table(tmp_path):
+    import sqlite3
+
+    db_path = tmp_path / "traces.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            CREATE TABLE nl2sql_traces (
+                trace_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                raw_query TEXT,
+                normalized_query TEXT,
+                candidate_signals_json TEXT NOT NULL DEFAULT '[]',
+                rag_matches_json TEXT NOT NULL DEFAULT '[]',
+                graph_trace_json TEXT NOT NULL DEFAULT '{}',
+                selected_tables_json TEXT NOT NULL DEFAULT '[]',
+                dropped_tables_json TEXT NOT NULL DEFAULT '[]',
+                estimated_tokens INTEGER NOT NULL DEFAULT 0,
+                confidence REAL,
+                generated_sql TEXT,
+                sql_valid INTEGER,
+                sql_validation_errors_json TEXT NOT NULL DEFAULT '[]',
+                error_type TEXT,
+                error_message TEXT,
+                latency_ms_json TEXT NOT NULL DEFAULT '{}',
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+
+    store = SQLiteTraceStore(str(db_path))
+
+    trace = NL2SQLTrace(
+        trace_id="t1",
+        last_generated_sql="SELECT 1",
+        attempts=[{"attempt": 1}],
+    )
+    store.save(trace)
+
+    loaded = store.get("t1")
+    assert loaded.last_generated_sql == "SELECT 1"
+    assert loaded.attempts == [{"attempt": 1}]

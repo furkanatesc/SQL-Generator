@@ -63,6 +63,10 @@ def test_pipeline_trace_capture_success(mock_schema_manager, mock_nvidia_client)
     assert trace.metadata["job_id"] == "job123"
     assert trace.metadata["dialect"] == "postgres"
     assert "total" in trace.latency_ms
+    assert trace.sql_valid is True
+    assert trace.last_generated_sql == trace.generated_sql
+    assert len(trace.attempts) == 1
+    assert trace.sql_validation_errors == []
     
     # Assert prune_schema was called correctly (without token_budget kwargs)
     mock_prune.assert_called_once()
@@ -143,3 +147,39 @@ def test_pipeline_trace_save_error_does_not_break_flow(mock_schema_manager, mock
     # Success returned despite store raising exception
     assert res["success"] is True
     assert res["generated_sql"] == "SELECT\n  *\nFROM test"
+
+def test_pipeline_trace_capture_sql_validation_failure(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store
+    )
+    
+    mock_nvidia_client.generate_sql.return_value = "SELECT missing_col FROM test"
+    
+    with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
+        mock_prune.return_value = {
+            "tables": {"test": {}}
+        }
+        
+        with patch('app.sql_pipeline.SQLValidator.validate', return_value=(False, "Missing column: missing_col")):
+            res = pipeline.run_pipeline(
+                job_id="job123",
+                natural_query="get test",
+                max_attempts=1
+            )
+            
+    assert res["success"] is False
+    assert len(store.saved) == 1
+    
+    trace = store.saved[0]
+    assert trace.sql_valid is False
+    assert trace.last_generated_sql is not None
+    assert trace.generated_sql is None
+    assert trace.error_type == "sql_generation_failed"
+    assert len(trace.sql_validation_errors) == 1
+    assert trace.sql_validation_errors[0]["type"] == "missing_column"
+    assert trace.sql_validation_errors[0]["stage"] == "semantic_validation"
+    assert len(trace.attempts) == 1
+    assert trace.attempts[0]["valid"] is False

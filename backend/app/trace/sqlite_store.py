@@ -82,6 +82,28 @@ class SQLiteTraceStore(TraceStore):
             """)
             conn.commit()
 
+            self._ensure_column(
+                conn,
+                "nl2sql_traces",
+                "last_generated_sql",
+                "last_generated_sql TEXT",
+            )
+            self._ensure_column(
+                conn,
+                "nl2sql_traces",
+                "attempts_json",
+                "attempts_json TEXT NOT NULL DEFAULT '[]'",
+            )
+
+    def _ensure_column(self, conn, table_name: str, column_name: str, column_sql: str) -> None:
+        existing = {
+            row["name"]
+            for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        }
+
+        if column_name not in existing:
+            conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_sql}")
+
     def _json_dumps(self, value, default) -> str:
         return json.dumps(value if value is not None else default, ensure_ascii=False)
 
@@ -110,6 +132,8 @@ class SQLiteTraceStore(TraceStore):
                     estimated_tokens,
                     confidence,
                     generated_sql,
+                    last_generated_sql,
+                    attempts_json,
                     sql_valid,
                     sql_validation_errors_json,
                     error_type,
@@ -117,7 +141,7 @@ class SQLiteTraceStore(TraceStore):
                     latency_ms_json,
                     metadata_json
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 trace.trace_id,
                 trace.created_at,
@@ -131,6 +155,8 @@ class SQLiteTraceStore(TraceStore):
                 trace.estimated_tokens,
                 trace.confidence,
                 trace.generated_sql,
+                trace.last_generated_sql,
+                self._json_dumps(trace.attempts, []),
                 None if trace.sql_valid is None else int(trace.sql_valid),
                 self._json_dumps(trace.sql_validation_errors, []),
                 trace.error_type,
@@ -190,8 +216,10 @@ class SQLiteTraceStore(TraceStore):
             confidence=row["confidence"],
 
             generated_sql=row["generated_sql"],
+            last_generated_sql=row["last_generated_sql"] if "last_generated_sql" in row.keys() else None,
             sql_valid=sql_valid,
             sql_validation_errors=self._json_loads(row["sql_validation_errors_json"], []),
+            attempts=self._json_loads(row["attempts_json"] if "attempts_json" in row.keys() else "[]", []),
 
             error_type=row["error_type"],
             error_message=row["error_message"],
