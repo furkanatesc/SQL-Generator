@@ -69,7 +69,7 @@ class CandidateAggregate:
             ]
         }
 
-from app.schema_graph import NetworkXGraphBackend, TraversalPolicy
+from app.schema_graph import NetworkXGraphBackend, TraversalPolicy, TokenBudgetEstimator, HubDetector
 
 
 class SchemaPruner:
@@ -79,8 +79,8 @@ class SchemaPruner:
         self.normalizer = normalizer or TextNormalizer()
         self.synonym_repository = synonym_repository or HybridSynonymRepository(normalizer=self.normalizer)
         self.lexicon_builder = SchemaLexiconBuilder(normalizer=self.normalizer)
-        
-        self.HUB_TABLES = {"KULLANICI", "HASTANE", "KURUM", "PERSONEL", "BIRIM", "LOG", "PARAMETRE", "TANIM", "YETKI"}
+        self.budget_estimator = TokenBudgetEstimator()
+        self.hub_detector = HubDetector(normalizer=self.normalizer)
         
     def _get_tokens(self, text: str) -> Set[str]:
         return self.normalizer.tokenize(text)
@@ -92,11 +92,7 @@ class SchemaPruner:
         union = set1.union(set2)
         return len(intersection) / len(union)
 
-    def _estimate_table_token_cost(self, table_meta: Dict[str, Any]) -> int:
-        cost = 8
-        cost += len(table_meta.get("columns", [])) * 3
-        cost += len(table_meta.get("foreign_keys", [])) * 4
-        return cost
+
 
     def resolve_entities(self, aqr: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[List[CandidateAggregate], Dict[str, Any]]:
         candidates: Dict[str, CandidateAggregate] = {}
@@ -107,8 +103,10 @@ class SchemaPruner:
         # Build lexicon for current schema
         lexicon = self.lexicon_builder.build_lexicon(schema)
         
+        hub_tables = self.hub_detector.detect_hubs(schema)
+        
         def add_candidate(table: str, score: float, source: str, reason: str, trace_data: Dict[str, Any] = None):
-            if table in self.HUB_TABLES:
+            if table in hub_tables:
                 # Apply hub penalty immediately to the signal score, or should it be on final score?
                 # The user's prompt suggested subtracting 0.3 from candidate.score. Let's do it on the signal.
                 score = max(score - 0.3, 0.0)
@@ -279,6 +277,11 @@ class SchemaPruner:
             
         self.graph_backend.build_graph(schema)
         
+        hub_tables = self.hub_detector.detect_hubs(schema)
+        skipped_budget = []
+        skipped_hubs = []
+        skipped_max_tables = []
+        
         selected_tables = set()
         current_cost = 0
         
@@ -290,10 +293,15 @@ class SchemaPruner:
         for c in seeds:
             tbl = c.table
             if tbl in schema["tables"] and tbl not in selected_tables:
-                cost = self._estimate_table_token_cost(schema["tables"][tbl])
-                if current_cost + cost <= policy.token_budget:
+                if len(selected_tables) >= policy.max_tables:
+                    skipped_max_tables.append(tbl)
+                    continue
+                cost = self.budget_estimator.estimate_table_cost(tbl, schema["tables"][tbl])
+                if self.budget_estimator.can_add(current_cost, cost, policy.token_budget):
                     selected_tables.add(tbl)
                     current_cost += cost
+                else:
+                    skipped_budget.append(tbl)
 
         # 2. Bounded BFS Expansion
         queue = [(c.table, 0) for c in seeds if c.table in selected_tables] # (table, depth)
@@ -314,15 +322,21 @@ class SchemaPruner:
                 if nbr in selected_tables:
                     continue
                     
-                if policy.exclude_hubs and nbr in self.HUB_TABLES:
+                if policy.exclude_hubs and nbr in hub_tables:
+                    skipped_hubs.append(nbr)
                     continue
                     
                 if nbr in schema["tables"]:
-                    cost = self._estimate_table_token_cost(schema["tables"][nbr])
-                    if current_cost + cost <= policy.token_budget:
+                    if len(selected_tables) >= policy.max_tables:
+                        skipped_max_tables.append(nbr)
+                        continue
+                    cost = self.budget_estimator.estimate_table_cost(nbr, schema["tables"][nbr])
+                    if self.budget_estimator.can_add(current_cost, cost, policy.token_budget):
                         selected_tables.add(nbr)
                         current_cost += cost
                         queue.append((nbr, depth + 1))
+                    else:
+                        skipped_budget.append(nbr)
                         
         # 3. Ensure shortest paths between disconnected selected tables
         selected_list = list(selected_tables)
@@ -333,12 +347,18 @@ class SchemaPruner:
                 if path:
                     for p_node in path:
                         if p_node not in selected_tables:
-                            if policy.exclude_hubs and p_node in self.HUB_TABLES:
+                            if policy.exclude_hubs and p_node in hub_tables:
+                                skipped_hubs.append(p_node)
                                 continue # Don't connect through hubs if excluded
-                            cost = self._estimate_table_token_cost(schema["tables"][p_node])
-                            if current_cost + cost <= policy.token_budget:
+                            if len(selected_tables) >= policy.max_tables:
+                                skipped_max_tables.append(p_node)
+                                continue
+                            cost = self.budget_estimator.estimate_table_cost(p_node, schema["tables"][p_node])
+                            if self.budget_estimator.can_add(current_cost, cost, policy.token_budget):
                                 selected_tables.add(p_node)
                                 current_cost += cost
+                            else:
+                                skipped_budget.append(p_node)
         
         pruned_schema = {
             "pruned": True,
@@ -348,7 +368,14 @@ class SchemaPruner:
             "debug_trace": {
                 "rag_matches": resolve_trace.get("rag_matches", []),
                 "candidate_signals": [c.to_dict() for c in candidates],
-                "selected_tables": list(selected_tables)
+                "selected_tables": list(selected_tables),
+                "graph_trace": {
+                    "policy": policy.__dict__,
+                    "hub_tables": list(hub_tables),
+                    "skipped_hubs": skipped_hubs,
+                    "skipped_budget": skipped_budget,
+                    "skipped_max_tables": skipped_max_tables
+                }
             },
             "tables": {},
             "graph": {

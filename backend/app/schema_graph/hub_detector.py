@@ -1,13 +1,20 @@
 from typing import Dict, Any, Set
+from app.nlp.text_normalizer import TextNormalizer
 
 class HubDetector:
+    KNOWN_HUB_TABLES = {
+        "KULLANICI", "HASTANE", "KURUM", "PERSONEL",
+        "BIRIM", "LOG", "PARAMETRE", "TANIM", "YETKI"
+    }
+    
     HUB_TOKENS = {
         "kullanici", "hastane", "kurum", "personel",
         "birim", "log", "parametre", "tanim", "yetki"
     }
 
-    def __init__(self, p95_threshold_multiplier: float = 0.95):
+    def __init__(self, p95_threshold_multiplier: float = 0.95, normalizer: TextNormalizer = None):
         self.p95_threshold_multiplier = p95_threshold_multiplier
+        self.normalizer = normalizer or TextNormalizer()
 
     def detect_hubs(self, schema: Dict[str, Any]) -> Set[str]:
         hubs = set()
@@ -22,20 +29,16 @@ class HubDetector:
         return table_name in self.detect_hubs(schema)
 
     def _known_name_hubs(self, schema: Dict[str, Any]) -> Set[str]:
-        exact_names = {t.upper() for t in self.HUB_TOKENS}
         tables = schema.get("tables", {}).keys()
-        return {t for t in tables if t.upper() in exact_names}
+        return {t for t in tables if t.upper() in self.KNOWN_HUB_TABLES}
 
     def _token_hubs(self, schema: Dict[str, Any]) -> Set[str]:
         tables = schema.get("tables", {}).keys()
         hubs = set()
         for t in tables:
-            t_lower = t.lower()
-            parts = t_lower.split('_')
-            for part in parts:
-                if part in self.HUB_TOKENS:
-                    hubs.add(t)
-                    break
+            tokens = self.normalizer.tokenize(t)
+            if tokens.intersection(self.HUB_TOKENS):
+                hubs.add(t)
         return hubs
 
     def _degree_hubs(self, schema: Dict[str, Any]) -> Set[str]:
