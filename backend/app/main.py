@@ -345,12 +345,8 @@ def refresh_database_schema():
         )
 
 # 4.5. Debug Traces API
-@app.get("/api/debug/traces", dependencies=[Depends(verify_api_key)])
-def get_debug_traces(limit: int = 50, offset: int = 0):
-    from app.trace_store import TraceStore
-    store = TraceStore()
-    traces = store.get_traces(limit=limit, offset=offset)
-    return {"status": "success", "traces": traces}
+from app.api.debug_traces import router as debug_traces_router
+app.include_router(debug_traces_router)
 
 # Custom and Disabled Relations API
 class RelationItem(BaseModel):
