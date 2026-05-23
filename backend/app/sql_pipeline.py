@@ -12,112 +12,8 @@ from app.llm_client import NVIDIAClient, PromptTemplateManager
 
 logger = logging.getLogger("sql_pipeline")
 
-
-def validate_columns_against_schema(sql: str, schema: Dict[str, Any], dialect: str = "oracle") -> Tuple[bool, str]:
-    """
-    Katman 1: Üretilen SQL'deki tablo ve kolon referanslarının gerçek şemada
-    var olup olmadığını sqlglot AST introspection ile doğrular.
-    
-    Returns:
-        (is_valid, error_message) — Geçerliyse (True, ""), değilse (False, detaylı hata)
-    """
-    try:
-        tree = sqlglot.parse_one(sql, read=dialect)
-    except Exception:
-        # Syntax hatası zaten ana döngüde yakalanıyor, burada sadece semantik kontrol
-        return True, ""
-
-    schema_tables = schema.get("tables", {})
-    # Şemadaki tablo isimlerini case-insensitive lookup için hazırla
-    table_lookup = {t.upper(): t for t in schema_tables.keys()}
-    # Her tablo için kolon isimlerini case-insensitive set olarak hazırla
-    column_lookup = {}
-    for t_name, t_meta in schema_tables.items():
-        column_lookup[t_name.upper()] = {
-            col["name"].upper() for col in t_meta.get("columns", [])
-        }
-
-    errors = []
-
-    # AST'den tüm tablo referanslarını çıkar
-    referenced_tables = set()
-    for table_node in tree.find_all(sqlglot_exp.Table):
-        table_name = table_node.name.upper() if table_node.name else None
-        if table_name:
-            referenced_tables.add(table_name)
-            if table_name not in table_lookup:
-                errors.append(f"Table '{table_name}' does not exist in the database schema. Available tables: {', '.join(sorted(table_lookup.keys()))}")
-
-    # Alias map: AST'den tablo alias'larını çıkar (C → CUSTOMERS gibi)
-    alias_map = {}
-    for table_node in tree.find_all(sqlglot_exp.Table):
-        tname = table_node.name.upper() if table_node.name else None
-        talias = table_node.alias.upper() if table_node.alias else None
-        if tname and talias:
-            alias_map[talias] = tname
-        elif tname:
-            alias_map[tname] = tname
-
-    # SELECT ifadesindeki expression alias'larını topla (COUNT(...) AS SIPARIS_SAYISI gibi)
-    # Bu alias'lar ORDER BY, HAVING vb. bloklarda kolon gibi referans edilebilir
-    select_aliases = set()
-    for alias_node in tree.find_all(sqlglot_exp.Alias):
-        if alias_node.alias:
-            select_aliases.add(alias_node.alias.upper())
-
-    # AST'den tüm kolon referanslarını çıkar ve şemayla karşılaştır
-    for col_node in tree.find_all(sqlglot_exp.Column):
-        col_name = col_node.name.upper() if col_node.name else None
-        if not col_name:
-            continue
-
-        # Wildcard (*) kontrolü
-        if col_name == "*":
-            continue
-
-        # SELECT alias'ı ise doğrulamadan atla (ORDER BY SIPARIS_SAYISI gibi)
-        if col_name in select_aliases:
-            continue
-
-        # Tablo qualifier varsa (C.COUNTRY gibi)
-        table_ref = None
-        if col_node.table:
-            table_ref = col_node.table.upper()
-            # Alias'ı gerçek tablo adına çevir
-            resolved_table = alias_map.get(table_ref, table_ref)
-        else:
-            resolved_table = None
-
-        if resolved_table and resolved_table in column_lookup:
-            if col_name not in column_lookup[resolved_table]:
-                available = ', '.join(sorted(column_lookup[resolved_table]))
-                errors.append(
-                    f"Column '{col_name}' does not exist in table '{resolved_table}'. "
-                    f"Available columns: {available}"
-                )
-        elif not resolved_table:
-            # Qualifier yok, tüm referans edilen tablolarda arayalım
-            found_in_any = False
-            for ref_t in referenced_tables:
-                if ref_t in column_lookup and col_name in column_lookup[ref_t]:
-                    found_in_any = True
-                    break
-            if not found_in_any and referenced_tables:
-                # Tüm tablolardaki mevcut kolonları listele
-                all_available = set()
-                for ref_t in referenced_tables:
-                    if ref_t in column_lookup:
-                        all_available.update(column_lookup[ref_t])
-                if all_available:  # Sadece bilinen tablolar varsa hata ver
-                    errors.append(
-                        f"Column '{col_name}' does not exist in any referenced table "
-                        f"({', '.join(sorted(referenced_tables))}). "
-                        f"Available columns: {', '.join(sorted(all_available))}"
-                    )
-
-    if errors:
-        return False, "SEMANTIC VALIDATION ERROR: " + "; ".join(errors)
-    return True, ""
+from app.sql_validator import SQLValidator
+from app.trace_store import TraceStore
 
 
 def enforce_oracle_case(sql: str, dialect: str = "oracle") -> str:
@@ -159,11 +55,13 @@ class SQLGenerationPipeline:
         self.schema_manager = schema_manager or SchemaManager()
         self.schema_pruner = SchemaPruner(schema_manager=self.schema_manager)
         self.nvidia_client = nvidia_client or NVIDIAClient()
+        self.trace_store = TraceStore()
         # Şema bilgisini AQR zenginleştirme için yükle
         self._full_schema = None
 
     def run_pipeline(
         self, 
+        job_id: str = "local_test",
         excel_file_path: Optional[str] = None, 
         natural_query: Optional[str] = None,
         previous_sql: Optional[str] = None,
@@ -312,7 +210,7 @@ class SQLGenerationPipeline:
                     log_callback("AST sözdizimi doğrulaması geçti. Şema-bazlı semantik doğrulama başlatılıyor...", 4)
 
                 # ── Katman 1 + 5: Schema-Aware Semantik Doğrulama ──
-                sem_valid, sem_error = validate_columns_against_schema(
+                sem_valid, sem_error = SQLValidator.validate(
                     current_sql, pruned_schema, dialect=dialect
                 )
                 if not sem_valid:
@@ -359,5 +257,25 @@ class SQLGenerationPipeline:
         else:
             if log_callback:
                 log_callback("Tebrikler! SQL üretim aşaması başarıyla sonuçlandırıldı.", 5)
+                
+        # --- İzlenebilirlik (Traceability) Kaydı ---
+        candidate_tables = []
+        selected_tables = []
+        estimated_tokens = 0
+        if "pruned_schema" in locals() and pruned_schema:
+            candidate_tables = pruned_schema.get("debug_trace", {}).get("seed_candidates", [])
+            selected_tables = pruned_schema.get("debug_trace", {}).get("selected_tables", [])
+            estimated_tokens = pruned_schema.get("estimated_tokens", 0)
+            
+        self.trace_store.save_trace(
+            job_id=job_id,
+            natural_query=natural_query or aqr.get("natural_query", ""),
+            candidate_tables=candidate_tables,
+            selected_tables=selected_tables,
+            estimated_tokens=estimated_tokens,
+            generated_sql=result["generated_sql"],
+            sql_valid=result["success"],
+            error_message=result.get("error") if not result["success"] else None
+        )
                 
         return result

@@ -67,6 +67,22 @@ def init_db():
             )
         """)
 
+        # Trace Tablosu
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS query_traces (
+                id TEXT PRIMARY KEY,
+                job_id TEXT,
+                natural_query TEXT,
+                candidate_tables TEXT,
+                selected_tables TEXT,
+                estimated_tokens INTEGER,
+                generated_sql TEXT,
+                sql_valid INTEGER,
+                error_message TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")

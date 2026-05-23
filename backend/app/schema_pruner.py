@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Set, Tuple, Optional
 from dataclasses import dataclass
 from app.schema_manager import SchemaManager
 from app.synonym_repository import SQLiteSynonymRepository, SynonymRule
+from app.schema_lexicon import SchemaLexiconBuilder
 
 logger = logging.getLogger("schema_pruner")
 
@@ -24,6 +25,14 @@ class Candidate:
         if not isinstance(other, Candidate):
             return False
         return self.table == other.table
+
+@dataclass
+class TraversalPolicy:
+    max_depth: int = 2
+    max_neighbors_per_seed: int = 5
+    min_edge_score: float = 0.50
+    exclude_hubs: bool = True
+    token_budget: int = 6000
 
 class SchemaGraphBackend:
     def build_graph(self, schema: Dict[str, Any]):
@@ -129,21 +138,12 @@ class SchemaPruner:
         self.schema_manager = schema_manager or SchemaManager()
         self.graph_backend = NetworkXGraphBackend()
         self.synonym_repository = synonym_repository or SQLiteSynonymRepository()
+        self.lexicon_builder = SchemaLexiconBuilder()
         
         self.HUB_TABLES = {"KULLANICI", "HASTANE", "KURUM", "PERSONEL", "BIRIM", "LOG", "PARAMETRE", "TANIM", "YETKI"}
         
     def _get_tokens(self, text: str) -> Set[str]:
-        if not text:
-            return set()
-            
-        text = text.lower()
-        text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
-        normalized = re.sub(r'[^a-zA-Z0-9]+', ' ', text)
-        
-        return {
-            t for t in normalized.split()
-            if len(t) >= 2
-        }
+        return self.lexicon_builder.tokenize(text)
 
     def _jaccard_similarity(self, set1: Set[str], set2: Set[str]) -> float:
         if not set1 or not set2:
@@ -162,6 +162,9 @@ class SchemaPruner:
         candidates: Dict[str, Candidate] = {}
         all_tables = list(schema["tables"].keys())
         query_text = aqr.get("natural_query", "")
+        
+        # Build lexicon for current schema
+        lexicon = self.lexicon_builder.build_lexicon(schema)
         
         def add_candidate(table: str, score: float, source: str, reason: str):
             if table in self.HUB_TABLES:
@@ -184,8 +187,12 @@ class SchemaPruner:
                 for idx, hit in enumerate(relevant_tables):
                     table_name = hit.get("table_name")
                     if table_name:
-                        score = max(0.8 - (idx * 0.05), 0.3)
-                        add_candidate(table_name, score, "embedding_table_hit", f"RAG rank {idx+1}")
+                        # RAG penalty/threshold: e.g. start at 0.8, decrease slightly.
+                        # We apply a strict threshold: only keep if score >= 0.72 (represented here logically, though we assign static scores based on rank, we'll assign 0.95 -> down to 0.7)
+                        # We only take top 5.
+                        score = max(0.95 - (idx * 0.05), 0.0)
+                        if score >= 0.72:
+                            add_candidate(table_name, score, "embedding_table_hit", f"RAG rank {idx+1}")
             except Exception as e:
                 logger.error(f"[SchemaPruner] RAG retrieval failed: {e}")
 
@@ -203,10 +210,15 @@ class SchemaPruner:
                         ignore = True
                         break
                     elif rule.target_type in ['concept', 'table']:
-                        expanded_tokens.add(rule.target_name.lower())
+                        expanded_tokens.add(self.lexicon_builder.normalize_text(rule.target_name))
                 
                 if not ignore:
                     expanded_tokens.add(t)
+                    
+                # Auto Schema Lexicon lookup
+                if t in lexicon and not ignore:
+                    for tbl in lexicon[t]["tables"]:
+                        add_candidate(tbl, 0.8, "schema_lexicon", f"Auto lexicon match for '{t}'")
             
             for table in all_tables:
                 table_lower = table.lower()
@@ -281,7 +293,10 @@ class SchemaPruner:
         valid_candidates = [c for c in candidates.values() if c.score >= 0.45]
         return valid_candidates
 
-    def prune_schema(self, aqr: Dict[str, Any], force_refresh: bool = False, expand_1hop: bool = False, token_budget: int = 6000) -> Dict[str, Any]:
+    def prune_schema(self, aqr: Dict[str, Any], force_refresh: bool = False, policy: TraversalPolicy = None) -> Dict[str, Any]:
+        if policy is None:
+            policy = TraversalPolicy()
+            
         schema = self.schema_manager.load_schema(force_refresh=force_refresh)
         
         candidates = self.resolve_entities(aqr, schema)
@@ -298,33 +313,52 @@ class SchemaPruner:
             
         self.graph_backend.build_graph(schema)
         
-        seeds_dict = {c.table: c.score for c in candidates}
-        ppr_scores = self.graph_backend.personalized_pagerank(seeds_dict)
-        
-        sorted_tables = sorted(ppr_scores.items(), key=lambda x: x[1], reverse=True)
-        
         selected_tables = set()
         current_cost = 0
         
-        strong_seeds = [c.table for c in candidates if c.score >= 0.8]
-        for tbl in strong_seeds:
-            if tbl in schema["tables"]:
+        # 1. Deterministic Bounded Traversal
+        # Start with candidates that meet the minimum edge score (or high confidence)
+        seeds = [c for c in candidates if c.score >= policy.min_edge_score]
+        seeds.sort(key=lambda x: x.score, reverse=True)
+        
+        for c in seeds:
+            tbl = c.table
+            if tbl in schema["tables"] and tbl not in selected_tables:
                 cost = self._estimate_table_token_cost(schema["tables"][tbl])
-                if current_cost + cost <= token_budget:
+                if current_cost + cost <= policy.token_budget:
                     selected_tables.add(tbl)
                     current_cost += cost
 
-        for tbl, score in sorted_tables:
-            if tbl in selected_tables:
-                continue
-            if tbl in self.HUB_TABLES and tbl not in strong_seeds:
+        # 2. Bounded BFS Expansion
+        queue = [(c.table, 0) for c in seeds if c.table in selected_tables] # (table, depth)
+        
+        while queue:
+            current_table, depth = queue.pop(0)
+            
+            if depth >= policy.max_depth:
                 continue
                 
-            cost = self._estimate_table_token_cost(schema["tables"][tbl])
-            if current_cost + cost <= token_budget:
-                selected_tables.add(tbl)
-                current_cost += cost
-
+            neighbors = self.graph_backend.top_neighbors(
+                current_table, 
+                limit=policy.max_neighbors_per_seed, 
+                min_weight=0.1 # graph weights are often penalized, so we use a low threshold for connectivity
+            )
+            
+            for nbr in neighbors:
+                if nbr in selected_tables:
+                    continue
+                    
+                if policy.exclude_hubs and nbr in self.HUB_TABLES:
+                    continue
+                    
+                if nbr in schema["tables"]:
+                    cost = self._estimate_table_token_cost(schema["tables"][nbr])
+                    if current_cost + cost <= policy.token_budget:
+                        selected_tables.add(nbr)
+                        current_cost += cost
+                        queue.append((nbr, depth + 1))
+                        
+        # 3. Ensure shortest paths between disconnected selected tables
         selected_list = list(selected_tables)
         for i in range(len(selected_list)):
             for j in range(i+1, len(selected_list)):
@@ -333,8 +367,10 @@ class SchemaPruner:
                 if path:
                     for p_node in path:
                         if p_node not in selected_tables:
+                            if policy.exclude_hubs and p_node in self.HUB_TABLES:
+                                continue # Don't connect through hubs if excluded
                             cost = self._estimate_table_token_cost(schema["tables"][p_node])
-                            if current_cost + cost <= token_budget:
+                            if current_cost + cost <= policy.token_budget:
                                 selected_tables.add(p_node)
                                 current_cost += cost
         
