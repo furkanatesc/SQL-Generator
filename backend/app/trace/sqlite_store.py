@@ -9,6 +9,7 @@ from app.trace.store import TraceStore
 class SQLiteTraceStore(TraceStore):
     def __init__(self, db_path: str):
         self.db_path = str(db_path)
+        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     def _connect(self):
@@ -47,8 +48,8 @@ class SQLiteTraceStore(TraceStore):
             """)
             conn.commit()
 
-    def _json_dumps(self, value) -> str:
-        return json.dumps(value if value is not None else {}, ensure_ascii=False)
+    def _json_dumps(self, value, default) -> str:
+        return json.dumps(value if value is not None else default, ensure_ascii=False)
 
     def _json_loads(self, value: str, default):
         if not value:
@@ -87,20 +88,20 @@ class SQLiteTraceStore(TraceStore):
                 trace.created_at,
                 trace.raw_query,
                 trace.normalized_query,
-                json.dumps(trace.candidate_signals, ensure_ascii=False),
-                json.dumps(trace.rag_matches, ensure_ascii=False),
-                json.dumps(trace.graph_trace, ensure_ascii=False),
-                json.dumps(trace.selected_tables, ensure_ascii=False),
-                json.dumps(trace.dropped_tables, ensure_ascii=False),
+                self._json_dumps(trace.candidate_signals, []),
+                self._json_dumps(trace.rag_matches, []),
+                self._json_dumps(trace.graph_trace, {}),
+                self._json_dumps(trace.selected_tables, []),
+                self._json_dumps(trace.dropped_tables, []),
                 trace.estimated_tokens,
                 trace.confidence,
                 trace.generated_sql,
                 None if trace.sql_valid is None else int(trace.sql_valid),
-                json.dumps(trace.sql_validation_errors, ensure_ascii=False),
+                self._json_dumps(trace.sql_validation_errors, []),
                 trace.error_type,
                 trace.error_message,
-                json.dumps(trace.latency_ms, ensure_ascii=False),
-                json.dumps(trace.metadata, ensure_ascii=False),
+                self._json_dumps(trace.latency_ms, {}),
+                self._json_dumps(trace.metadata, {}),
             ))
             conn.commit()
 
