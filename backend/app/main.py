@@ -11,6 +11,7 @@ from app.database import (
     init_db, get_job, create_job, update_job_status, list_jobs, get_config, set_config
 )
 from app.auth import verify_api_key
+from app.api.debug_traces import router as debug_traces_router
 
 # Global thread-safe logs ve stream yapıları
 import queue
@@ -33,6 +34,8 @@ app = FastAPI(
     description="SQLGen platformu için lokal FastAPI API katmanı",
     version="0.1.0"
 )
+
+app.include_router(debug_traces_router)
 
 # CORS
 app.add_middleware(
@@ -343,10 +346,6 @@ def refresh_database_schema():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Veritabanı bağlantısı veya şema yenileme başarısız oldu: {str(e)}"
         )
-
-# 4.5. Debug Traces API
-from app.api.debug_traces import router as debug_traces_router
-app.include_router(debug_traces_router)
 
 # Custom and Disabled Relations API
 class RelationItem(BaseModel):

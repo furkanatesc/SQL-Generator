@@ -1,10 +1,15 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.auth import verify_api_key
 from app.trace.dependencies import get_trace_store
 from app.trace.store import TraceStore
 
-router = APIRouter(prefix="/api/debug/traces", tags=["debug-traces"])
+router = APIRouter(
+    prefix="/api/debug/traces",
+    tags=["debug-traces"],
+    dependencies=[Depends(verify_api_key)],
+)
 
 def ensure_debug_enabled():
     enabled = os.getenv("NL2SQL_DEBUG_ENDPOINTS_ENABLED", "true").lower()
