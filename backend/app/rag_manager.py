@@ -265,7 +265,7 @@ class RAGManager:
             query_vector=vector,
             limit=limit
         )
-        return [hit.payload for hit in hits]
+        return [{"payload": hit.payload, "score": hit.score} for hit in hits]
 
     def search_business_rules(self, query_text: str, limit: int = 3, api_key: str = None) -> List[Dict[str, Any]]:
         """

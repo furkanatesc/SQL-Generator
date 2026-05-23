@@ -18,6 +18,7 @@ class Candidate:
     score: float
     source: str
     reason: str
+    trace_data: Dict[str, Any] = None
 
     def __hash__(self):
         return hash(self.table)
@@ -168,16 +169,16 @@ class SchemaPruner:
         # Build lexicon for current schema
         lexicon = self.lexicon_builder.build_lexicon(schema)
         
-        def add_candidate(table: str, score: float, source: str, reason: str):
+        def add_candidate(table: str, score: float, source: str, reason: str, trace_data: Dict[str, Any] = None):
             if table in self.HUB_TABLES:
                 score -= 0.3
             
             if table in candidates:
                 if score > candidates[table].score:
-                    candidates[table] = Candidate(table, score, source, reason)
+                    candidates[table] = Candidate(table, score, source, reason, trace_data)
             else:
                 if score > 0.0:
-                    candidates[table] = Candidate(table, score, source, reason)
+                    candidates[table] = Candidate(table, score, source, reason, trace_data)
 
         # 0. Layer: RAG Embedding Retrieval
         if query_text:
@@ -187,14 +188,35 @@ class SchemaPruner:
                 relevant_tables = rag_manager.search_ddl(query_text, limit=10)
                 
                 for idx, hit in enumerate(relevant_tables):
-                    table_name = hit.get("table_name")
+                    payload = hit.get("payload", {})
+                    raw_score = hit.get("score")
+                    
+                    if raw_score is None:
+                        continue
+                        
+                    table_name = payload.get("table_name")
                     if table_name:
-                        # RAG penalty/threshold: e.g. start at 0.8, decrease slightly.
-                        # We apply a strict threshold: only keep if score >= 0.72 (represented here logically, though we assign static scores based on rank, we'll assign 0.95 -> down to 0.7)
-                        # We only take top 5.
-                        score = max(0.95 - (idx * 0.05), 0.0)
-                        if score >= 0.72:
-                            add_candidate(table_name, score, "embedding_table_hit", f"RAG rank {idx+1}")
+                        # Qdrant with Cosine distance returns similarity (-1 to 1) where higher is better
+                        normalized_score = raw_score
+                        accepted = normalized_score >= 0.72
+                        
+                        trace_data = {
+                            "table": table_name,
+                            "raw_score": raw_score,
+                            "normalized_score": normalized_score,
+                            "score_mode": "similarity_higher_is_better",
+                            "accepted": accepted
+                        }
+                        
+                        if accepted:
+                            add_candidate(table_name, normalized_score, "rag", f"Semantic match, score: {normalized_score:.3f}", trace_data)
+                        
+                        # Store rejected hits somewhere? For now we just don't add them as candidates.
+                        # Wait, the user said "accepted/rejected RAG hits trace’e yazılacak".
+                        # We can store them in a list inside self.rag_traces.
+                        if not hasattr(self, 'rag_traces'):
+                            self.rag_traces = []
+                        self.rag_traces.append(trace_data)
             except Exception as e:
                 logger.error(f"[SchemaPruner] RAG retrieval failed: {e}")
 
@@ -383,7 +405,8 @@ class SchemaPruner:
             "pruned_table_count": len(selected_tables),
             "estimated_tokens": current_cost,
             "debug_trace": {
-                "seed_candidates": [{"table": c.table, "score": c.score, "reason": c.reason} for c in candidates],
+                "rag_matches": getattr(self, 'rag_traces', []),
+                "seed_candidates": [{"table": c.table, "score": c.score, "reason": c.reason, "trace_data": c.trace_data} for c in candidates],
                 "selected_tables": list(selected_tables)
             },
             "tables": {},
