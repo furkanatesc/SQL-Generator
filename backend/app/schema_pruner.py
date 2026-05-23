@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List, Set, Tuple
-from dataclasses import dataclass, field
+
 from app.schema_manager import SchemaManager
 from app.synonym_repository import HybridSynonymRepository
 from app.schema_lexicon import SchemaLexiconBuilder
@@ -229,6 +229,21 @@ class SchemaPruner:
             policy=policy,
         )
         
+        if not selected_tables:
+            return {
+                "pruned": False,
+                "error": "Aday tablolar bulundu ancak traversal politikası ve bütçe kısıtları nedeniyle güvenli alt şema oluşturulamadı.",
+                "original_table_count": len(schema["tables"]),
+                "pruned_table_count": 0,
+                "tables": {},
+                "graph": {"nodes": [], "edges": []},
+                "debug_trace": {
+                    "rag_matches": resolve_trace.get("rag_matches", []),
+                    "candidate_signals": [c.to_dict() for c in candidates],
+                    "graph_trace": graph_trace,
+                },
+            }
+        
         return self._build_pruned_schema(
             schema=schema,
             selected_tables=selected_tables,
@@ -253,12 +268,12 @@ class SchemaPruner:
             "debug_trace": {
                 "rag_matches": resolve_trace.get("rag_matches", []),
                 "candidate_signals": [c.to_dict() for c in candidates],
-                "selected_tables": list(selected_tables),
+                "selected_tables": sorted(selected_tables),
                 "graph_trace": graph_trace
             },
             "tables": {},
             "graph": {
-                "nodes": list(selected_tables),
+                "nodes": sorted(selected_tables),
                 "edges": []
             }
         }

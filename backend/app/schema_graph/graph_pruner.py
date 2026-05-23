@@ -64,6 +64,19 @@ class GraphPruner:
         selected_tables.add(table)
         return True, current_cost + table_cost
 
+    def _policy_to_dict(self, policy: TraversalPolicy) -> Dict[str, Any]:
+        return {
+            "min_candidate_score": policy.min_candidate_score,
+            "min_edge_weight": policy.min_edge_weight,
+            "max_depth": policy.max_depth,
+            "max_neighbors_per_seed": policy.max_neighbors_per_seed,
+            "exclude_hubs": policy.exclude_hubs,
+            "allow_hubs_as_connectors": policy.allow_hubs_as_connectors,
+            "token_budget": policy.token_budget,
+            "max_tables": policy.max_tables,
+            "path_mode": policy.path_mode,
+        }
+
     def select_subgraph(
         self,
         schema: Dict[str, Any],
@@ -76,7 +89,7 @@ class GraphPruner:
         hub_tables = set(hub_reasons.keys())
 
         graph_trace = {
-            "policy": policy.__dict__,
+            "policy": self._policy_to_dict(policy),
             "path_mode": policy.path_mode,
             "hub_tables": [
                 {"table": table, "reasons": reasons}
@@ -169,7 +182,7 @@ class GraphPruner:
                     queue.append((neighbor, depth + 1))
 
         # Path repair
-        selected_list = list(selected_tables)
+        selected_list = sorted(selected_tables)
         for i in range(len(selected_list)):
             for j in range(i + 1, len(selected_list)):
                 source = selected_list[i]
@@ -228,6 +241,6 @@ class GraphPruner:
                     })
 
         graph_trace["estimated_tokens"] = current_cost
-        graph_trace["selected_tables"] = list(selected_tables)
+        graph_trace["selected_tables"] = sorted(selected_tables)
 
         return selected_tables, graph_trace

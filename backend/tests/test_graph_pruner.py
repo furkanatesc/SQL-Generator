@@ -256,3 +256,77 @@ def test_graph_pruner_trace_contains_expected_keys(graph_pruner):
     
     for key in expected_keys:
         assert key in trace
+
+def test_graph_trace_policy_is_explicit_dict(graph_pruner):
+    schema = {
+        "tables": {"A": {"columns": [{"name": "id"}], "foreign_keys": []}},
+        "graph": {"nodes": ["A"], "edges": []}
+    }
+    
+    candidates = [
+        CandidateAggregate(table="A", signals=[CandidateSignal(source="test", score=0.9, reason="test")])
+    ]
+    
+    policy = TraversalPolicy(min_candidate_score=0.45)
+    
+    _, trace = graph_pruner.select_subgraph(schema, candidates, policy)
+    
+    # Assert policy is a standard dictionary not the class internal dict if it were changed.
+    assert isinstance(trace["policy"], dict)
+    assert "min_candidate_score" in trace["policy"]
+    assert "exclude_hubs" in trace["policy"]
+
+def test_graph_trace_selected_tables_are_sorted(graph_pruner):
+    schema = {
+        "tables": {
+            "C": {"columns": [{"name": "id"}], "foreign_keys": []},
+            "A": {"columns": [{"name": "id"}], "foreign_keys": []},
+            "B": {"columns": [{"name": "id"}], "foreign_keys": []}
+        },
+        "graph": {"nodes": ["A", "B", "C"], "edges": []}
+    }
+    
+    candidates = [
+        CandidateAggregate(table="C", signals=[CandidateSignal(source="test", score=0.9, reason="test")]),
+        CandidateAggregate(table="A", signals=[CandidateSignal(source="test", score=0.9, reason="test")]),
+        CandidateAggregate(table="B", signals=[CandidateSignal(source="test", score=0.9, reason="test")])
+    ]
+    
+    policy = TraversalPolicy(min_candidate_score=0.45)
+    
+    selected_tables, trace = graph_pruner.select_subgraph(schema, candidates, policy)
+    
+    assert trace["selected_tables"] == ["A", "B", "C"]
+
+def test_graph_trace_skip_objects_have_phase_and_reason(graph_pruner):
+    schema = {
+        "tables": {
+            "A": {"columns": [{"name": "id"}], "foreign_keys": [{"referenced_table": "KULLANICI"}]},
+            "KULLANICI": {"columns": [{"name": "id"}], "foreign_keys": []}, # Hub
+            "EXPENSIVE": {"columns": [{"name": f"col_{i}"} for i in range(100)], "foreign_keys": []}
+        },
+        "graph": {
+            "nodes": ["A", "KULLANICI", "EXPENSIVE"],
+            "edges": [{"source": "A", "target": "KULLANICI"}]
+        }
+    }
+    
+    candidates = [
+        CandidateAggregate(table="A", signals=[CandidateSignal(source="test", score=0.9, reason="test")]),
+        CandidateAggregate(table="EXPENSIVE", signals=[CandidateSignal(source="test", score=0.9, reason="test")])
+    ]
+    
+    # max_tables=1 to trigger max_tables skip, very low budget to trigger budget skip
+    policy = TraversalPolicy(min_candidate_score=0.45, token_budget=10, max_tables=1, exclude_hubs=True)
+    
+    # By picking A first (if lucky) or EXPENSIVE first, we can force skips. 
+    # Since A has lower cost than EXPENSIVE, A might get selected first, triggering budget or max_tables on EXPENSIVE.
+    # To reliably trigger skips, let's just inspect what is skipped.
+    
+    _, trace = graph_pruner.select_subgraph(schema, candidates, policy)
+    
+    for key in ["skipped_hubs", "skipped_budget", "skipped_max_tables"]:
+        for item in trace[key]:
+            assert "table" in item
+            assert "phase" in item
+            assert "reason" in item
