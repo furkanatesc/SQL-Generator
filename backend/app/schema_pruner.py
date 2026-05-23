@@ -6,7 +6,7 @@ import math
 from typing import Dict, Any, List, Set, Tuple, Optional
 from dataclasses import dataclass, field
 from app.schema_manager import SchemaManager
-from app.synonym_repository import SQLiteSynonymRepository, SynonymRule
+from app.synonym_repository import HybridSynonymRepository, SynonymRule
 from app.schema_lexicon import SchemaLexiconBuilder
 from app.nlp.text_normalizer import TextNormalizer
 
@@ -180,7 +180,7 @@ class SchemaPruner:
     def __init__(self, schema_manager: SchemaManager = None, synonym_repository = None, normalizer: TextNormalizer = None):
         self.schema_manager = schema_manager or SchemaManager()
         self.graph_backend = NetworkXGraphBackend()
-        self.synonym_repository = synonym_repository or SQLiteSynonymRepository()
+        self.synonym_repository = synonym_repository or HybridSynonymRepository(normalizer=self.normalizer)
         self.normalizer = normalizer or TextNormalizer()
         self.lexicon_builder = SchemaLexiconBuilder(normalizer=self.normalizer)
         
