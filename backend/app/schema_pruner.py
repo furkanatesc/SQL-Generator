@@ -180,8 +180,8 @@ class SchemaPruner:
     def __init__(self, schema_manager: SchemaManager = None, synonym_repository = None, normalizer: TextNormalizer = None):
         self.schema_manager = schema_manager or SchemaManager()
         self.graph_backend = NetworkXGraphBackend()
-        self.synonym_repository = synonym_repository or HybridSynonymRepository(normalizer=self.normalizer)
         self.normalizer = normalizer or TextNormalizer()
+        self.synonym_repository = synonym_repository or HybridSynonymRepository(normalizer=self.normalizer)
         self.lexicon_builder = SchemaLexiconBuilder(normalizer=self.normalizer)
         
         self.HUB_TABLES = {"KULLANICI", "HASTANE", "KURUM", "PERSONEL", "BIRIM", "LOG", "PARAMETRE", "TANIM", "YETKI"}
@@ -202,10 +202,11 @@ class SchemaPruner:
         cost += len(table_meta.get("foreign_keys", [])) * 4
         return cost
 
-    def resolve_entities(self, aqr: Dict[str, Any], schema: Dict[str, Any]) -> List[CandidateAggregate]:
+    def resolve_entities(self, aqr: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[List[CandidateAggregate], Dict[str, Any]]:
         candidates: Dict[str, CandidateAggregate] = {}
         all_tables = list(schema["tables"].keys())
         query_text = aqr.get("natural_query", "")
+        rag_traces = []
         
         # Build lexicon for current schema
         lexicon = self.lexicon_builder.build_lexicon(schema)
@@ -260,12 +261,7 @@ class SchemaPruner:
                         if accepted:
                             add_candidate(table_name, normalized_score, "rag", f"Semantic match, score: {normalized_score:.3f}", trace_data)
                         
-                        # Store rejected hits somewhere? For now we just don't add them as candidates.
-                        # Wait, the user said "accepted/rejected RAG hits trace’e yazılacak".
-                        # We can store them in a list inside self.rag_traces.
-                        if not hasattr(self, 'rag_traces'):
-                            self.rag_traces = []
-                        self.rag_traces.append(trace_data)
+                        rag_traces.append(trace_data)
             except Exception as e:
                 logger.error(f"[SchemaPruner] RAG retrieval failed: {e}")
 
@@ -365,7 +361,7 @@ class SchemaPruner:
                         add_candidate(table, 0.4, "keyword_column_match", f"Matched column {token}")
                         
         valid_candidates = [c for c in candidates.values() if c.score >= 0.45]
-        return valid_candidates
+        return valid_candidates, {"rag_matches": rag_traces}
 
     def prune_schema(self, aqr: Dict[str, Any], force_refresh: bool = False, policy: TraversalPolicy = None) -> Dict[str, Any]:
         if policy is None:
@@ -373,7 +369,7 @@ class SchemaPruner:
             
         schema = self.schema_manager.load_schema(force_refresh=force_refresh)
         
-        candidates = self.resolve_entities(aqr, schema)
+        candidates, resolve_trace = self.resolve_entities(aqr, schema)
         
         if not candidates:
             return {
@@ -454,7 +450,7 @@ class SchemaPruner:
             "pruned_table_count": len(selected_tables),
             "estimated_tokens": current_cost,
             "debug_trace": {
-                "rag_matches": getattr(self, 'rag_traces', []),
+                "rag_matches": resolve_trace.get("rag_matches", []),
                 "candidate_signals": [c.to_dict() for c in candidates],
                 "selected_tables": list(selected_tables)
             },
