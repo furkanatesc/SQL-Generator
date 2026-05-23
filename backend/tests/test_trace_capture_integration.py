@@ -183,3 +183,42 @@ def test_pipeline_trace_capture_sql_validation_failure(mock_schema_manager, mock
     assert trace.sql_validation_errors[0]["stage"] == "semantic_validation"
     assert len(trace.attempts) == 1
     assert trace.attempts[0]["valid"] is False
+
+def test_pipeline_trace_clears_validation_errors_after_successful_retry(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store
+    )
+    
+    mock_nvidia_client.generate_sql.side_effect = [
+        "SELECT missing_col FROM test",
+        "SELECT * FROM test",
+    ]
+    
+    with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
+        mock_prune.return_value = {
+            "tables": {"test": {}}
+        }
+        
+        with patch('app.sql_pipeline.SQLValidator.validate', side_effect=[
+            (False, "Missing column: missing_col"),
+            (True, None),
+        ]):
+            res = pipeline.run_pipeline(
+                job_id="job123",
+                natural_query="get test",
+                max_attempts=2
+            )
+            
+    assert res["success"] is True
+    
+    trace = store.saved[0]
+    assert trace.sql_valid is True
+    assert trace.generated_sql is not None
+    assert trace.last_generated_sql == trace.generated_sql
+    assert trace.sql_validation_errors == []
+    assert len(trace.attempts) == 2
+    assert trace.attempts[0]["valid"] is False
+    assert trace.attempts[1]["valid"] is True

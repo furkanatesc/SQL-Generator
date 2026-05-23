@@ -94,6 +94,7 @@ class SQLiteTraceStore(TraceStore):
                 "attempts_json",
                 "attempts_json TEXT NOT NULL DEFAULT '[]'",
             )
+            conn.commit()
 
     def _ensure_column(self, conn, table_name: str, column_name: str, column_sql: str) -> None:
         existing = {

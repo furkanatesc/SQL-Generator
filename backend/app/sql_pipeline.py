@@ -363,6 +363,11 @@ class SQLGenerationPipeline:
         # --- İzlenebilirlik (Traceability) Kaydı ---
         pruned_schema_ref = locals().get("pruned_schema", {})
         
+        final_sql_valid = result["success"] if result.get("attempts") else None
+        final_validation_errors = [] if result["success"] else validation_errors
+        final_error_type = None if result["success"] else "sql_generation_failed"
+        final_error_message = None if result["success"] else result.get("error")
+        
         self._capture_trace_on_exit(
             start_time=start_time,
             job_id=job_id,
@@ -371,11 +376,11 @@ class SQLGenerationPipeline:
             pruned_schema=pruned_schema_ref,
             generated_sql=result["generated_sql"] if result["success"] else None,
             last_generated_sql=last_generated_sql,
-            sql_valid=result["success"] if result.get("attempts") else None,
-            sql_validation_errors=validation_errors,
+            sql_valid=final_sql_valid,
+            sql_validation_errors=final_validation_errors,
             attempts=result.get("attempts", []),
-            error_message=result.get("error") if not result["success"] else None,
-            error_type=None if result["success"] else "sql_generation_failed"
+            error_message=final_error_message,
+            error_type=final_error_type
         )
                 
         return result
