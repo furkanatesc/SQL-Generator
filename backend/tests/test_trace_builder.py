@@ -44,3 +44,20 @@ def test_build_trace_with_error_and_empty_debug_trace():
     assert trace.estimated_tokens == 0
     assert trace.candidate_signals == []
     assert trace.graph_trace == {}
+
+def test_build_trace_from_pruned_schema_includes_sql_error_latency_metadata():
+    raw_query = "show users"
+    pruned_schema = {"estimated_tokens": 50, "error": "some internal err"}
+    trace = build_trace_from_pruned_schema(
+        raw_query=raw_query,
+        pruned_schema=pruned_schema,
+        generated_sql="SELECT * FROM users",
+        error_type="SyntaxError",
+        latency_ms={"total": 1200},
+        metadata={"job_id": "job-123"}
+    )
+    assert trace.generated_sql == "SELECT * FROM users"
+    assert trace.error_message == "some internal err"
+    assert trace.error_type == "SyntaxError"
+    assert trace.latency_ms == {"total": 1200}
+    assert trace.metadata == {"job_id": "job-123"}

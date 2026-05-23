@@ -248,7 +248,8 @@ def process_job_pipeline(job_id: str):
                 q.put(log_entry)
     
     try:
-        pipeline = SQLGenerationPipeline()
+        from app.trace.dependencies import get_trace_store
+        pipeline = SQLGenerationPipeline(trace_store=get_trace_store())
         dialect = get_config("target_db_type") or "postgres"
         api_key = get_config("nvidia_api_key")
         

@@ -13,8 +13,10 @@ from app.llm_client import NVIDIAClient, PromptTemplateManager
 logger = logging.getLogger("sql_pipeline")
 
 from app.sql_validator import SQLValidator
-from app.trace_store import TraceStore
+from app.trace.builders import build_trace_from_pruned_schema
+from app.trace.store import TraceStore
 
+import time
 
 def enforce_oracle_case(sql: str, dialect: str = "oracle") -> str:
     """
@@ -51,13 +53,21 @@ def enforce_oracle_case(sql: str, dialect: str = "oracle") -> str:
         return sql.upper()
 
 class SQLGenerationPipeline:
-    def __init__(self, schema_manager: SchemaManager = None, nvidia_client: NVIDIAClient = None):
+    def __init__(self, schema_manager: SchemaManager = None, nvidia_client: NVIDIAClient = None, trace_store: TraceStore | None = None):
         self.schema_manager = schema_manager or SchemaManager()
         self.schema_pruner = SchemaPruner(schema_manager=self.schema_manager)
         self.nvidia_client = nvidia_client or NVIDIAClient()
-        self.trace_store = TraceStore()
+        self.trace_store = trace_store
         # Şema bilgisini AQR zenginleştirme için yükle
         self._full_schema = None
+
+    def _save_trace_safely(self, trace):
+        if not self.trace_store:
+            return
+        try:
+            self.trace_store.save(trace)
+        except Exception as e:
+            logger.error(f"Failed to save NL2SQL trace: {e}")
 
     def run_pipeline(
         self, 
@@ -89,6 +99,8 @@ class SQLGenerationPipeline:
 
         if log_callback:
             log_callback("SQL üretim süreci başlatıldı...", 1)
+            
+        start_time = time.perf_counter()
 
         # 1. Excel Ayrıştırma (AQR) veya Doğal Dil Sorgusu
         if excel_file_path:
@@ -103,6 +115,16 @@ class SQLGenerationPipeline:
                 result["error"] = f"Excel Ayrıştırma Hatası: {str(e)}"
                 if log_callback:
                     log_callback(f"Excel Ayrıştırma BAŞARISIZ: {str(e)}", 1)
+                
+                self._capture_trace_on_exit(
+                    start_time=start_time,
+                    job_id=job_id,
+                    dialect=dialect,
+                    natural_query=natural_query or "",
+                    pruned_schema={"error": result["error"]},
+                    generated_sql=None,
+                    error_message=result["error"]
+                )
                 return result
         elif natural_query:
             if log_callback:
@@ -123,6 +145,16 @@ class SQLGenerationPipeline:
             result["error"] = "Girdi hatası: Hem Excel dosyası hem de Doğal Dil Sorgusu boş olamaz."
             if log_callback:
                 log_callback("Girdi hatası: Girdi parametreleri eksik.", 1)
+            
+            self._capture_trace_on_exit(
+                start_time=start_time,
+                job_id=job_id,
+                dialect=dialect,
+                natural_query=natural_query or "",
+                pruned_schema={"error": result["error"]},
+                generated_sql=None,
+                error_message=result["error"]
+            )
             return result
 
         # 2. Şema Yükleme ve Budama
@@ -134,6 +166,16 @@ class SQLGenerationPipeline:
                 result["error"] = pruned_schema["error"]
                 if log_callback:
                     log_callback(f"Şema Budama Başarısız: {result['error']}", 2)
+                
+                self._capture_trace_on_exit(
+                    start_time=start_time,
+                    job_id=job_id,
+                    dialect=dialect,
+                    natural_query=natural_query or aqr.get("natural_query", ""),
+                    pruned_schema=pruned_schema,
+                    generated_sql=None,
+                    error_message=result["error"]
+                )
                 return result
 
             result["pruned_schema_tables"] = list(pruned_schema.get("tables", {}).keys())
@@ -143,6 +185,16 @@ class SQLGenerationPipeline:
             result["error"] = f"Şema Budama Hatası: {str(e)}"
             if log_callback:
                 log_callback(f"Şema Budama BAŞARISIZ: {str(e)}", 2)
+                
+            self._capture_trace_on_exit(
+                start_time=start_time,
+                job_id=job_id,
+                dialect=dialect,
+                natural_query=natural_query or aqr.get("natural_query", ""),
+                pruned_schema={"error": result["error"]},
+                generated_sql=None,
+                error_message=result["error"]
+            )
             return result
 
         # 3. İteratif Üretim Döngüsü (Writer-Critic)
@@ -259,23 +311,45 @@ class SQLGenerationPipeline:
                 log_callback("Tebrikler! SQL üretim aşaması başarıyla sonuçlandırıldı.", 5)
                 
         # --- İzlenebilirlik (Traceability) Kaydı ---
-        candidate_tables = []
-        selected_tables = []
-        estimated_tokens = 0
-        if "pruned_schema" in locals() and pruned_schema:
-            candidate_tables = pruned_schema.get("debug_trace", {}).get("seed_candidates", [])
-            selected_tables = pruned_schema.get("debug_trace", {}).get("selected_tables", [])
-            estimated_tokens = pruned_schema.get("estimated_tokens", 0)
-            
-        self.trace_store.save_trace(
+        pruned_schema_ref = locals().get("pruned_schema", {})
+        
+        self._capture_trace_on_exit(
+            start_time=start_time,
             job_id=job_id,
+            dialect=dialect,
             natural_query=natural_query or aqr.get("natural_query", ""),
-            candidate_tables=candidate_tables,
-            selected_tables=selected_tables,
-            estimated_tokens=estimated_tokens,
-            generated_sql=result["generated_sql"],
-            sql_valid=result["success"],
+            pruned_schema=pruned_schema_ref,
+            generated_sql=result["generated_sql"] if result["success"] else None,
             error_message=result.get("error") if not result["success"] else None
         )
                 
         return result
+
+    def _capture_trace_on_exit(
+        self,
+        start_time: float,
+        job_id: str,
+        dialect: str,
+        natural_query: str,
+        pruned_schema: Dict[str, Any],
+        generated_sql: Optional[str] = None,
+        error_message: Optional[str] = None
+    ):
+        if not self.trace_store:
+            return
+            
+        total_ms = int((time.perf_counter() - start_time) * 1000)
+        
+        trace = build_trace_from_pruned_schema(
+            raw_query=natural_query,
+            pruned_schema=pruned_schema,
+            generated_sql=generated_sql,
+            error_message=error_message,
+            latency_ms={"total": total_ms},
+            metadata={
+                "job_id": job_id,
+                "dialect": dialect,
+                "source": "job_pipeline"
+            }
+        )
+        self._save_trace_safely(trace)
