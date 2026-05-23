@@ -88,7 +88,7 @@ def test_golden_queries(mock_rag, mock_load, pruner, mock_schema):
     mock_rag_instance.search_ddl.side_effect = mock_search_ddl
     mock_rag.return_value = mock_rag_instance
     
-    policy = TraversalPolicy(min_edge_score=0.45)
+    policy = TraversalPolicy(min_edge_weight=0.45)
     
     for case in GOLDEN_QUERIES:
         aqr = {"natural_query": case["query"], "entities": [case["query"]]}

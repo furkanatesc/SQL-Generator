@@ -283,8 +283,8 @@ class SchemaPruner:
         current_cost = 0
         
         # 1. Deterministic Bounded Traversal
-        # Start with candidates that meet the minimum edge score (or high confidence)
-        seeds = [c for c in candidates if c.score >= policy.min_edge_score]
+        # Start with candidates that meet the minimum candidate score
+        seeds = [c for c in candidates if c.score >= policy.min_candidate_score]
         seeds.sort(key=lambda x: x.score, reverse=True)
         
         for c in seeds:
@@ -307,7 +307,7 @@ class SchemaPruner:
             neighbors = self.graph_backend.top_neighbors(
                 current_table, 
                 limit=policy.max_neighbors_per_seed, 
-                min_weight=0.1 # graph weights are often penalized, so we use a low threshold for connectivity
+                min_weight=policy.min_edge_weight
             )
             
             for nbr in neighbors:
