@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Star Wars Blaster Loading Effect */
+.btn-laser {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-laser.is-loading::before,
+.btn-laser.is-loading::after {
+  content: '';
+  position: absolute;
+  width: 35px; /* Laser length */
+  height: 2px; /* Laser thickness */
+  border-radius: 10px;
+  z-index: 10;
+}
+
+/* Red Laser (Sith) - Left to Right */
+.btn-laser.is-loading::before {
+  top: 30%;
+  left: -50px;
+  background: #ef4444; 
+  box-shadow: 0 0 8px #ef4444, 0 0 16px #ef4444, 0 0 24px #ef4444; 
+  animation: blasterRed 0.7s linear infinite;
+}
+
+/* Blue Laser (Jedi) - Right to Left */
+.btn-laser.is-loading::after {
+  top: 70%;
+  right: -50px;
+  background: #3b82f6; 
+  box-shadow: 0 0 8px #3b82f6, 0 0 16px #3b82f6, 0 0 24px #3b82f6; 
+  animation: blasterBlue 0.8s linear infinite;
+  animation-delay: 0.3s; /* Slightly offset so they don't fire exactly at the same time */
+}
+
+@keyframes blasterRed {
+  0% { left: -50px; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+@keyframes blasterBlue {
+  0% { right: -50px; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { right: 100%; opacity: 0; }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "sqlgen",
+  "version": "0.1.0",
+  "description": "SQLGen — Doğal dilden SQL üretim platformu",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^35.0.0"
+  }
+}

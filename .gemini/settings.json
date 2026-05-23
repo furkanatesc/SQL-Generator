@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sqlgen": {
+      "command": "c:\\Users\\furkan\\Desktop\\SQLGen\\backend\\venv\\Scripts\\python.exe",
+      "args": ["c:\\Users\\furkan\\Desktop\\SQLGen\\backend\\mcp_server.py"],
+      "timeout": 30000
+    }
+  }
+}

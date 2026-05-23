@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.env
+*.pyc
+__pycache__/
+backend/venv/
+*.egg-info/
+.DS_Store
+
+# Node.js
+node_modules/
+dist/
+build/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# SQLGen Data & Cache
+backend/schema_cache.json
+backend/qdrant_data/
+backend/sqlgen.db
+backend/uploads/
