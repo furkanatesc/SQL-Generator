@@ -89,6 +89,8 @@ class NetworkXGraphBackend(SchemaGraphBackend):
             return []
         except self.nx.NodeNotFound:
             return []
+        except ValueError:
+            raise
         except Exception as e:
             logger.error(f"Shortest path failed: {e}")
             return []
