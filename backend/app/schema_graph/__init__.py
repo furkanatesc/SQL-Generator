@@ -3,11 +3,13 @@ from .networkx_backend import NetworkXGraphBackend
 from .traversal_policy import TraversalPolicy
 from .token_budget import TokenBudgetEstimator
 from .hub_detector import HubDetector
+from .graph_pruner import GraphPruner
 
 __all__ = [
     "SchemaGraphBackend", 
     "NetworkXGraphBackend", 
     "TraversalPolicy",
     "TokenBudgetEstimator",
-    "HubDetector"
+    "HubDetector",
+    "GraphPruner"
 ]
