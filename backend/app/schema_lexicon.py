@@ -28,7 +28,13 @@ class SchemaLexiconBuilder:
             table_tokens = self.normalizer.tokenize(table_name)
             for token in table_tokens:
                 if token not in lexicon:
-                    lexicon[token] = {"tables": set(), "columns": set(), "source": "schema"}
+                    lexicon[token] = {
+                        "tables": set(), 
+                        "columns": set(), 
+                        "source": "schema",
+                        "can_seed": not self.normalizer.is_generic(token),
+                        "can_support": True
+                    }
                 lexicon[token]["tables"].add(table_name)
                 
             # Kolon isimlerinden tokenları çıkar
@@ -39,7 +45,13 @@ class SchemaLexiconBuilder:
                 
                 for token in col_tokens:
                     if token not in lexicon:
-                        lexicon[token] = {"tables": set(), "columns": set(), "source": "schema"}
+                        lexicon[token] = {
+                            "tables": set(), 
+                            "columns": set(), 
+                            "source": "schema",
+                            "can_seed": not self.normalizer.is_generic(token),
+                            "can_support": True
+                        }
                     lexicon[token]["columns"].add(full_col_name)
                     # Kolonun geçtiği tabloyu da işaretle
                     lexicon[token]["tables"].add(table_name)

@@ -12,6 +12,15 @@ class TextNormalizer:
             'ü': 'u', 'Ü': 'u', 'ş': 's', 'Ş': 's', 
             'ö': 'o', 'Ö': 'o', 'ç': 'c', 'Ç': 'c'
         }
+        
+        self.GENERIC_TOKENS = {
+            "id", "no", "ad", "adi", "kod", "kodu",
+            "tarih", "durum", "tip", "tur",
+            "aktif", "pasif", "kayit", "islem", "aciklama"
+        }
+
+    def is_generic(self, token: str) -> bool:
+        return token in self.GENERIC_TOKENS
 
     def normalize(self, text: str) -> str:
         """

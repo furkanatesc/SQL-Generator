@@ -219,8 +219,9 @@ class SchemaPruner:
                     
                 # Auto Schema Lexicon lookup
                 if t in lexicon and not ignore:
-                    for tbl in lexicon[t]["tables"]:
-                        add_candidate(tbl, 0.8, "schema_lexicon", f"Auto lexicon match for '{t}'")
+                    if lexicon[t].get("can_seed", True):
+                        for tbl in lexicon[t]["tables"]:
+                            add_candidate(tbl, 0.8, "schema_lexicon", f"Auto lexicon match for '{t}'")
             
             for table in all_tables:
                 table_lower = table.lower()
