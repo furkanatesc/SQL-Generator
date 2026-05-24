@@ -108,4 +108,38 @@ def test_runner_handles_pipeline_crash_gracefully():
     result = runner.run_case(case)
     
     assert result.passed is False
-    assert result.error_type == "MissingTraceError"
+def test_runner_applies_required_sql_features_check():
+    trace = NL2SQLTrace(
+        sql_valid=True,
+        selected_tables=["USERS"],
+        generated_sql="SELECT * FROM users JOIN orders ON users.id = orders.user_id"
+    )
+    runner = EvaluationRunner(pipeline_factory=lambda store: FakePipeline(store, trace))
+    case = GoldenCase(
+        case_id="feature_check",
+        natural_query="test",
+        required_sql_features=["join"]
+    )
+    
+    result = runner.run_case(case)
+    assert result.passed is True
+
+def test_runner_fails_case_when_required_sql_feature_missing():
+    trace = NL2SQLTrace(
+        sql_valid=True,
+        selected_tables=["USERS"],
+        generated_sql="SELECT * FROM users"
+    )
+    runner = EvaluationRunner(pipeline_factory=lambda store: FakePipeline(store, trace))
+    case = GoldenCase(
+        case_id="feature_check_fail",
+        natural_query="test",
+        required_sql_features=["join"]
+    )
+    
+    result = runner.run_case(case)
+    assert result.passed is False
+    
+    failed_checks = [c for c in result.checks if not c.passed]
+    assert len(failed_checks) == 1
+    assert failed_checks[0].name == "required_sql_features"

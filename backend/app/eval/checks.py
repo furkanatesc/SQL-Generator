@@ -42,3 +42,30 @@ def check_forbidden_sql_fragments(trace: NL2SQLTrace, case: GoldenCase) -> EvalC
         message="" if not present else f"Found forbidden SQL fragments: {present}",
         details={"forbidden": case.forbidden_sql_fragments, "present": present},
     )
+
+def check_required_sql_features(trace: NL2SQLTrace, case: GoldenCase) -> EvalCheckResult:
+    from app.eval.sql_features import extract_sql_features
+    detected = extract_sql_features(trace.generated_sql or "")
+    required = set(case.required_sql_features)
+    missing = sorted(list(required - detected))
+    
+    return EvalCheckResult(
+        name="required_sql_features",
+        passed=not missing,
+        message="" if not missing else f"Missing required SQL features: {missing}",
+        details={"required": sorted(list(required)), "detected": sorted(list(detected)), "missing": missing},
+    )
+
+def check_forbidden_sql_features(trace: NL2SQLTrace, case: GoldenCase) -> EvalCheckResult:
+    from app.eval.sql_features import extract_sql_features
+    detected = extract_sql_features(trace.generated_sql or "")
+    forbidden = set(case.forbidden_sql_features)
+    present = sorted(list(forbidden.intersection(detected)))
+    
+    return EvalCheckResult(
+        name="forbidden_sql_features",
+        passed=not present,
+        message="" if not present else f"Found forbidden SQL features: {present}",
+        details={"forbidden": sorted(list(forbidden)), "detected": sorted(list(detected)), "present": present},
+    )
+

@@ -13,6 +13,9 @@ class GoldenCase:
     required_sql_fragments: List[str] = field(default_factory=list)
     forbidden_sql_fragments: List[str] = field(default_factory=list)
 
+    required_sql_features: List[str] = field(default_factory=list)
+    forbidden_sql_features: List[str] = field(default_factory=list)
+
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

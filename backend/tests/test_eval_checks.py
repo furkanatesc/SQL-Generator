@@ -4,6 +4,8 @@ from app.eval.checks import (
     check_expected_tables,
     check_required_sql_fragments,
     check_forbidden_sql_fragments,
+    check_required_sql_features,
+    check_forbidden_sql_features,
 )
 from app.eval.golden_cases import GOLDEN_CASES
 from app.trace.models import NL2SQLTrace
@@ -66,3 +68,43 @@ def test_forbidden_sql_fragments_check_fails_when_present():
 def test_golden_case_ids_are_unique():
     ids = [case.case_id for case in GOLDEN_CASES]
     assert len(ids) == len(set(ids))
+
+def test_required_sql_features_check_passes():
+    trace = NL2SQLTrace(generated_sql="SELECT * FROM users JOIN orders ON users.id = orders.user_id")
+    case = GoldenCase(case_id="test", natural_query="test", required_sql_features=["join"])
+    result = check_required_sql_features(trace, case)
+    assert result.passed is True
+
+def test_required_sql_features_check_reports_missing_features():
+    trace = NL2SQLTrace(generated_sql="SELECT * FROM users")
+    case = GoldenCase(case_id="test", natural_query="test", required_sql_features=["join"])
+    result = check_required_sql_features(trace, case)
+    assert result.passed is False
+    assert "join" in result.details["missing"]
+    assert "join" in result.message
+
+def test_forbidden_sql_features_check_passes_when_absent():
+    trace = NL2SQLTrace(generated_sql="SELECT * FROM users")
+    case = GoldenCase(case_id="test", natural_query="test", forbidden_sql_features=["join"])
+    result = check_forbidden_sql_features(trace, case)
+    assert result.passed is True
+
+def test_forbidden_sql_features_check_fails_when_present():
+    trace = NL2SQLTrace(generated_sql="SELECT * FROM users JOIN orders ON users.id = orders.user_id")
+    case = GoldenCase(case_id="test", natural_query="test", forbidden_sql_features=["join"])
+    result = check_forbidden_sql_features(trace, case)
+    assert result.passed is False
+    assert "join" in result.details["present"]
+    assert "join" in result.message
+
+def test_golden_cases_have_non_empty_natural_queries():
+    for case in GOLDEN_CASES:
+        assert case.natural_query.strip() != "", f"Case {case.case_id} has an empty natural query"
+
+def test_golden_cases_use_supported_sql_features():
+    SUPPORTED_SQL_FEATURES = {"join", "aggregation", "where", "group_by", "order_by", "limit"}
+    for case in GOLDEN_CASES:
+        for feature in case.required_sql_features:
+            assert feature in SUPPORTED_SQL_FEATURES, f"Unsupported required feature {feature} in case {case.case_id}"
+        for feature in case.forbidden_sql_features:
+            assert feature in SUPPORTED_SQL_FEATURES, f"Unsupported forbidden feature {feature} in case {case.case_id}"
