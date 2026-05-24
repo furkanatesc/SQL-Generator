@@ -1,4 +1,3 @@
-from typing import Any
 from app.eval.models import EvalCheckResult, GoldenCase
 from app.trace.models import NL2SQLTrace
 

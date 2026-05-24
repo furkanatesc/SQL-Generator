@@ -2,36 +2,16 @@ import argparse
 import json
 from app.eval.golden_cases import GOLDEN_CASES
 from app.eval.runner import EvaluationRunner
-from app.trace.store import RecordingTraceStore
-
-# Dummy pipeline to make the CLI runnable if real pipeline isn't hooked up yet, 
-# or we can import the real pipeline if it exists. 
-# For now, to keep it simple and independent, we'll try to import the real one
-# and fall back to a mock if needed, but the instructions say "bu PR'da test 
-# düzeyinde çalışacak". Let's provide a basic hook for the real pipeline.
-try:
-    from app.sql_pipeline import SQLPipeline
-    from app.llm_client import LLMClient
-    from app.schema_manager import SchemaManager
-    from app.nlp.embeddings import EmbeddingModel
-    def get_real_pipeline(store: RecordingTraceStore):
-        # We need to initialize the real pipeline.
-        # However, to avoid real LLM calls by mistake in eval right now,
-        # and since this is just an evaluation skeleton, let's use a fake pipeline
-        # in the CLI by default unless configured otherwise.
-        # Actually, the user says "python -m app.eval.run_eval" should work.
-        pass
-except ImportError:
-    pass
+from app.eval.trace_recorder import RecordingTraceStore
 
 class FakePipelineForCLI:
     def __init__(self, store: RecordingTraceStore):
         self.store = store
         
-    def run_pipeline(self, query: str):
+    def run_pipeline(self, *, natural_query: str, **kwargs):
         from app.trace.models import NL2SQLTrace
         trace = NL2SQLTrace(
-            raw_query=query,
+            raw_query=natural_query,
             sql_valid=True,
             selected_tables=["CUSTOMERS"],
             generated_sql="SELECT * FROM customers"

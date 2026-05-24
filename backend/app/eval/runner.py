@@ -6,7 +6,7 @@ from app.eval.checks import (
     check_required_sql_fragments,
     check_forbidden_sql_fragments
 )
-from app.trace.store import RecordingTraceStore
+from app.eval.trace_recorder import RecordingTraceStore
 
 class EvaluationRunner:
     def __init__(self, pipeline_factory: Callable[[RecordingTraceStore], Any]):
@@ -23,7 +23,10 @@ class EvaluationRunner:
         
         try:
             # We assume the pipeline takes natural_query as input
-            pipeline.run_pipeline(query=case.natural_query)
+            pipeline.run_pipeline(
+                job_id=f"eval:{case.case_id}",
+                natural_query=case.natural_query
+            )
         except Exception as e:
             # We don't want the suite to crash if one case fails badly
             pass

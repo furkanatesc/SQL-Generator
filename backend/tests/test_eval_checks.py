@@ -5,6 +5,7 @@ from app.eval.checks import (
     check_required_sql_fragments,
     check_forbidden_sql_fragments,
 )
+from app.eval.golden_cases import GOLDEN_CASES
 from app.trace.models import NL2SQLTrace
 
 def test_check_sql_valid_passes_when_trace_sql_valid_true():
@@ -61,3 +62,7 @@ def test_forbidden_sql_fragments_check_fails_when_present():
     assert result.passed is False
     assert "DELETE" in result.details["present"]
     assert "DELETE" in result.message
+
+def test_golden_case_ids_are_unique():
+    ids = [case.case_id for case in GOLDEN_CASES]
+    assert len(ids) == len(set(ids))

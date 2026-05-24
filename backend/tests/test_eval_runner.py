@@ -1,7 +1,7 @@
 from app.eval.runner import EvaluationRunner
 from app.eval.models import GoldenCase
 from app.trace.models import NL2SQLTrace
-from app.trace.store import RecordingTraceStore
+from app.eval.trace_recorder import RecordingTraceStore
 
 class FakePipeline:
     def __init__(self, store: RecordingTraceStore, trace_to_save: NL2SQLTrace, should_crash: bool = False):
@@ -9,11 +9,37 @@ class FakePipeline:
         self.trace_to_save = trace_to_save
         self.should_crash = should_crash
 
-    def run_pipeline(self, **kwargs):
+    def run_pipeline(self, *, natural_query: str, **kwargs):
         if self.should_crash:
             raise RuntimeError("Pipeline crashed completely")
         self.store.save(self.trace_to_save)
         return {"success": self.trace_to_save.sql_valid is True}
+
+def test_runner_calls_pipeline_with_natural_query():
+    trace = NL2SQLTrace(sql_valid=True, selected_tables=["USERS"], generated_sql="SELECT * FROM users")
+
+    class StrictFakePipeline:
+        def __init__(self, store):
+            self.store = store
+            self.received_natural_query = None
+
+        def run_pipeline(self, *, natural_query, **kwargs):
+            self.received_natural_query = natural_query
+            self.store.save(trace)
+
+    holder = {}
+
+    def factory(store):
+        holder["pipeline"] = StrictFakePipeline(store)
+        return holder["pipeline"]
+
+    runner = EvaluationRunner(factory)
+    case = GoldenCase(case_id="c1", natural_query="list users")
+
+    runner.run_case(case)
+
+    assert holder["pipeline"].received_natural_query == "list users"
+
 
 def test_runner_runs_single_case_and_returns_passed_result():
     trace = NL2SQLTrace(
