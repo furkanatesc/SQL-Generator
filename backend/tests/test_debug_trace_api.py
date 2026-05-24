@@ -84,3 +84,79 @@ def test_debug_traces_disabled(monkeypatch, test_client, mock_store):
     response = test_client.get("/api/debug/traces/t1", headers=auth_headers())
     assert response.status_code == 404
     assert response.json()["detail"] == "Not found"
+
+def test_debug_traces_filters_by_sql_valid(test_client, mock_store):
+    mock_store.save(NL2SQLTrace(trace_id="t1", sql_valid=True))
+    mock_store.save(NL2SQLTrace(trace_id="t2", sql_valid=False))
+
+    res = test_client.get("/api/debug/traces?sql_valid=false", headers=auth_headers())
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["traces"]) == 1
+    assert data["traces"][0]["trace_id"] == "t2"
+    assert data["filters"]["sql_valid"] is False
+
+def test_debug_traces_filters_by_error_type(test_client, mock_store):
+    mock_store.save(NL2SQLTrace(trace_id="t1", error_type="err1"))
+    mock_store.save(NL2SQLTrace(trace_id="t2", error_type="err2"))
+
+    res = test_client.get("/api/debug/traces?error_type=err1", headers=auth_headers())
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["traces"]) == 1
+    assert data["traces"][0]["trace_id"] == "t1"
+    assert data["filters"]["error_type"] == "err1"
+
+def test_debug_traces_filters_by_job_id(test_client, mock_store):
+    mock_store.save(NL2SQLTrace(trace_id="t1", metadata={"job_id": "j1"}))
+    mock_store.save(NL2SQLTrace(trace_id="t2", metadata={"job_id": "j2"}))
+
+    res = test_client.get("/api/debug/traces?job_id=j1", headers=auth_headers())
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["traces"]) == 1
+    assert data["traces"][0]["trace_id"] == "t1"
+    assert data["filters"]["job_id"] == "j1"
+
+def test_debug_traces_filters_by_dialect(test_client, mock_store):
+    mock_store.save(NL2SQLTrace(trace_id="t1", metadata={"dialect": "pg"}))
+    mock_store.save(NL2SQLTrace(trace_id="t2", metadata={"dialect": "mysql"}))
+
+    res = test_client.get("/api/debug/traces?dialect=pg", headers=auth_headers())
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["traces"]) == 1
+    assert data["traces"][0]["trace_id"] == "t1"
+    assert data["filters"]["dialect"] == "pg"
+
+def test_debug_traces_paginates_with_limit_and_offset(test_client, mock_store):
+    for i in range(5):
+        mock_store.save(NL2SQLTrace(trace_id=f"t{i}", created_at=f"2026-01-0{i+1}T00:00:00+00:00"))
+
+    res = test_client.get("/api/debug/traces?limit=2&offset=1", headers=auth_headers())
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data["traces"]) == 2
+    assert data["traces"][0]["trace_id"] == "t3"
+    assert data["traces"][1]["trace_id"] == "t2"
+
+def test_debug_traces_returns_pagination_metadata(test_client, mock_store):
+    for i in range(3):
+        mock_store.save(NL2SQLTrace(trace_id=f"t{i}"))
+
+    res = test_client.get("/api/debug/traces?limit=2&offset=0", headers=auth_headers())
+    data = res.json()
+    
+    assert data["pagination"]["limit"] == 2
+    assert data["pagination"]["offset"] == 0
+    assert data["pagination"]["has_more"] is True
+    assert data["pagination"]["next_offset"] == 2
+    
+    # Second page
+    res2 = test_client.get("/api/debug/traces?limit=2&offset=2", headers=auth_headers())
+    data2 = res2.json()
+    
+    assert data2["pagination"]["limit"] == 2
+    assert data2["pagination"]["offset"] == 2
+    assert data2["pagination"]["has_more"] is False
+    assert data2["pagination"]["next_offset"] is None

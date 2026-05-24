@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from app.trace.models import NL2SQLTrace
 from app.trace.store import TraceStore
+from app.trace.query import TraceQuery
 
 
 class SQLiteTraceStore(TraceStore):
@@ -94,6 +95,18 @@ class SQLiteTraceStore(TraceStore):
                 "attempts_json",
                 "attempts_json TEXT NOT NULL DEFAULT '[]'",
             )
+            self._ensure_column(
+                conn,
+                "nl2sql_traces",
+                "job_id",
+                "job_id TEXT",
+            )
+            self._ensure_column(
+                conn,
+                "nl2sql_traces",
+                "dialect",
+                "dialect TEXT",
+            )
             conn.commit()
 
     def _ensure_column(self, conn, table_name: str, column_name: str, column_sql: str) -> None:
@@ -135,6 +148,8 @@ class SQLiteTraceStore(TraceStore):
                     generated_sql,
                     last_generated_sql,
                     attempts_json,
+                    job_id,
+                    dialect,
                     sql_valid,
                     sql_validation_errors_json,
                     error_type,
@@ -142,7 +157,7 @@ class SQLiteTraceStore(TraceStore):
                     latency_ms_json,
                     metadata_json
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 trace.trace_id,
                 trace.created_at,
@@ -158,6 +173,8 @@ class SQLiteTraceStore(TraceStore):
                 trace.generated_sql,
                 trace.last_generated_sql,
                 self._json_dumps(trace.attempts, []),
+                trace.metadata.get("job_id"),
+                trace.metadata.get("dialect"),
                 None if trace.sql_valid is None else int(trace.sql_valid),
                 self._json_dumps(trace.sql_validation_errors, []),
                 trace.error_type,
@@ -180,17 +197,51 @@ class SQLiteTraceStore(TraceStore):
 
         return self._row_to_trace(row)
 
-    def list_recent(self, limit: int = 50) -> List[NL2SQLTrace]:
+    def list_traces(self, query: TraceQuery) -> List[NL2SQLTrace]:
         with self._lock:
             conn = self._connect()
-            rows = conn.execute(
-                """
+            
+            where = []
+            params = []
+
+            if query.sql_valid is not None:
+                where.append("sql_valid = ?")
+                params.append(int(query.sql_valid))
+
+            if query.error_type:
+                where.append("error_type = ?")
+                params.append(query.error_type)
+
+            if query.job_id:
+                where.append("job_id = ?")
+                params.append(query.job_id)
+
+            if query.dialect:
+                where.append("dialect = ?")
+                params.append(query.dialect)
+
+            if query.created_after:
+                where.append("created_at >= ?")
+                params.append(query.created_after)
+
+            if query.created_before:
+                where.append("created_at <= ?")
+                params.append(query.created_before)
+
+            where_clause = ""
+            if where:
+                where_clause = "WHERE " + " AND ".join(where)
+
+            sql = f"""
                 SELECT * FROM nl2sql_traces
-                ORDER BY created_at DESC
-                LIMIT ?
-                """,
-                (limit,)
-            ).fetchall()
+                {where_clause}
+                ORDER BY created_at DESC, trace_id DESC
+                LIMIT ? OFFSET ?
+            """
+            
+            params.extend([query.limit, query.offset])
+            
+            rows = conn.execute(sql, tuple(params)).fetchall()
 
         return [self._row_to_trace(row) for row in rows]
 

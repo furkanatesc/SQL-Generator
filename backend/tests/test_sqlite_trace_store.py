@@ -182,3 +182,112 @@ def test_sqlite_trace_store_migrates_existing_trace_table(tmp_path):
     loaded = store.get("t1")
     assert loaded.last_generated_sql == "SELECT 1"
     assert loaded.attempts == [{"attempt": 1}]
+
+from app.trace.query import TraceQuery
+
+def test_sqlite_trace_store_filters_by_sql_valid(tmp_path):
+    store = SQLiteTraceStore(str(tmp_path / "traces.db"))
+    store.save(NL2SQLTrace(trace_id="t1", sql_valid=True))
+    store.save(NL2SQLTrace(trace_id="t2", sql_valid=False))
+    store.save(NL2SQLTrace(trace_id="t3", sql_valid=None))
+
+    assert len(store.list_traces(TraceQuery(sql_valid=True))) == 1
+    assert store.list_traces(TraceQuery(sql_valid=True))[0].trace_id == "t1"
+    
+    assert len(store.list_traces(TraceQuery(sql_valid=False))) == 1
+    assert store.list_traces(TraceQuery(sql_valid=False))[0].trace_id == "t2"
+
+def test_sqlite_trace_store_filters_by_error_type(tmp_path):
+    store = SQLiteTraceStore(str(tmp_path / "traces.db"))
+    store.save(NL2SQLTrace(trace_id="t1", error_type="type1"))
+    store.save(NL2SQLTrace(trace_id="t2", error_type="type2"))
+
+    res = store.list_traces(TraceQuery(error_type="type1"))
+    assert len(res) == 1
+    assert res[0].trace_id == "t1"
+
+def test_sqlite_trace_store_filters_by_job_id(tmp_path):
+    store = SQLiteTraceStore(str(tmp_path / "traces.db"))
+    store.save(NL2SQLTrace(trace_id="t1", metadata={"job_id": "j1"}))
+    store.save(NL2SQLTrace(trace_id="t2", metadata={"job_id": "j2"}))
+
+    res = store.list_traces(TraceQuery(job_id="j1"))
+    assert len(res) == 1
+    assert res[0].trace_id == "t1"
+
+def test_sqlite_trace_store_filters_by_dialect(tmp_path):
+    store = SQLiteTraceStore(str(tmp_path / "traces.db"))
+    store.save(NL2SQLTrace(trace_id="t1", metadata={"dialect": "postgres"}))
+    store.save(NL2SQLTrace(trace_id="t2", metadata={"dialect": "mysql"}))
+
+    res = store.list_traces(TraceQuery(dialect="postgres"))
+    assert len(res) == 1
+    assert res[0].trace_id == "t1"
+
+def test_sqlite_trace_store_applies_limit_and_offset(tmp_path):
+    store = SQLiteTraceStore(str(tmp_path / "traces.db"))
+    for i in range(5):
+        store.save(NL2SQLTrace(trace_id=f"t{i}", created_at=f"2026-01-0{i+1}T00:00:00+00:00"))
+
+    res = store.list_traces(TraceQuery(limit=2, offset=1))
+    assert len(res) == 2
+    assert res[0].trace_id == "t3"
+    assert res[1].trace_id == "t2"
+
+def test_sqlite_trace_store_combines_filters_with_and_semantics(tmp_path):
+    store = SQLiteTraceStore(str(tmp_path / "traces.db"))
+    store.save(NL2SQLTrace(trace_id="t1", sql_valid=False, error_type="e1"))
+    store.save(NL2SQLTrace(trace_id="t2", sql_valid=False, error_type="e2"))
+    store.save(NL2SQLTrace(trace_id="t3", sql_valid=True, error_type="e1"))
+
+    res = store.list_traces(TraceQuery(sql_valid=False, error_type="e1"))
+    assert len(res) == 1
+    assert res[0].trace_id == "t1"
+
+def test_sqlite_trace_store_adds_job_id_and_dialect_columns_to_existing_db(tmp_path):
+    import sqlite3
+    db_path = tmp_path / "traces.db"
+    
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            CREATE TABLE nl2sql_traces (
+                trace_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                raw_query TEXT,
+                normalized_query TEXT,
+                candidate_signals_json TEXT NOT NULL DEFAULT '[]',
+                rag_matches_json TEXT NOT NULL DEFAULT '[]',
+                graph_trace_json TEXT NOT NULL DEFAULT '{}',
+                selected_tables_json TEXT NOT NULL DEFAULT '[]',
+                dropped_tables_json TEXT NOT NULL DEFAULT '[]',
+                estimated_tokens INTEGER NOT NULL DEFAULT 0,
+                confidence REAL,
+                generated_sql TEXT,
+                sql_valid INTEGER,
+                sql_validation_errors_json TEXT NOT NULL DEFAULT '[]',
+                error_type TEXT,
+                error_message TEXT,
+                latency_ms_json TEXT NOT NULL DEFAULT '{}',
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+        
+    store = SQLiteTraceStore(str(db_path))
+    trace = NL2SQLTrace(
+        trace_id="t1",
+        metadata={"job_id": "job-1", "dialect": "psql"}
+    )
+    store.save(trace)
+    
+    loaded = store.get("t1")
+    assert loaded.metadata.get("job_id") == "job-1"
+    assert loaded.metadata.get("dialect") == "psql"
+    
+    res = store.list_traces(TraceQuery(job_id="job-1"))
+    assert len(res) == 1
+    
+    # Also verify the columns were actually added
+    with sqlite3.connect(db_path) as conn:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(nl2sql_traces)").fetchall()}
+        assert "job_id" in cols
+        assert "dialect" in cols
