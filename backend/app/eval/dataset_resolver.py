@@ -4,14 +4,20 @@ from app.eval.profiles import EvalProfile, EvalProfileNotImplementedError
 from app.eval.golden_cases import GOLDEN_CASES
 
 SMOKE_CASES = [
-    GOLDEN_CASES[0]
+    GoldenCase(
+        case_id="smoke_list_customers",
+        natural_query="List all customers",
+        expected_tables=["CUSTOMERS"],
+        required_sql_fragments=["SELECT", "FROM"],
+        forbidden_sql_fragments=["DELETE", "DROP", "UPDATE", "INSERT"],
+    )
 ]
 
 def get_cases_for_profile(profile: EvalProfile) -> List[GoldenCase]:
     if profile == EvalProfile.SMOKE:
-        return SMOKE_CASES
+        return list(SMOKE_CASES)
     elif profile == EvalProfile.GOLDEN:
-        return GOLDEN_CASES
+        return list(GOLDEN_CASES)
     elif profile == EvalProfile.LARGE_SCHEMA:
         raise EvalProfileNotImplementedError("large_schema profile is reserved for future PRs and is not implemented yet.")
     else:
