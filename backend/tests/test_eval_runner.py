@@ -143,3 +143,64 @@ def test_runner_fails_case_when_required_sql_feature_missing():
     failed_checks = [c for c in result.checks if not c.passed]
     assert len(failed_checks) == 1
     assert failed_checks[0].name == "required_sql_features"
+
+def test_run_suite_returns_summary_counts():
+    trace1 = NL2SQLTrace(sql_valid=True, selected_tables=["USERS"])
+    trace2 = NL2SQLTrace(sql_valid=False) # Will fail sql_valid check
+
+    count = [0]
+    class TwoCasePipeline:
+        def __init__(self, store):
+            self.store = store
+            
+        def run_pipeline(self, *, natural_query, **kwargs):
+            if count[0] == 0:
+                self.store.save(trace1)
+            else:
+                self.store.save(trace2)
+            count[0] += 1
+            
+    runner = EvaluationRunner(pipeline_factory=lambda store: TwoCasePipeline(store))
+    cases = [
+        GoldenCase(case_id="c1", natural_query="q1"),
+        GoldenCase(case_id="c2", natural_query="q2")
+    ]
+    
+    suite_result = runner.run_suite(cases)
+    assert suite_result.total_cases == 2
+    assert suite_result.passed == 1
+    assert suite_result.failed == 1
+    assert len(suite_result.results) == 2
+
+def test_run_suite_computes_pass_rate():
+    trace = NL2SQLTrace(sql_valid=True)
+    runner = EvaluationRunner(pipeline_factory=lambda store: FakePipeline(store, trace))
+    cases = [
+        GoldenCase(case_id="c1", natural_query="q1"),
+        GoldenCase(case_id="c2", natural_query="q2"),
+        GoldenCase(case_id="c3", natural_query="q3"),
+        GoldenCase(case_id="c4", natural_query="q4")
+    ]
+    # all pass
+    suite_result = runner.run_suite(cases)
+    assert suite_result.pass_rate == 1.0
+
+def test_suite_result_pass_rate_is_zero_when_no_cases():
+    runner = EvaluationRunner(pipeline_factory=lambda store: FakePipeline(store, NL2SQLTrace()))
+    suite_result = runner.run_suite([])
+    assert suite_result.total_cases == 0
+    assert suite_result.passed == 0
+    assert suite_result.failed == 0
+    assert suite_result.pass_rate == 0.0
+    assert suite_result.results == []
+
+def test_run_all_backward_compatibility_is_preserved():
+    trace = NL2SQLTrace(sql_valid=True)
+    runner = EvaluationRunner(pipeline_factory=lambda store: FakePipeline(store, trace))
+    cases = [
+        GoldenCase(case_id="c1", natural_query="q1")
+    ]
+    results = runner.run_all(cases)
+    assert isinstance(results, list)
+    assert len(results) == 1
+    assert results[0].case_id == "c1"

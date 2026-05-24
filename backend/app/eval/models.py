@@ -34,3 +34,12 @@ class EvalCaseResult:
     checks: List[EvalCheckResult]
     generated_sql: Optional[str] = None
     error_type: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class EvalSuiteResult:
+    total_cases: int
+    passed: int
+    failed: int
+    pass_rate: float
+    results: List[EvalCaseResult]

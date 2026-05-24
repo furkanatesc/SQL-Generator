@@ -1,5 +1,5 @@
 from typing import List, Callable, Any
-from app.eval.models import GoldenCase, EvalCaseResult, EvalCheckResult
+from app.eval.models import GoldenCase, EvalCaseResult, EvalCheckResult, EvalSuiteResult
 from app.eval.checks import (
     check_sql_valid,
     check_expected_tables,
@@ -71,3 +71,21 @@ class EvaluationRunner:
 
     def run_all(self, cases: List[GoldenCase]) -> List[EvalCaseResult]:
         return [self.run_case(case) for case in cases]
+
+    def run_suite(self, cases: List[GoldenCase]) -> EvalSuiteResult:
+        results = self.run_all(cases)
+        total = len(results)
+        if total == 0:
+            return EvalSuiteResult(total_cases=0, passed=0, failed=0, pass_rate=0.0, results=[])
+        
+        passed = sum(1 for r in results if r.passed)
+        failed = total - passed
+        pass_rate = passed / total
+        
+        return EvalSuiteResult(
+            total_cases=total,
+            passed=passed,
+            failed=failed,
+            pass_rate=pass_rate,
+            results=results
+        )
