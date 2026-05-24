@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from app.eval.runner import EvaluationRunner
 from app.eval.reporting import suite_result_to_dict
 from app.eval.trace_recorder import RecordingTraceStore
@@ -18,27 +19,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     return parser
 
-def main():
+def build_runner() -> EvaluationRunner:
+    # In PR 4.4, we use a fake pipeline so we don't hit the real LLM API by default.
+    return EvaluationRunner(pipeline_factory=lambda store: DeterministicFakePipeline(store))
+
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         profile_enum = parse_eval_profile(args.profile)
         cases = get_cases_for_profile(profile_enum)
     except EvalProfileNotImplementedError as e:
-        raise SystemExit(str(e))
+        print(str(e), file=sys.stderr)
+        return 2
     except ValueError as e:
-        raise SystemExit(str(e))
+        print(str(e), file=sys.stderr)
+        return 2
 
-    # In PR 4.4, we use a fake pipeline so we don't hit the real LLM API by default.
-    # The user explicitly said: "Eval testleri veya default runner gerçek LLM çağırırsa PR reddedilir."
-    runner = EvaluationRunner(pipeline_factory=lambda store: DeterministicFakePipeline(store))
+    runner = build_runner()
     suite_result = runner.run_suite(cases, profile=profile_enum)
 
     if args.json:
         output = suite_result_to_dict(suite_result)
         print(json.dumps(output, indent=2))
-        return
+        return 1 if suite_result.failed > 0 else 0
 
     print("Evaluation Summary")
     print("-" * 18)
@@ -60,5 +65,7 @@ def main():
                 print(f"  FAIL {c.name}: {msg}")
         print()
 
+    return 1 if suite_result.failed > 0 else 0
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
