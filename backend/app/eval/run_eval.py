@@ -23,6 +23,34 @@ def build_runner() -> EvaluationRunner:
     # In PR 4.4, we use a fake pipeline so we don't hit the real LLM API by default.
     return EvaluationRunner(pipeline_factory=lambda store: DeterministicFakePipeline(store))
 
+def print_text_report(suite_result) -> None:
+    print("Evaluation Summary")
+    print("-" * 18)
+    print(f"Profile: {suite_result.profile}")
+    print(f"Total cases: {suite_result.total_cases}")
+    print(f"Passed: {suite_result.passed}")
+    print(f"Failed: {suite_result.failed}")
+    print(f"Pass rate: {suite_result.pass_rate * 100:.2f}%")
+    print()
+
+    for r in suite_result.results:
+        status = "[PASS]" if r.passed else "[FAIL]"
+        print(f"{status} {r.case_id}")
+
+        if r.error_type:
+            print(f"  Error type: {r.error_type}")
+
+        if r.error_message:
+            print(f"  Error message: {r.error_message}")
+
+        for c in r.checks:
+            if c.passed:
+                print(f"  PASS {c.name}")
+            else:
+                msg = c.message if c.message else "Failed"
+                print(f"  FAIL {c.name}: {msg}")
+        print()
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -45,26 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(output, indent=2))
         return 1 if suite_result.failed > 0 else 0
 
-    print("Evaluation Summary")
-    print("-" * 18)
-    print(f"Profile: {suite_result.profile}")
-    print(f"Total cases: {suite_result.total_cases}")
-    print(f"Passed: {suite_result.passed}")
-    print(f"Failed: {suite_result.failed}")
-    print(f"Pass rate: {suite_result.pass_rate * 100:.2f}%")
-    print()
-
-    for r in suite_result.results:
-        status = "[PASS]" if r.passed else "[FAIL]"
-        print(f"{status} {r.case_id}")
-        for c in r.checks:
-            if c.passed:
-                print(f"  PASS {c.name}")
-            else:
-                msg = c.message if c.message else "Failed"
-                print(f"  FAIL {c.name}: {msg}")
-        print()
-
+    print_text_report(suite_result)
     return 1 if suite_result.failed > 0 else 0
 
 if __name__ == "__main__":
