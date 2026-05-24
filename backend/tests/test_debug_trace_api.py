@@ -160,3 +160,40 @@ def test_debug_traces_returns_pagination_metadata(test_client, mock_store):
     assert data2["pagination"]["offset"] == 2
     assert data2["pagination"]["has_more"] is False
     assert data2["pagination"]["next_offset"] is None
+
+def test_debug_trace_api_response_shape_is_stable(test_client, mock_store):
+    mock_store.save(NL2SQLTrace(trace_id="t1"))
+    
+    res = test_client.get("/api/debug/traces", headers=auth_headers())
+    data = res.json()
+    
+    assert "count" in data
+    assert "pagination" in data
+    assert "filters" in data
+    assert "traces" in data
+    
+    assert "limit" in data["pagination"]
+    assert "offset" in data["pagination"]
+    assert "next_offset" in data["pagination"]
+    assert "has_more" in data["pagination"]
+
+def test_debug_trace_api_rejects_limit_over_200(test_client, mock_store):
+    res = test_client.get("/api/debug/traces?limit=201", headers=auth_headers())
+    assert res.status_code == 422  # validation error
+
+def test_debug_trace_api_rejects_negative_offset(test_client, mock_store):
+    res = test_client.get("/api/debug/traces?offset=-1", headers=auth_headers())
+    assert res.status_code == 422  # validation error
+
+def test_debug_trace_api_combines_filters_with_and_semantics(test_client, mock_store):
+    mock_store.save(NL2SQLTrace(trace_id="t1", error_type="e1", metadata={"job_id": "j1"}))
+    mock_store.save(NL2SQLTrace(trace_id="t2", error_type="e2", metadata={"job_id": "j1"}))
+    mock_store.save(NL2SQLTrace(trace_id="t3", error_type="e1", metadata={"job_id": "j2"}))
+    
+    res = test_client.get("/api/debug/traces?error_type=e1&job_id=j1", headers=auth_headers())
+    data = res.json()
+    assert len(data["traces"]) == 1
+    assert data["traces"][0]["trace_id"] == "t1"
+    
+    assert data["filters"]["error_type"] == "e1"
+    assert data["filters"]["job_id"] == "j1"
