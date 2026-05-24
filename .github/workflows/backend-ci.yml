@@ -42,3 +42,7 @@ jobs:
           NL2SQL_DEBUG_ENDPOINTS_ENABLED: "true"
         run: |
           pytest -q
+
+      - name: Run eval smoke profile
+        run: |
+          python -m app.eval.run_eval --profile smoke --json
