@@ -1,13 +1,13 @@
 import json
-import pytest
-from app.eval.run_eval import main
-from app.eval.models import EvalSuiteResult
 
-def test_eval_cli_returns_zero_for_successful_smoke_profile(capsys):
+from app.eval.models import EvalCaseResult, EvalSuiteResult
+from app.eval.run_eval import main
+
+def test_eval_cli_returns_zero_for_successful_smoke_profile():
     exit_code = main(["--profile", "smoke"])
     assert exit_code == 0
 
-def test_eval_cli_returns_zero_for_successful_golden_profile(capsys):
+def test_eval_cli_returns_zero_for_successful_golden_profile():
     exit_code = main(["--profile", "golden"])
     assert exit_code == 0
 
@@ -66,7 +66,6 @@ def test_eval_cli_returns_one_when_suite_has_failed_cases(monkeypatch):
     assert exit_code == 1
 
 def test_eval_cli_text_output_includes_failure_diagnostics(monkeypatch, capsys):
-    from app.eval.models import EvalCaseResult
     class FakeRunner:
         def run_suite(self, cases, profile):
             return EvalSuiteResult(

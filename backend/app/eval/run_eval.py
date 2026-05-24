@@ -1,12 +1,12 @@
 import argparse
 import json
 import sys
-from app.eval.runner import EvaluationRunner
-from app.eval.reporting import suite_result_to_dict
-from app.eval.trace_recorder import RecordingTraceStore
-from app.eval.profiles import EvalProfile, parse_eval_profile, EvalProfileNotImplementedError
 from app.eval.dataset_resolver import get_cases_for_profile
 from app.eval.fake_pipeline import DeterministicFakePipeline
+from app.eval.models import EvalSuiteResult
+from app.eval.profiles import EvalProfile, EvalProfileNotImplementedError, parse_eval_profile
+from app.eval.reporting import suite_result_to_dict
+from app.eval.runner import EvaluationRunner
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run NL2SQL Evaluation")
@@ -20,10 +20,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 def build_runner() -> EvaluationRunner:
-    # In PR 4.4, we use a fake pipeline so we don't hit the real LLM API by default.
+    # Use deterministic fake eval pipeline by default; no real LLM/API calls.
     return EvaluationRunner(pipeline_factory=lambda store: DeterministicFakePipeline(store))
 
-def print_text_report(suite_result) -> None:
+def print_text_report(suite_result: EvalSuiteResult) -> None:
     print("Evaluation Summary")
     print("-" * 18)
     print(f"Profile: {suite_result.profile}")
