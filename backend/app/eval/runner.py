@@ -30,9 +30,16 @@ class EvaluationRunner:
                 job_id=f"eval:{case.case_id}",
                 natural_query=case.natural_query
             )
-        except Exception as e:
+        except Exception as exc:
             # We don't want the suite to crash if one case fails badly
-            pass
+            return EvalCaseResult(
+                case_id=case.case_id,
+                passed=False,
+                checks=[],
+                generated_sql=None,
+                error_type="PipelineExecutionError",
+                error_message=str(exc)
+            )
         
         # At this point, the pipeline should have saved a trace.
         # If it didn't (e.g. crashed before saving), we handle it.
@@ -41,7 +48,9 @@ class EvaluationRunner:
                 case_id=case.case_id,
                 passed=False,
                 checks=[],
-                error_type="MissingTraceError"
+                generated_sql=None,
+                error_type="MissingTraceError",
+                error_message="Pipeline completed without saving an evaluation trace."
             )
             
         trace = store.saved[0]

@@ -15,6 +15,7 @@ def case_result_to_dict(result: EvalCaseResult) -> Dict[str, Any]:
         "passed": result.passed,
         "generated_sql": result.generated_sql,
         "error_type": result.error_type,
+        "error_message": result.error_message,
         "checks": [check_result_to_dict(c) for c in result.checks]
     }
 

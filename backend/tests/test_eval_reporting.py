@@ -50,3 +50,16 @@ def test_suite_result_to_dict_has_stable_summary_shape():
     assert summary["pass_rate"] == 0.7
     assert "results" in result
     assert result["results"] == []
+
+def test_case_result_to_dict_includes_error_message():
+    case = EvalCaseResult(
+        case_id="case_with_error",
+        passed=False,
+        checks=[],
+        generated_sql=None,
+        error_type="PipelineExecutionError",
+        error_message="Something blew up"
+    )
+    result = case_result_to_dict(case)
+    assert result["error_message"] == "Something blew up"
+    assert result["error_type"] == "PipelineExecutionError"

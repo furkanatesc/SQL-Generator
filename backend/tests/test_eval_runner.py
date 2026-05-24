@@ -206,3 +206,69 @@ def test_run_all_backward_compatibility_is_preserved():
     assert isinstance(results, list)
     assert len(results) == 1
     assert results[0].case_id == "c1"
+
+def test_runner_surfaces_pipeline_exception_diagnostics():
+    class CrashingPipeline:
+        def __init__(self, store):
+            self.store = store
+            
+        def run_pipeline(self, *, natural_query: str, **kwargs):
+            raise RuntimeError("boom")
+            
+    runner = EvaluationRunner(lambda store: CrashingPipeline(store))
+    case = GoldenCase(case_id="crash_case", natural_query="test")
+    
+    result = runner.run_case(case)
+    
+    assert result.passed is False
+    assert result.error_type == "PipelineExecutionError"
+    assert "boom" in result.error_message
+    assert result.checks == []
+    assert result.generated_sql is None
+
+def test_runner_surfaces_missing_trace_diagnostic():
+    class NoTracePipeline:
+        def __init__(self, store):
+            self.store = store
+
+        def run_pipeline(self, *, natural_query: str, **kwargs):
+            return {"success": True}
+            
+    runner = EvaluationRunner(lambda store: NoTracePipeline(store))
+    case = GoldenCase(case_id="no_trace_case", natural_query="test")
+    
+    result = runner.run_case(case)
+    
+    assert result.passed is False
+    assert result.error_type == "MissingTraceError"
+    assert result.error_message == "Pipeline completed without saving an evaluation trace."
+    assert result.checks == []
+    assert result.generated_sql is None
+
+def test_suite_continues_after_pipeline_exception():
+    trace = NL2SQLTrace(sql_valid=True)
+    count = [0]
+    
+    class FlakyPipeline:
+        def __init__(self, store):
+            self.store = store
+            
+        def run_pipeline(self, *, natural_query: str, **kwargs):
+            if count[0] == 0:
+                count[0] += 1
+                raise RuntimeError("crash on first case")
+            else:
+                self.store.save(trace)
+                count[0] += 1
+                
+    runner = EvaluationRunner(lambda store: FlakyPipeline(store))
+    cases = [
+        GoldenCase(case_id="c1", natural_query="crash_this"),
+        GoldenCase(case_id="c2", natural_query="pass_this")
+    ]
+    
+    suite = runner.run_suite(cases)
+    
+    assert suite.total_cases == 2
+    assert suite.failed == 1
+    assert suite.passed == 1

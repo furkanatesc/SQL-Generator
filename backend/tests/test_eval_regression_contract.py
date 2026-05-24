@@ -52,6 +52,7 @@ def test_smoke_profile_json_report_contract_is_stable():
         "passed",
         "generated_sql",
         "error_type",
+        "error_message",
         "checks",
     }
     assert case["case_id"] == "smoke_list_customers"
@@ -81,6 +82,7 @@ def test_golden_profile_report_has_structural_invariants():
         assert "passed" in result
         assert "generated_sql" in result
         assert "error_type" in result
+        assert "error_message" in result
 
 def test_check_result_json_shape_is_stable():
     check = EvalCheckResult(

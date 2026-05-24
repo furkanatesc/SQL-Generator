@@ -34,6 +34,7 @@ class EvalCaseResult:
     checks: List[EvalCheckResult]
     generated_sql: Optional[str] = None
     error_type: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 @dataclass(frozen=True)

@@ -63,3 +63,17 @@ def test_deterministic_fake_sql_fixture_satisfies_smoke_case_expectations():
 
     assert suite.total_cases == 1
     assert suite.failed == 0
+
+def test_runner_surfaces_fake_pipeline_missing_case_as_pipeline_error():
+    from app.eval.models import GoldenCase
+    case = GoldenCase(
+        case_id="unknown_case",
+        natural_query="unknown",
+    )
+
+    runner = EvaluationRunner(lambda store: DeterministicFakePipeline(store))
+    result = runner.run_case(case)
+
+    assert result.passed is False
+    assert result.error_type == "PipelineExecutionError"
+    assert "No deterministic fake SQL configured" in result.error_message
