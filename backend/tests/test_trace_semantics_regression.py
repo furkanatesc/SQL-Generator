@@ -126,6 +126,7 @@ def test_llm_api_failure_attempt_has_validation_errors(mock_schema_manager, mock
     trace = store.saved[0]
     assert trace.generated_sql is None
     assert trace.last_generated_sql is None
+    assert trace.sql_valid is False
     assert trace.error_type == "sql_generation_failed"
     assert trace.sql_validation_errors[0]["type"] == "llm_api_error"
     assert trace.sql_validation_errors[0]["stage"] == "llm_generation"
