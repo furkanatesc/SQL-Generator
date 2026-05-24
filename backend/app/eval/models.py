@@ -38,6 +38,7 @@ class EvalCaseResult:
 
 @dataclass(frozen=True)
 class EvalSuiteResult:
+    profile: str
     total_cases: int
     passed: int
     failed: int

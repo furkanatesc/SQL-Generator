@@ -4,6 +4,8 @@ from app.eval.golden_cases import GOLDEN_CASES
 from app.eval.runner import EvaluationRunner
 from app.eval.reporting import suite_result_to_dict
 from app.eval.trace_recorder import RecordingTraceStore
+from app.eval.profiles import EvalProfile, parse_eval_profile, EvalProfileNotImplementedError
+from app.eval.dataset_resolver import get_cases_for_profile
 
 class FakePipelineForCLI:
     def __init__(self, store: RecordingTraceStore):
@@ -22,12 +24,26 @@ class FakePipelineForCLI:
 def main():
     parser = argparse.ArgumentParser(description="Run NL2SQL Evaluation")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
+    parser.add_argument(
+        "--profile", 
+        type=str,
+        default=EvalProfile.SMOKE.value,
+        help="Evaluation profile to run (smoke, golden, large_schema)"
+    )
     args = parser.parse_args()
+
+    try:
+        profile_enum = parse_eval_profile(args.profile)
+        cases = get_cases_for_profile(profile_enum)
+    except EvalProfileNotImplementedError as e:
+        raise SystemExit(str(e))
+    except ValueError as e:
+        raise SystemExit(str(e))
 
     # In PR 4.1, we use a fake pipeline so we don't hit the real LLM API.
     # The user explicitly said: "Eval testleri veya default runner gerçek LLM çağırırsa PR reddedilir."
     runner = EvaluationRunner(pipeline_factory=lambda store: FakePipelineForCLI(store))
-    suite_result = runner.run_suite(GOLDEN_CASES)
+    suite_result = runner.run_suite(cases, profile=profile_enum.value)
 
     if args.json:
         output = suite_result_to_dict(suite_result)
@@ -36,6 +52,7 @@ def main():
 
     print("Evaluation Summary")
     print("-" * 18)
+    print(f"Profile: {suite_result.profile}")
     print(f"Total cases: {suite_result.total_cases}")
     print(f"Passed: {suite_result.passed}")
     print(f"Failed: {suite_result.failed}")

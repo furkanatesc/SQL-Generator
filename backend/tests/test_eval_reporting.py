@@ -33,6 +33,7 @@ def test_case_result_to_dict_includes_generated_sql_and_error_type():
 
 def test_suite_result_to_dict_has_stable_summary_shape():
     suite = EvalSuiteResult(
+        profile="smoke",
         total_cases=10,
         passed=7,
         failed=3,
@@ -40,6 +41,7 @@ def test_suite_result_to_dict_has_stable_summary_shape():
         results=[]
     )
     result = suite_result_to_dict(suite)
+    assert result["profile"] == "smoke"
     assert "summary" in result
     summary = result["summary"]
     assert summary["total_cases"] == 10

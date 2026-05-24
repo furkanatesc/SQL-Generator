@@ -72,17 +72,18 @@ class EvaluationRunner:
     def run_all(self, cases: List[GoldenCase]) -> List[EvalCaseResult]:
         return [self.run_case(case) for case in cases]
 
-    def run_suite(self, cases: List[GoldenCase]) -> EvalSuiteResult:
+    def run_suite(self, cases: List[GoldenCase], profile: str = "smoke") -> EvalSuiteResult:
         results = self.run_all(cases)
         total = len(results)
         if total == 0:
-            return EvalSuiteResult(total_cases=0, passed=0, failed=0, pass_rate=0.0, results=[])
+            return EvalSuiteResult(profile=profile, total_cases=0, passed=0, failed=0, pass_rate=0.0, results=[])
         
         passed = sum(1 for r in results if r.passed)
         failed = total - passed
         pass_rate = passed / total
         
         return EvalSuiteResult(
+            profile=profile,
             total_cases=total,
             passed=passed,
             failed=failed,

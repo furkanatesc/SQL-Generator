@@ -20,6 +20,7 @@ def case_result_to_dict(result: EvalCaseResult) -> Dict[str, Any]:
 
 def suite_result_to_dict(result: EvalSuiteResult) -> Dict[str, Any]:
     return {
+        "profile": result.profile,
         "summary": {
             "total_cases": result.total_cases,
             "passed": result.passed,

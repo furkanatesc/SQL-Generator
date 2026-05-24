@@ -167,6 +167,7 @@ def test_run_suite_returns_summary_counts():
     ]
     
     suite_result = runner.run_suite(cases)
+    assert suite_result.profile == "smoke"
     assert suite_result.total_cases == 2
     assert suite_result.passed == 1
     assert suite_result.failed == 1
@@ -188,6 +189,7 @@ def test_run_suite_computes_pass_rate():
 def test_suite_result_pass_rate_is_zero_when_no_cases():
     runner = EvaluationRunner(pipeline_factory=lambda store: FakePipeline(store, NL2SQLTrace()))
     suite_result = runner.run_suite([])
+    assert suite_result.profile == "smoke"
     assert suite_result.total_cases == 0
     assert suite_result.passed == 0
     assert suite_result.failed == 0
