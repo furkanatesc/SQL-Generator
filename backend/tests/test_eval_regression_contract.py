@@ -1,4 +1,3 @@
-import pytest
 from app.eval.models import EvalCheckResult, GoldenCase
 from app.eval.profiles import EvalProfile
 from app.eval.dataset_resolver import get_cases_for_profile
@@ -56,6 +55,9 @@ def test_smoke_profile_json_report_contract_is_stable():
         "checks",
     }
     assert case["case_id"] == "smoke_list_customers"
+    
+    check_names = {check["name"] for check in case["checks"]}
+    assert "sql_valid" in check_names
 
 def test_golden_profile_report_has_structural_invariants():
     cases = get_cases_for_profile(EvalProfile.GOLDEN)
@@ -134,3 +136,8 @@ def test_empty_suite_summary_arithmetic_invariants():
     assert suite_result.failed == 0
     assert suite_result.pass_rate == 0.0
     assert len(suite_result.results) == 0
+
+def test_run_suite_accepts_string_profile_for_backward_compatibility():
+    runner = make_runner()
+    suite_result = runner.run_suite([], profile="smoke")
+    assert suite_result.profile == "smoke"
