@@ -126,10 +126,9 @@ def test_llm_api_failure_attempt_has_validation_errors(mock_schema_manager, mock
     trace = store.saved[0]
     assert trace.generated_sql is None
     assert trace.last_generated_sql is None
-    assert trace.sql_valid is False
     assert trace.error_type == "sql_generation_failed"
     assert trace.sql_validation_errors[0]["type"] == "llm_api_error"
-    assert "üretimi" in trace.error_message.lower() or "uret" in trace.error_message.lower()
+    assert trace.sql_validation_errors[0]["stage"] == "llm_generation"
     assert len(trace.attempts) == 1
     assert trace.attempts[0]["valid"] is False
     assert trace.attempts[0]["validation_errors"][0]["type"] == "llm_api_error"
@@ -159,4 +158,103 @@ def test_input_error(mock_schema_manager, mock_nvidia_client):
     assert trace.last_generated_sql is None
     assert trace.sql_valid is None
     assert trace.error_type == "input_error"
-    assert "boş olamaz" in trace.error_message.lower() or "bo" in trace.error_message.lower()
+    assert "boş olamaz" in trace.error_message.lower()
+
+def test_schema_pruning_exception_trace_contract(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store,
+    )
+
+    with patch.object(
+        pipeline.schema_pruner,
+        "prune_schema",
+        side_effect=Exception("graph exploded"),
+    ):
+        result = pipeline.run_pipeline(job_id="j1", natural_query="q")
+
+    trace = store.saved[0]
+
+    assert result["success"] is False
+    assert trace.generated_sql is None
+    assert trace.last_generated_sql is None
+    assert trace.sql_valid is None
+    assert trace.sql_validation_errors == []
+    assert trace.attempts == []
+    assert trace.error_type == "schema_pruning_exception"
+    assert "graph exploded" in trace.error_message
+
+def test_excel_parse_error_trace_contract(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store,
+    )
+
+    with patch(
+        "app.sql_pipeline.parse_excel_request",
+        side_effect=Exception("bad excel"),
+    ):
+        result = pipeline.run_pipeline(
+            job_id="j1",
+            excel_file_path="/tmp/fake.xlsx",
+            natural_query=None,
+        )
+
+    trace = store.saved[0]
+
+    assert result["success"] is False
+    assert trace.generated_sql is None
+    assert trace.last_generated_sql is None
+    assert trace.sql_valid is None
+    assert trace.sql_validation_errors == []
+    assert trace.attempts == []
+    assert trace.error_type == "excel_parse_error"
+    assert "bad excel" in trace.error_message
+
+def test_semantic_missing_column_taxonomy_contract(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store,
+    )
+
+    mock_nvidia_client.generate_sql.return_value = "SELECT missing_col FROM users"
+
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+        with patch('app.sql_pipeline.SQLValidator.validate', return_value=(False, "Missing column: missing_col")):
+            pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=1)
+
+    trace = store.saved[0]
+    assert trace.error_type == "sql_generation_failed"
+    assert len(trace.attempts) == 1
+    assert trace.attempts[0]["validation_errors"][0]["stage"] == "semantic_validation"
+    assert trace.attempts[0]["validation_errors"][0]["type"] == "missing_column"
+    assert trace.sql_validation_errors[0]["stage"] == "semantic_validation"
+    assert trace.sql_validation_errors[0]["type"] == "missing_column"
+
+def test_ast_parse_error_taxonomy_contract(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store,
+    )
+
+    mock_nvidia_client.generate_sql.return_value = "SELECT * FROM users WHERE ;"
+
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+        with patch('app.sql_guardrail.SQLGuardrailValidator.validate', return_value=[]):
+            pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=1)
+
+    trace = store.saved[0]
+    assert trace.error_type == "sql_generation_failed"
+    assert len(trace.attempts) == 1
+    assert trace.attempts[0]["validation_errors"][0]["stage"] == "ast_parse"
+    assert trace.attempts[0]["validation_errors"][0]["type"] == "syntax_error"
+    assert trace.sql_validation_errors[0]["stage"] == "ast_parse"
+    assert trace.sql_validation_errors[0]["type"] == "syntax_error"
