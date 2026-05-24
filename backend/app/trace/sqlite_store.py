@@ -108,6 +108,27 @@ class SQLiteTraceStore(TraceStore):
                 "dialect TEXT",
             )
             conn.commit()
+            
+            self._backfill_metadata_filter_columns(conn)
+            conn.commit()
+
+    def _backfill_metadata_filter_columns(self, conn) -> None:
+        rows = conn.execute("""
+            SELECT trace_id, metadata_json, job_id, dialect
+            FROM nl2sql_traces
+            WHERE job_id IS NULL OR dialect IS NULL
+        """).fetchall()
+
+        for row in rows:
+            metadata = self._json_loads(row["metadata_json"], {})
+            job_id = row["job_id"] or metadata.get("job_id")
+            dialect = row["dialect"] or metadata.get("dialect")
+
+            conn.execute("""
+                UPDATE nl2sql_traces
+                SET job_id = ?, dialect = ?
+                WHERE trace_id = ?
+            """, (job_id, dialect, row["trace_id"]))
 
     def _ensure_column(self, conn, table_name: str, column_name: str, column_sql: str) -> None:
         existing = {

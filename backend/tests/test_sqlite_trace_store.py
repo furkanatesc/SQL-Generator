@@ -291,3 +291,55 @@ def test_sqlite_trace_store_adds_job_id_and_dialect_columns_to_existing_db(tmp_p
         cols = {row[1] for row in conn.execute("PRAGMA table_info(nl2sql_traces)").fetchall()}
         assert "job_id" in cols
         assert "dialect" in cols
+
+def test_sqlite_trace_store_backfills_job_id_and_dialect_from_existing_metadata(tmp_path):
+    import sqlite3
+    import json
+
+    db_path = tmp_path / "traces.db"
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            CREATE TABLE nl2sql_traces (
+                trace_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                raw_query TEXT,
+                normalized_query TEXT,
+                candidate_signals_json TEXT NOT NULL DEFAULT '[]',
+                rag_matches_json TEXT NOT NULL DEFAULT '[]',
+                graph_trace_json TEXT NOT NULL DEFAULT '{}',
+                selected_tables_json TEXT NOT NULL DEFAULT '[]',
+                dropped_tables_json TEXT NOT NULL DEFAULT '[]',
+                estimated_tokens INTEGER NOT NULL DEFAULT 0,
+                confidence REAL,
+                generated_sql TEXT,
+                sql_valid INTEGER,
+                sql_validation_errors_json TEXT NOT NULL DEFAULT '[]',
+                error_type TEXT,
+                error_message TEXT,
+                latency_ms_json TEXT NOT NULL DEFAULT '{}',
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+        conn.execute("""
+            INSERT INTO nl2sql_traces (
+                trace_id,
+                created_at,
+                metadata_json
+            )
+            VALUES (?, ?, ?)
+        """, (
+            "old-trace",
+            "2026-01-01T00:00:00+00:00",
+            json.dumps({"job_id": "old-job", "dialect": "postgres"}),
+        ))
+
+    store = SQLiteTraceStore(str(db_path))
+
+    by_job = store.list_traces(TraceQuery(job_id="old-job"))
+    assert len(by_job) == 1
+    assert by_job[0].trace_id == "old-trace"
+
+    by_dialect = store.list_traces(TraceQuery(dialect="postgres"))
+    assert len(by_dialect) == 1
+    assert by_dialect[0].trace_id == "old-trace"
