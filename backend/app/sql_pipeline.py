@@ -13,6 +13,7 @@ from app.llm_client import NVIDIAClient, PromptTemplateManager
 logger = logging.getLogger("sql_pipeline")
 
 from app.sql_validator import SQLValidator
+from app.sql_guardrail import SQLGuardrailValidator
 from app.trace.builders import build_trace_from_pruned_schema
 from app.trace.store import TraceStore
 from app.schema_graph import TraversalPolicy
@@ -287,6 +288,20 @@ class SQLGenerationPipeline:
                 if dialect.lower() == "oracle":
                     current_sql = enforce_oracle_case(current_sql, dialect=dialect)
                     attempt_info["sql"] = current_sql
+
+                # --- Guardrail Validation ---
+                guardrail_errors = SQLGuardrailValidator.validate(current_sql, dialect=dialect)
+                if guardrail_errors:
+                    last_error = guardrail_errors[0]["message"]
+                    attempt_info["valid"] = False
+                    attempt_info["error"] = last_error
+                    attempt_info["validation_errors"] = guardrail_errors
+                    result["attempts"].append(attempt_info)
+                    for err in guardrail_errors:
+                        validation_errors.append(err)
+                    if log_callback:
+                        log_callback(f"Güvenlik doğrulaması (Guardrail) BAŞARISIZ: {last_error}", 4)
+                    continue
 
                 # AST Doğrulama (sqlglot)
                 try:

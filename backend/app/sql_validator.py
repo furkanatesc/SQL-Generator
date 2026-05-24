@@ -4,12 +4,9 @@ from typing import Dict, Any, Tuple
 
 class SQLValidator:
     """
-    Katman 1: Güvenlik, Semantik ve Sözdizimi Kontrolleri
-    v1 Production standardı gereği DML komutlarını yasaklar, 
-    tablo/kolon isimlerinin şemada var olduğunu doğrular.
+    Katman 1: Semantik ve Sözdizimi Kontrolleri
+    Tablo/kolon isimlerinin şemada var olduğunu doğrular.
     """
-    
-    DML_KEYWORDS = {"DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE", "ALTER", "CREATE"}
     
     @staticmethod
     def validate(sql: str, schema: Dict[str, Any], dialect: str = "oracle") -> Tuple[bool, str]:
@@ -19,14 +16,8 @@ class SQLValidator:
         except Exception as e:
             return False, f"SYNTAX ERROR: {str(e)}"
             
-        # 2. DML ve Riskli Komut Kontrolü (Güvenlik)
-        # Sadece SELECT ifadelerine izin vermeliyiz
+        # 2. Temel tip kontrolü (Güvenlik kontrolleri artık SQLGuardrailValidator'da yapılıyor)
         if not isinstance(tree, sqlglot_exp.Select):
-            # Check if it's a DML specifically for better error message
-            sql_upper = sql.upper()
-            for kw in SQLValidator.DML_KEYWORDS:
-                if kw in sql_upper:
-                    return False, f"SECURITY ERROR: DML commands like {kw} are strictly prohibited."
             return False, "SECURITY ERROR: Only SELECT statements are allowed."
             
         # 3. Şema-bazlı Tablo/Kolon Doğrulama (Semantik)

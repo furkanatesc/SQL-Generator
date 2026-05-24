@@ -95,7 +95,10 @@ def test_sqlite_trace_store_round_trips_all_json_fields(tmp_path):
         last_generated_sql="SELECT broken",
         attempts=[{"attempt": 1, "valid": False}],
         sql_valid=False,
-        sql_validation_errors=[{"type": "missing_column", "column": "x"}],
+        sql_validation_errors=[
+            {"type": "missing_column", "column": "x"},
+            {"type": "unsafe_sql", "stage": "sql_guardrail", "message": "Only read-only SELECT statements are allowed", "details": {"reason": "dml_keyword_detected", "keyword": "DELETE"}}
+        ],
         latency_ms={"total": 123, "llm": 90},
         metadata={"env": "test"},
     )
