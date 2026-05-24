@@ -2,10 +2,14 @@ import sqlite3
 import os
 from typing import Optional, Dict, Any, List
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sqlgen.db")
+def get_db_path():
+    return os.getenv(
+        "SQLGEN_DB_PATH",
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sqlgen.db")
+    )
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
