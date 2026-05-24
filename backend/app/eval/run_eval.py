@@ -46,7 +46,7 @@ def main():
     # In PR 4.4, we use a fake pipeline so we don't hit the real LLM API by default.
     # The user explicitly said: "Eval testleri veya default runner gerçek LLM çağırırsa PR reddedilir."
     runner = EvaluationRunner(pipeline_factory=lambda store: FakePipelineForCLI(store))
-    suite_result = runner.run_suite(cases, profile=profile_enum.value)
+    suite_result = runner.run_suite(cases, profile=profile_enum)
 
     if args.json:
         output = suite_result_to_dict(suite_result)

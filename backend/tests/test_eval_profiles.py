@@ -15,7 +15,7 @@ def test_parse_eval_profile_rejects_invalid_profile():
     with pytest.raises(ValueError, match="Invalid eval profile 'prod'. Valid profiles: smoke, golden, large_schema"):
         parse_eval_profile("prod")
 
-def test_default_eval_profile_is_smoke():
+def test_smoke_profile_returns_cases():
     cases = get_cases_for_profile(EvalProfile.SMOKE)
     assert len(cases) > 0
 
