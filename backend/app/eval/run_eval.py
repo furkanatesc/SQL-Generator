@@ -5,20 +5,7 @@ from app.eval.reporting import suite_result_to_dict
 from app.eval.trace_recorder import RecordingTraceStore
 from app.eval.profiles import EvalProfile, parse_eval_profile, EvalProfileNotImplementedError
 from app.eval.dataset_resolver import get_cases_for_profile
-
-class FakePipelineForCLI:
-    def __init__(self, store: RecordingTraceStore):
-        self.store = store
-        
-    def run_pipeline(self, *, natural_query: str, **kwargs):
-        from app.trace.models import NL2SQLTrace
-        trace = NL2SQLTrace(
-            raw_query=natural_query,
-            sql_valid=True,
-            selected_tables=["CUSTOMERS"],
-            generated_sql="SELECT * FROM customers"
-        )
-        self.store.save(trace)
+from app.eval.fake_pipeline import DeterministicFakePipeline
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run NL2SQL Evaluation")
@@ -45,7 +32,7 @@ def main():
 
     # In PR 4.4, we use a fake pipeline so we don't hit the real LLM API by default.
     # The user explicitly said: "Eval testleri veya default runner gerçek LLM çağırırsa PR reddedilir."
-    runner = EvaluationRunner(pipeline_factory=lambda store: FakePipelineForCLI(store))
+    runner = EvaluationRunner(pipeline_factory=lambda store: DeterministicFakePipeline(store))
     suite_result = runner.run_suite(cases, profile=profile_enum)
 
     if args.json:
