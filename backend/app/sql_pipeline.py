@@ -310,8 +310,10 @@ class SQLGenerationPipeline:
                     last_error = f"SQLGLOT AST Parse Error: {str(parse_err)}"
                     attempt_info["valid"] = False
                     attempt_info["error"] = last_error
+                    classified_error = classify_sql_error(last_error, stage="ast_parse")
+                    attempt_info["validation_errors"] = [classified_error]
                     result["attempts"].append(attempt_info)
-                    validation_errors.append(classify_sql_error(last_error, stage="ast_parse"))
+                    validation_errors.append(classified_error)
                     if log_callback:
                         log_callback(f"AST doğrulaması BAŞARISIZ: {last_error}", 4)
                     continue
@@ -327,8 +329,10 @@ class SQLGenerationPipeline:
                     last_error = sem_error
                     attempt_info["valid"] = False
                     attempt_info["error"] = last_error
+                    classified_error = classify_sql_error(last_error, stage="semantic_validation")
+                    attempt_info["validation_errors"] = [classified_error]
                     result["attempts"].append(attempt_info)
-                    validation_errors.append(classify_sql_error(last_error, stage="semantic_validation"))
+                    validation_errors.append(classified_error)
                     if log_callback:
                         log_callback(f"Semantik doğrulama BAŞARISIZ (Critic döngüsüne yönlendiriliyor): {last_error}", 4)
                     continue
@@ -355,12 +359,14 @@ class SQLGenerationPipeline:
                 last_error = f"LLM API Çağrı Hatası: {str(e)}"
                 attempt_info["valid"] = False
                 attempt_info["error"] = last_error
-                result["attempts"].append(attempt_info)
-                validation_errors.append({
+                classified_error = {
                     "type": "llm_api_error",
                     "stage": "llm_generation",
                     "message": last_error,
-                })
+                }
+                attempt_info["validation_errors"] = [classified_error]
+                result["attempts"].append(attempt_info)
+                validation_errors.append(classified_error)
                 if log_callback:
                     log_callback(f"LLM API Çağrı Hatası: {str(e)}", 3)
                 continue
@@ -379,7 +385,12 @@ class SQLGenerationPipeline:
         pruned_schema_ref = locals().get("pruned_schema", {})
         
         final_sql_valid = result["success"] if result.get("attempts") else None
-        final_validation_errors = [] if result["success"] else validation_errors
+        final_attempt = result["attempts"][-1] if result.get("attempts") else None
+        final_validation_errors = (
+            []
+            if result["success"]
+            else (final_attempt.get("validation_errors", []) if final_attempt else validation_errors)
+        )
         final_error_type = None if result["success"] else "sql_generation_failed"
         final_error_message = None if result["success"] else result.get("error")
         
