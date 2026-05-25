@@ -77,11 +77,16 @@ class SQLGenerationPipeline:
     def __init__(self, schema_manager: SchemaManager = None, nvidia_client: NVIDIAClient = None, trace_store: TraceStore | None = None, llm_provider: LLMProvider | None = None):
         self.schema_manager = schema_manager or SchemaManager()
         self.schema_pruner = SchemaPruner(schema_manager=self.schema_manager)
-        self.nvidia_client = nvidia_client or NVIDIAClient()
+        self.nvidia_client = nvidia_client
         self.trace_store = trace_store
         self.llm_provider = llm_provider
         # Şema bilgisini AQR zenginleştirme için yükle
         self._full_schema = None
+
+    def _get_nvidia_client(self) -> NVIDIAClient:
+        if self.nvidia_client is None:
+            self.nvidia_client = NVIDIAClient()
+        return self.nvidia_client
 
     def _generate_sql(
         self,
@@ -101,7 +106,7 @@ class SQLGenerationPipeline:
             )
             return response.sql
 
-        return self.nvidia_client.generate_sql(prompt, api_key=api_key)
+        return self._get_nvidia_client().generate_sql(prompt, api_key=api_key)
 
     def _save_trace_safely(self, trace):
         if not self.trace_store:

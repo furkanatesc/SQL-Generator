@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.sql_pipeline import SQLGenerationPipeline
 from app.llm.fake_provider import DeterministicFakeLLMProvider
@@ -69,8 +68,7 @@ def test_writer_and_corrector_purpose_contract():
     assert result["generated_sql"] == "SELECT\n  *\nFROM customers"
     
     assert len(fake_provider.requests_received) >= 2
-    assert fake_provider.requests_received[0].purpose == "writer"
-    assert fake_provider.requests_received[1].purpose == "corrector"
+    assert [req.purpose for req in fake_provider.requests_received] == ["writer", "corrector"]
 
 
 def test_legacy_nvidia_path_preserved():
@@ -84,3 +82,22 @@ def test_legacy_nvidia_path_preserved():
     assert result["success"] is True
     assert result["generated_sql"] == "SELECT\n  *\nFROM customers"
     mock_nvidia_client.generate_sql.assert_called_once()
+
+
+def test_injected_provider_does_not_construct_nvidia_client():
+    fake_provider = DeterministicFakeLLMProvider(sql="SELECT * FROM customers")
+
+    with patch("app.sql_pipeline.NVIDIAClient") as nvidia_client_cls:
+        pipeline = SQLGenerationPipeline(
+            schema_manager=MagicMock(),
+            llm_provider=fake_provider,
+        )
+        pipeline.schema_pruner = MagicMock()
+        pipeline.schema_pruner.prune_schema.return_value = {
+            "tables": {"customers": {}}
+        }
+
+        result = pipeline.run_pipeline(natural_query="test query")
+
+    assert result["success"] is True
+    nvidia_client_cls.assert_not_called()
