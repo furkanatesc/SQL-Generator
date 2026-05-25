@@ -21,6 +21,47 @@ from app.schema_graph import TraversalPolicy
 
 import time
 
+def redact_sensitive_text(value: str, known_secrets: Set[str] = None) -> str:
+    if not value or not isinstance(value, str):
+        return value
+
+    # 1. Redact general regex patterns
+    # For patterns with capture groups (like api_key=value, password=value)
+    prefix_patterns = [
+        r"(?i)(api[_-]?key\s*=\s*)[^\s,;']+",
+        r"(?i)(token\s*=\s*)[^\s,;']+",
+        r"(?i)(password\s*=\s*)[^\s,;']+",
+        r"(?i)(secret\s*=\s*)[^\s,;']+",
+    ]
+    for pattern in prefix_patterns:
+        value = re.sub(pattern, r"\1[REDACTED]", value)
+
+    # For patterns without capture groups (like sk-..., nvapi-...)
+    simple_patterns = [
+        r"sk-[A-Za-z0-9._-]+",
+        r"nvapi-[A-Za-z0-9._-]+",
+    ]
+    for pattern in simple_patterns:
+        value = re.sub(pattern, "[REDACTED]", value)
+
+    # 2. Redact specific known secrets
+    if known_secrets:
+        for secret in known_secrets:
+            if secret and len(secret) > 3:  # avoid redacting extremely short/empty strings
+                escaped = re.escape(secret)
+                value = re.sub(escaped, "[REDACTED]", value)
+
+    return value
+
+def redact_sensitive(value: Any, known_secrets: Set[str] = None) -> Any:
+    if isinstance(value, str):
+        return redact_sensitive_text(value, known_secrets)
+    if isinstance(value, list):
+        return [redact_sensitive(v, known_secrets) for v in value]
+    if isinstance(value, dict):
+        return {k: redact_sensitive(v, known_secrets) for k, v in value.items()}
+    return value
+
 def enforce_oracle_case(sql: str, dialect: str = "oracle") -> str:
     """
     Katman 4: Oracle dialect'inde tüm identifier'ları (tablo ve kolon isimleri)
@@ -135,6 +176,16 @@ class SQLGenerationPipeline:
         4. sqlglot ile AST doğrulaması
         5. Sözdizimi hatası durumunda Eleştirmen Ajan (Critic/Corrector Agent) döngüsü
         """
+        known_secrets = set()
+        if api_key:
+            known_secrets.add(api_key)
+        env_nvidia = os.environ.get("NVIDIA_API_KEY")
+        if env_nvidia:
+            known_secrets.add(env_nvidia)
+        for env_k, env_v in os.environ.items():
+            if env_v and any(sec in env_k.upper() for sec in ["KEY", "SECRET", "PASSWORD", "TOKEN"]):
+                known_secrets.add(env_v)
+
         result = {
             "success": False,
             "aqr": None,
@@ -175,9 +226,10 @@ class SQLGenerationPipeline:
                     sql_validation_errors=[],
                     attempts=[],
                     error_message=result["error"],
-                    error_type="excel_parse_error"
+                    error_type="excel_parse_error",
+                    known_secrets=known_secrets
                 )
-                return result
+                return redact_sensitive(result, known_secrets)
         elif natural_query:
             if log_callback:
                 log_callback("Doğal dil sorgusu alındı (Excel şablonu pas geçildi).", 1)
@@ -210,9 +262,10 @@ class SQLGenerationPipeline:
                 sql_validation_errors=[],
                 attempts=[],
                 error_message=result["error"],
-                error_type="input_error"
+                error_type="input_error",
+                known_secrets=known_secrets
             )
-            return result
+            return redact_sensitive(result, known_secrets)
 
         # 2. Şema Yükleme ve Budama
         try:
@@ -236,9 +289,10 @@ class SQLGenerationPipeline:
                     sql_validation_errors=[],
                     attempts=[],
                     error_message=result["error"],
-                    error_type="schema_pruning_error"
+                    error_type="schema_pruning_error",
+                    known_secrets=known_secrets
                 )
-                return result
+                return redact_sensitive(result, known_secrets)
 
             result["pruned_schema_tables"] = list(pruned_schema.get("tables", {}).keys())
             if log_callback:
@@ -260,9 +314,10 @@ class SQLGenerationPipeline:
                 sql_validation_errors=[],
                 attempts=[],
                 error_message=result["error"],
-                error_type="schema_pruning_exception"
+                error_type="schema_pruning_exception",
+                known_secrets=known_secrets
             )
-            return result
+            return redact_sensitive(result, known_secrets)
 
         # 3. İteratif Üretim Döngüsü (Writer-Critic)
         natural_query = aqr.get("natural_query", "")
@@ -453,10 +508,11 @@ class SQLGenerationPipeline:
             sql_validation_errors=final_validation_errors,
             attempts=result.get("attempts", []),
             error_message=final_error_message,
-            error_type=final_error_type
+            error_type=final_error_type,
+            known_secrets=known_secrets
         )
                 
-        return result
+        return redact_sensitive(result, known_secrets)
 
     def _capture_trace_on_exit(
         self,
@@ -471,12 +527,31 @@ class SQLGenerationPipeline:
         sql_validation_errors: Optional[List[Dict[str, Any]]] = None,
         attempts: Optional[List[Dict[str, Any]]] = None,
         error_message: Optional[str] = None,
-        error_type: Optional[str] = None
+        error_type: Optional[str] = None,
+        known_secrets: Optional[Set[str]] = None
     ):
         if not self.trace_store:
             return
             
         total_ms = int((time.perf_counter() - start_time) * 1000)
+
+        # Collect known secrets dynamically for trace redaction
+        known_secrets = set(known_secrets or set())
+        env_nvidia = os.environ.get("NVIDIA_API_KEY")
+        if env_nvidia:
+            known_secrets.add(env_nvidia)
+        for env_k, env_v in os.environ.items():
+            if env_v and any(sec in env_k.upper() for sec in ["KEY", "SECRET", "PASSWORD", "TOKEN"]):
+                known_secrets.add(env_v)
+
+        # Redact potentially sensitive input parameters before saving
+        natural_query = redact_sensitive(natural_query, known_secrets)
+        pruned_schema = redact_sensitive(pruned_schema, known_secrets)
+        generated_sql = redact_sensitive(generated_sql, known_secrets)
+        last_generated_sql = redact_sensitive(last_generated_sql, known_secrets)
+        sql_validation_errors = redact_sensitive(sql_validation_errors, known_secrets)
+        attempts = redact_sensitive(attempts, known_secrets)
+        error_message = redact_sensitive(error_message, known_secrets)
         
         trace = build_trace_from_pruned_schema(
             raw_query=natural_query,
