@@ -101,3 +101,41 @@ def test_injected_provider_does_not_construct_nvidia_client():
 
     assert result["success"] is True
     nvidia_client_cls.assert_not_called()
+
+
+def test_pipeline_rejects_unsafe_generated_sql():
+    # Fake LLM provider continually generates unsafe SQL
+    fake_provider = DeterministicFakeLLMProvider(sql="DROP TABLE users;")
+    
+    pipeline = get_mocked_pipeline(llm_provider=fake_provider)
+    
+    result = pipeline.run_pipeline(natural_query="test query")
+    
+    assert result["success"] is False
+    assert result["error"] is not None
+    # Verify the attempts show guardrail validation failures
+    assert len(result["attempts"]) > 0
+    for attempt in result["attempts"]:
+        assert attempt["valid"] is False
+        assert any(
+            err.get("stage") == "sql_guardrail" 
+            for err in attempt.get("validation_errors", [])
+        )
+
+
+def test_pipeline_does_not_call_real_llm_for_guardrail_failure():
+    # Guarantee we are not hitting the real LLM by using the mock client and checking call count
+    mock_nvidia_client = MagicMock()
+    fake_provider = TrackingFakeProvider(
+        responses=["DELETE FROM orders;"] * 5  # Enough responses for all retries
+    )
+    
+    pipeline = get_mocked_pipeline(llm_provider=fake_provider, nvidia_client=mock_nvidia_client)
+    
+    result = pipeline.run_pipeline(natural_query="test query")
+    
+    assert result["success"] is False
+    # Ensure real client was not invoked
+    mock_nvidia_client.generate_sql.assert_not_called()
+    # Ensure the fake provider was indeed invoked and rejected
+    assert len(fake_provider.requests_received) > 0
