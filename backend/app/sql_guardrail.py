@@ -2,6 +2,8 @@ import sqlglot
 from sqlglot import exp
 from typing import List, Dict, Any
 
+from app.sql_dialects import DEFAULT_SQL_DIALECT, normalize_sql_dialect
+
 class SQLGuardrailValidator:
     """
     Güvenlik Duvarı (Guardrail) Katmanı
@@ -30,8 +32,17 @@ class SQLGuardrailValidator:
     }
 
     @classmethod
-    def validate(cls, sql: str, dialect: str = "postgres") -> List[Dict[str, Any]]:
+    def validate(cls, sql: str, dialect: str = DEFAULT_SQL_DIALECT) -> List[Dict[str, Any]]:
         errors = []
+
+        try:
+            dialect = normalize_sql_dialect(dialect)
+        except ValueError as e:
+            return [{
+                "type": "unsupported_dialect",
+                "stage": "sql_guardrail",
+                "message": str(e),
+            }]
 
         if not sql or not sql.strip():
             return [{
