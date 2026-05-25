@@ -31,6 +31,15 @@ class SQLGuardrailValidator:
         'grant', 'revoke', 'commit', 'rollback', 'command'
     }
 
+    DANGEROUS_FUNCTION_NAMES = {
+        "pg_sleep",
+        "pg_read_file",
+        "pg_ls_dir",
+        "dblink",
+        "lo_import",
+        "lo_export",
+    }
+
     @classmethod
     def validate(cls, sql: str, dialect: str = DEFAULT_SQL_DIALECT) -> List[Dict[str, Any]]:
         errors = []
@@ -93,7 +102,22 @@ class SQLGuardrailValidator:
 
         # Statement içinde herhangi bir yasaklı DML/DDL node'u var mı kontrol et
         for node in stmt.find_all(exp.Expression):
+            node_name = getattr(node, "name", None)
             node_key = node.key.lower() if hasattr(node, "key") else ""
+            
+            function_name = (node_name or node_key or "").lower()
+
+            if isinstance(node, exp.Func) and function_name in cls.DANGEROUS_FUNCTION_NAMES:
+                errors.append({
+                    "type": "unsafe_sql",
+                    "stage": "sql_guardrail",
+                    "message": "Dangerous SQL function is not allowed",
+                    "details": {
+                        "reason": "dangerous_function_detected",
+                        "function": function_name.upper(),
+                    },
+                })
+                break
             
             if isinstance(node, cls.FORBIDDEN_NODE_TYPES) or node_key in cls.FORBIDDEN_KEYS:
                 errors.append({
