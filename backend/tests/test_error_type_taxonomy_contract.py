@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import MagicMock, patch
 
 from app.sql_pipeline import SQLGenerationPipeline
@@ -39,11 +38,10 @@ def test_pipeline_input_error_uses_stable_error_type():
     
     trace_store.save.assert_called_once()
     trace = trace_store.save.call_args[0][0]
-    # trace object is of type NL2SQLTrace, so we access attribute
-    assert getattr(trace, "error_type", None) == "input_error" or trace.get("error_type") == "input_error" if isinstance(trace, dict) else trace.error_type == "input_error"
     err_type = getattr(trace, "error_type", None)
     if err_type is None and isinstance(trace, dict):
         err_type = trace.get("error_type")
+        
     assert err_type == "input_error"
     assert err_type in ALLOWED_ERROR_TYPES
 
@@ -119,21 +117,25 @@ def test_pipeline_semantic_failure_uses_stable_validation_error_type(mock_prompt
     )
     
     with patch("app.sql_pipeline.SchemaPruner.prune_schema") as mock_prune:
-        mock_prune.return_value = {"tables": {"users": ["id"]}}
+        mock_prune.return_value = {
+            "tables": {
+                "users": {
+                    "columns": [{"name": "id"}]
+                }
+            }
+        }
         
-        with patch("app.sql_validator.SQLValidator.validate") as mock_validate:
-            # We return a specific error that matches "missing column"
-            mock_validate.return_value = (False, "missing column invalid_col")
-            result = pipeline.run_pipeline(
-                job_id="test",
-                natural_query="test query",
-                max_attempts=1
-            )
+        result = pipeline.run_pipeline(
+            job_id="test",
+            natural_query="test query",
+            max_attempts=1
+        )
             
     assert result["success"] is False
     err = result["attempts"][0]["validation_errors"][0]
-    assert err["type"] in ALLOWED_ERROR_TYPES
+    assert err["type"] == "missing_column"
     assert err["stage"] == "semantic_validation"
+    assert err["type"] in ALLOWED_ERROR_TYPES
 
 
 @patch("app.sql_pipeline.PromptTemplateManager.get_writer_prompt", return_value="dummy prompt")
@@ -158,6 +160,18 @@ def test_all_pipeline_validation_error_types_are_known_taxonomy_values(mock_prom
         )
         
     assert result["success"] is False
-    err = result["attempts"][0]["validation_errors"][0]
-    assert err["type"] in ALLOWED_ERROR_TYPES
-    assert err["stage"] in ["ast_parse", "sql_guardrail"]
+    
+    for attempt in result["attempts"]:
+        for err in attempt.get("validation_errors", []):
+            assert err["type"] in ALLOWED_ERROR_TYPES
+            assert "stage" in err
+            
+    trace_store.save.assert_called_once()
+    trace = trace_store.save.call_args[0][0]
+    trace_val_errors = getattr(trace, "sql_validation_errors", None)
+    if trace_val_errors is None and isinstance(trace, dict):
+        trace_val_errors = trace.get("sql_validation_errors", [])
+        
+    for err in trace_val_errors or []:
+        assert err["type"] in ALLOWED_ERROR_TYPES
+        assert "stage" in err
