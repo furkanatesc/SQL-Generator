@@ -9,6 +9,7 @@ from app.excel_parser import parse_excel_request
 from app.schema_manager import SchemaManager
 from app.schema_pruner import SchemaPruner
 from app.llm_client import NVIDIAClient, PromptTemplateManager
+from app.llm.provider import LLMProvider, SQLGenerationRequest
 
 logger = logging.getLogger("sql_pipeline")
 
@@ -73,13 +74,34 @@ def classify_sql_error(error_message: str, stage: str) -> Dict[str, Any]:
     }
 
 class SQLGenerationPipeline:
-    def __init__(self, schema_manager: SchemaManager = None, nvidia_client: NVIDIAClient = None, trace_store: TraceStore | None = None):
+    def __init__(self, schema_manager: SchemaManager = None, nvidia_client: NVIDIAClient = None, trace_store: TraceStore | None = None, llm_provider: LLMProvider | None = None):
         self.schema_manager = schema_manager or SchemaManager()
         self.schema_pruner = SchemaPruner(schema_manager=self.schema_manager)
         self.nvidia_client = nvidia_client or NVIDIAClient()
         self.trace_store = trace_store
+        self.llm_provider = llm_provider
         # Şema bilgisini AQR zenginleştirme için yükle
         self._full_schema = None
+
+    def _generate_sql(
+        self,
+        *,
+        prompt: str,
+        dialect: str,
+        purpose: str,
+        api_key: str | None = None,
+    ) -> str:
+        if self.llm_provider is not None:
+            response = self.llm_provider.generate_sql(
+                SQLGenerationRequest(
+                    prompt=prompt,
+                    dialect=dialect,
+                    purpose=purpose,
+                )
+            )
+            return response.sql
+
+        return self.nvidia_client.generate_sql(prompt, api_key=api_key)
 
     def _save_trace_safely(self, trace):
         if not self.trace_store:
@@ -255,6 +277,7 @@ class SQLGenerationPipeline:
             
             try:
                 if attempt == 1:
+                    purpose = "writer"
                     if log_callback:
                         log_callback("NVIDIA NIM (Llama-3.3-Nemotron) ile taslak SQL sorgusu üretiliyor...", 3)
                     prompt = PromptTemplateManager.get_writer_prompt(
@@ -265,6 +288,7 @@ class SQLGenerationPipeline:
                         dialect=dialect
                     )
                 else:
+                    purpose = "corrector"
                     if log_callback:
                         log_callback(f"Critic döngüsü devrede. AST hataları düzeltiliyor (Deneme {attempt}/{max_attempts})...", 5)
                     prompt = PromptTemplateManager.get_corrector_prompt(
@@ -276,7 +300,12 @@ class SQLGenerationPipeline:
                     )
                 
                 # API Çağrısı ile SQL üret
-                generated_sql = self.nvidia_client.generate_sql(prompt, api_key=api_key)
+                generated_sql = self._generate_sql(
+                    prompt=prompt,
+                    dialect=dialect,
+                    purpose=purpose,
+                    api_key=api_key
+                )
                 current_sql = generated_sql
                 last_generated_sql = current_sql
                 attempt_info["sql"] = current_sql
