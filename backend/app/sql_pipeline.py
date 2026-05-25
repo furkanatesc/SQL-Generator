@@ -335,7 +335,11 @@ class SQLGenerationPipeline:
                         validation_errors.append(err)
                     if log_callback:
                         log_callback(f"Güvenlik doğrulaması (Guardrail) BAŞARISIZ: {last_error}", 4)
-                    continue
+                    
+                    if guardrail_errors[0]["type"] == "sql_parse_error":
+                        continue
+                    else:
+                        break
 
                 # AST Doğrulama (sqlglot)
                 try:

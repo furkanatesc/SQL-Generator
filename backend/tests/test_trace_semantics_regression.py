@@ -74,7 +74,7 @@ def test_final_failure_uses_last_attempt_validation_errors(mock_schema_manager, 
     assert trace.sql_validation_errors[0]["type"] == "non_select_statement"
     assert len(trace.attempts) == 2
 
-def test_guardrail_retry_success_trace_contract(mock_schema_manager, mock_nvidia_client):
+def test_guardrail_failure_fail_fast_trace_contract(mock_schema_manager, mock_nvidia_client):
     store = RecordingTraceStore()
     pipeline = SQLGenerationPipeline(schema_manager=mock_schema_manager, nvidia_client=mock_nvidia_client, trace_store=store)
     
@@ -85,17 +85,15 @@ def test_guardrail_retry_success_trace_contract(mock_schema_manager, mock_nvidia
             pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=2)
 
     trace = store.saved[0]
-    assert trace.generated_sql == "SELECT\n  *\nFROM users"
-    assert trace.last_generated_sql == trace.generated_sql
-    assert trace.sql_valid is True
-    assert trace.sql_validation_errors == []
-    assert trace.error_type is None
-    assert len(trace.attempts) == 2
+    assert trace.generated_sql is None
+    assert trace.last_generated_sql == "DELETE FROM users;"
+    assert trace.sql_valid is False
+    assert trace.error_type == "sql_generation_failed"
+    assert len(trace.attempts) == 1
     assert trace.attempts[0]["valid"] is False
     assert trace.attempts[0]["validation_errors"][0]["stage"] == "sql_guardrail"
-    assert trace.attempts[1]["valid"] is True
 
-def test_all_guardrail_failures_trace_contract(mock_schema_manager, mock_nvidia_client):
+def test_all_guardrail_failures_fail_fast_trace_contract(mock_schema_manager, mock_nvidia_client):
     store = RecordingTraceStore()
     pipeline = SQLGenerationPipeline(schema_manager=mock_schema_manager, nvidia_client=mock_nvidia_client, trace_store=store)
     
@@ -107,12 +105,12 @@ def test_all_guardrail_failures_trace_contract(mock_schema_manager, mock_nvidia_
 
     trace = store.saved[0]
     assert trace.generated_sql is None
-    assert trace.last_generated_sql == "DELETE FROM users;"
+    assert trace.last_generated_sql == "DROP TABLE users;"
     assert trace.sql_valid is False
     assert trace.error_type == "sql_generation_failed"
     assert len(trace.sql_validation_errors) > 0
     assert trace.sql_validation_errors[0]["stage"] == "sql_guardrail"
-    assert len(trace.attempts) == 2
+    assert len(trace.attempts) == 1
 
 def test_llm_api_failure_attempt_has_validation_errors(mock_schema_manager, mock_nvidia_client):
     store = RecordingTraceStore()
