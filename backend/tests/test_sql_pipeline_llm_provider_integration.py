@@ -186,3 +186,30 @@ def test_pipeline_exposes_sql_on_non_guardrail_failure():
     # Ensure it was NOT a guardrail failure
     last_attempt = result["attempts"][-1]
     assert not any(err.get("stage") == "sql_guardrail" for err in last_attempt.get("validation_errors", []))
+
+
+def test_pipeline_fail_fast_on_guardrail_failure():
+    unsafe_sql = "DROP TABLE users;"
+    fake_provider = TrackingFakeProvider(
+        responses=[unsafe_sql, "SELECT 1;", "SELECT 2;"]  # Subsequent responses should never be used
+    )
+    
+    pipeline = get_mocked_pipeline(llm_provider=fake_provider)
+    
+    result = pipeline.run_pipeline(natural_query="drop users")
+    
+    # Assert pipeline fails
+    assert result["success"] is False
+    
+    # Assert fail-fast: only 1 attempt and 1 provider call made
+    assert len(result["attempts"]) == 1
+    assert fake_provider.call_count == 1
+    
+    # Assert generated_sql is empty due to sanitization
+    assert result["generated_sql"] == ""
+    
+    # Assert diagnostic information
+    first_attempt = result["attempts"][0]
+    assert first_attempt["sql"] == unsafe_sql
+    assert first_attempt["valid"] is False
+    assert any(err.get("stage") == "sql_guardrail" for err in first_attempt.get("validation_errors", []))
