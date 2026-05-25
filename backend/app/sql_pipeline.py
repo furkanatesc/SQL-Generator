@@ -409,8 +409,17 @@ class SQLGenerationPipeline:
             result["error"] = f"SQL üretimi başarısız oldu. {max_attempts} deneme yapıldı."
             if log_callback:
                 log_callback(f"Maksimum deneme limitine ({max_attempts}) ulaşıldı. Süreç başarısız.", 5)
-            # Do not expose unsafe/rejected SQL in the public generated_sql field
-            result["generated_sql"] = ""
+            if result["attempts"]:
+                last_attempt = result["attempts"][-1]
+                has_guardrail_error = any(
+                    err.get("stage") == "sql_guardrail" 
+                    for err in last_attempt.get("validation_errors", [])
+                )
+                if has_guardrail_error:
+                    # Do not expose unsafe/rejected SQL in the public generated_sql field
+                    result["generated_sql"] = ""
+                else:
+                    result["generated_sql"] = last_attempt["sql"]
         else:
             if log_callback:
                 log_callback("Tebrikler! SQL üretim aşaması başarıyla sonuçlandırıldı.", 5)

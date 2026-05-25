@@ -163,3 +163,26 @@ def test_pipeline_does_not_expose_guardrail_rejected_sql_as_generated_sql():
     last_attempt = result["attempts"][-1]
     assert last_attempt["sql"] == unsafe_sql
     assert any(err.get("stage") == "sql_guardrail" for err in last_attempt.get("validation_errors", []))
+
+
+def test_pipeline_exposes_sql_on_non_guardrail_failure():
+    # Fake LLM provider returns safe SQL but with syntax/semantic errors
+    # For example, selecting from a non-existent table not in schema
+    invalid_sql = "SELECT * FROM non_existent_table_12345"
+    fake_provider = TrackingFakeProvider(
+        responses=[invalid_sql] * 5
+    )
+    
+    pipeline = get_mocked_pipeline(llm_provider=fake_provider)
+    
+    result = pipeline.run_pipeline(natural_query="get everything")
+    
+    # Assert pipeline fails
+    assert result["success"] is False
+    
+    # Assert generated_sql still exposes the last attempted query for non-guardrail failures
+    assert result["generated_sql"] == invalid_sql
+    
+    # Ensure it was NOT a guardrail failure
+    last_attempt = result["attempts"][-1]
+    assert not any(err.get("stage") == "sql_guardrail" for err in last_attempt.get("validation_errors", []))
