@@ -409,8 +409,8 @@ class SQLGenerationPipeline:
             result["error"] = f"SQL üretimi başarısız oldu. {max_attempts} deneme yapıldı."
             if log_callback:
                 log_callback(f"Maksimum deneme limitine ({max_attempts}) ulaşıldı. Süreç başarısız.", 5)
-            if result["attempts"]:
-                result["generated_sql"] = result["attempts"][-1]["sql"]
+            # Do not expose unsafe/rejected SQL in the public generated_sql field
+            result["generated_sql"] = ""
         else:
             if log_callback:
                 log_callback("Tebrikler! SQL üretim aşaması başarıyla sonuçlandırıldı.", 5)

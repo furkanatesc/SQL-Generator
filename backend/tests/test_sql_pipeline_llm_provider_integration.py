@@ -139,3 +139,27 @@ def test_pipeline_does_not_call_real_llm_for_guardrail_failure():
     mock_nvidia_client.generate_sql.assert_not_called()
     # Ensure the fake provider was indeed invoked and rejected
     assert len(fake_provider.requests_received) > 0
+
+
+def test_pipeline_does_not_expose_guardrail_rejected_sql_as_generated_sql():
+    # Fake LLM provider returns unsafe command-like SQL
+    unsafe_sql = "DROP TABLE users;"
+    fake_provider = TrackingFakeProvider(
+        responses=[unsafe_sql] * 5
+    )
+    
+    pipeline = get_mocked_pipeline(llm_provider=fake_provider)
+    
+    result = pipeline.run_pipeline(natural_query="delete everything")
+    
+    # Assert pipeline fails
+    assert result["success"] is False
+    
+    # Assert generated_sql is sanitized (empty/none), never containing the unsafe SQL payload
+    assert result["generated_sql"] == ""
+    assert "DROP" not in result["generated_sql"]
+    
+    # Assert diagnostic details are retained
+    last_attempt = result["attempts"][-1]
+    assert last_attempt["sql"] == unsafe_sql
+    assert any(err.get("stage") == "sql_guardrail" for err in last_attempt.get("validation_errors", []))
