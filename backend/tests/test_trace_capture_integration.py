@@ -263,78 +263,79 @@ def test_pipeline_final_validation_errors_reflect_only_last_failed_attempt(mock_
     assert len(trace.sql_validation_errors) == 1
     assert trace.sql_validation_errors[0]["stage"] == "sql_guardrail"
 
-def test_pipeline_trace_capture_unsafe_sql_retry_success(mock_schema_manager, mock_nvidia_client):
+def test_pipeline_trace_capture_unsafe_sql_fail_fast(mock_schema_manager, mock_nvidia_client):
     store = RecordingTraceStore()
     pipeline = SQLGenerationPipeline(
         schema_manager=mock_schema_manager,
         nvidia_client=mock_nvidia_client,
         trace_store=store
     )
-    
-    # 1. Unsafe SQL 2. Safe SQL
+
+    # First is unsafe, pipeline should fail-fast
     mock_nvidia_client.generate_sql.side_effect = [
         "DELETE FROM customers WHERE id = 1;",
         "SELECT * FROM customers WHERE id = 1;"
     ]
-    
+
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
             "tables": {"customers": {}}
         }
-        
+
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
             res = pipeline.run_pipeline(
                 job_id="job123",
                 natural_query="get test",
                 max_attempts=2
             )
-            
-    assert res["success"] is True
-    
+
+    assert res["success"] is False
+    assert len(res["attempts"]) == 1
+
     trace = store.saved[0]
-    assert trace.sql_valid is True
-    assert trace.generated_sql.startswith("SELECT")
-    assert trace.last_generated_sql == trace.generated_sql
-    assert trace.sql_validation_errors == []
-    assert len(trace.attempts) == 2
+    assert trace.sql_valid is False
+    assert trace.generated_sql is None
+    assert trace.last_generated_sql == "DELETE FROM customers WHERE id = 1;"
+    assert trace.error_type == "sql_generation_failed"
+    assert len(trace.attempts) == 1
     assert trace.attempts[0]["valid"] is False
     assert trace.attempts[0]["validation_errors"][0]["stage"] == "sql_guardrail"
-    assert trace.attempts[1]["valid"] is True
 
-def test_pipeline_trace_capture_all_attempts_unsafe_failure(mock_schema_manager, mock_nvidia_client):
+def test_pipeline_trace_capture_unsafe_failure_fail_fast(mock_schema_manager, mock_nvidia_client):
     store = RecordingTraceStore()
     pipeline = SQLGenerationPipeline(
         schema_manager=mock_schema_manager,
         nvidia_client=mock_nvidia_client,
         trace_store=store
     )
-    
+
     mock_nvidia_client.generate_sql.side_effect = [
         "DROP TABLE users;",
         "DELETE FROM users;"
     ]
-    
+
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
             "tables": {"users": {}}
         }
-        
+
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
             res = pipeline.run_pipeline(
                 job_id="job123",
                 natural_query="get users",
                 max_attempts=2
             )
-            
+
     assert res["success"] is False
-    
+
     trace = store.saved[0]
     assert trace.sql_valid is False
     assert trace.generated_sql is None
-    assert trace.last_generated_sql == "DELETE FROM users;"
+    assert trace.last_generated_sql == "DROP TABLE users;"
     assert trace.error_type == "sql_generation_failed"
-    assert trace.sql_validation_errors != []
-    assert trace.sql_validation_errors[0]["stage"] == "sql_guardrail"
+    assert len(trace.attempts) == 1
+    assert trace.attempts[0]["valid"] is False
+    assert trace.attempts[0]["validation_errors"][0]["stage"] == "sql_guardrail"
 
 def test_pipeline_trace_capture_multiple_statements_rejection(mock_schema_manager, mock_nvidia_client):
     store = RecordingTraceStore()
