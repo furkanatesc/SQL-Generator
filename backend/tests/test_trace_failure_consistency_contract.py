@@ -36,6 +36,7 @@ def test_input_failure_trace_consistency():
     assert trace_get(trace, "generated_sql") is None
     assert trace_get(trace, "last_generated_sql") is None
     assert trace_get(trace, "sql_validation_errors") == []
+    assert trace_get(trace, "attempts") == result["attempts"]
 
 
 # 2. LLM exception failure trace consistency
@@ -77,8 +78,11 @@ def test_llm_exception_failure_trace_consistency(mock_prompt):
     assert len(trace_attempts) == 1
     assert trace_attempts[0]["validation_errors"][0]["type"] == "llm_api_error"
 
-    # Consistency assertions between final attempt and trace validation errors
-    attempt_err = result["attempts"][0]["validation_errors"][0]
+    # Cross-check: Trace attempts must exactly match result attempts
+    assert trace_get(trace, "attempts") == result["attempts"]
+
+    # Cross-check: Metadata equality between final attempt and trace validation errors
+    attempt_err = result["attempts"][-1]["validation_errors"][0]
     trace_err = val_errors[0]
     assert trace_err["type"] == attempt_err["type"]
     assert trace_err["stage"] == attempt_err["stage"]
@@ -107,6 +111,8 @@ def test_guardrail_failure_trace_consistency(mock_prompt):
         )
 
     assert result["success"] is False
+    
+    # 4-way safety matrix assertion (explicit check that unsafe SQL does not leak publicly)
     assert result["generated_sql"] == ""
     assert result["attempts"][0]["sql"] == "DROP TABLE users;"
     assert result["attempts"][0]["validation_errors"][0]["stage"] == "sql_guardrail"
@@ -118,11 +124,16 @@ def test_guardrail_failure_trace_consistency(mock_prompt):
     assert trace_get(trace, "last_generated_sql") == "DROP TABLE users;"
     assert trace_get(trace, "sql_validation_errors")[0]["stage"] == "sql_guardrail"
 
-    # Consistency assertions between final attempt and trace validation errors
-    attempt_err = result["attempts"][0]["validation_errors"][0]
+    # Cross-check: Trace attempts must exactly match result attempts
+    assert trace_get(trace, "attempts") == result["attempts"]
+
+    # Cross-check and exact type assertion for Guardrail failures
+    attempt_err = result["attempts"][-1]["validation_errors"][0]
     trace_err = trace_get(trace, "sql_validation_errors")[0]
-    assert trace_err["type"] == attempt_err["type"]
-    assert trace_err["stage"] == attempt_err["stage"]
+    assert attempt_err["type"] == "non_select_statement"
+    assert attempt_err["stage"] == "sql_guardrail"
+    assert trace_err["type"] == "non_select_statement"
+    assert trace_err["stage"] == "sql_guardrail"
 
 
 # 4. Semantic validation failure trace consistency
@@ -154,6 +165,8 @@ def test_semantic_validation_failure_trace_consistency(mock_prompt):
         )
 
     assert result["success"] is False
+    
+    # Explicit differentiation from Guardrail failure: semantic failures can retain public SQL output
     assert result["generated_sql"] == "SELECT invalid_col FROM users"
     assert result["attempts"][0]["validation_errors"][0]["type"] == "missing_column"
 
@@ -168,8 +181,11 @@ def test_semantic_validation_failure_trace_consistency(mock_prompt):
     assert val_errors[0]["type"] == "missing_column"
     assert val_errors[0]["stage"] == "semantic_validation"
 
-    # Consistency assertions between final attempt and trace validation errors
-    attempt_err = result["attempts"][0]["validation_errors"][0]
+    # Cross-check: Trace attempts must exactly match result attempts
+    assert trace_get(trace, "attempts") == result["attempts"]
+
+    # Cross-check: Metadata equality between final attempt and trace validation errors
+    attempt_err = result["attempts"][-1]["validation_errors"][0]
     trace_err = val_errors[0]
     assert trace_err["type"] == attempt_err["type"]
     assert trace_err["stage"] == attempt_err["stage"]
@@ -210,8 +226,11 @@ def test_syntax_parse_failure_trace_consistency(mock_prompt):
     assert val_errors[0]["type"] in {"sql_parse_error", "syntax_error"}
     assert val_errors[0]["stage"] in {"sql_guardrail", "ast_parse"}
 
-    # Consistency assertions between final attempt and trace validation errors
-    attempt_err = result["attempts"][0]["validation_errors"][0]
+    # Cross-check: Trace attempts must exactly match result attempts
+    assert trace_get(trace, "attempts") == result["attempts"]
+
+    # Cross-check: Metadata equality between final attempt and trace validation errors
+    attempt_err = result["attempts"][-1]["validation_errors"][0]
     trace_err = val_errors[0]
     assert trace_err["type"] == attempt_err["type"]
     assert trace_err["stage"] == attempt_err["stage"]
