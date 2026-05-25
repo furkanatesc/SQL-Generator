@@ -134,6 +134,12 @@ def start_job_without_file(
     request: JobCreateRequest,
     background_tasks: BackgroundTasks
 ):
+    if not request.natural_query.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=[{"loc": ["body", "natural_query"], "msg": "natural_query cannot be empty or whitespace", "type": "value_error"}]
+        )
+        
     job_id = str(uuid.uuid4())
     dialect = get_config("target_db_type") or "postgres"
     job = create_job(job_id=job_id, natural_query=request.natural_query, previous_sql=request.previous_sql, dialect=dialect)
