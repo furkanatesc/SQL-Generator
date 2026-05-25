@@ -2,6 +2,8 @@ import sqlglot
 from sqlglot import exp as sqlglot_exp
 from typing import Dict, Any, Tuple
 
+from app.sql_dialects import DEFAULT_SQL_DIALECT, normalize_sql_dialect
+
 class SQLValidator:
     """
     Katman 1: Semantik ve Sözdizimi Kontrolleri
@@ -9,8 +11,13 @@ class SQLValidator:
     """
     
     @staticmethod
-    def validate(sql: str, schema: Dict[str, Any], dialect: str = "oracle") -> Tuple[bool, str]:
-        # 1. Syntax Validasyon & AST Parsing
+    def validate(sql: str, schema: Dict[str, Any], dialect: str = DEFAULT_SQL_DIALECT) -> Tuple[bool, str]:
+        # 1. Dialect & Syntax Validasyon & AST Parsing
+        try:
+            dialect = normalize_sql_dialect(dialect)
+        except ValueError as e:
+            return False, f"DIALECT ERROR: {str(e)}"
+
         try:
             tree = sqlglot.parse_one(sql, read=dialect)
         except Exception as e:
