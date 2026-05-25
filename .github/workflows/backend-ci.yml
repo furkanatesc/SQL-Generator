@@ -45,4 +45,5 @@ jobs:
 
       - name: Run eval smoke profile
         run: |
+          echo "Running eval smoke profile via deterministic fake pipeline..."
           python -m app.eval.run_eval --profile smoke --json
