@@ -50,3 +50,11 @@ jobs:
       - name: Run eval gate CLI on generated smoke report
         run: |
           python -m evals.eval_gate_cli /tmp/eval_smoke_report.json
+
+      - name: Run golden eval profile and write report
+        run: |
+          python -m app.eval.run_eval --profile golden --json --output /tmp/golden_eval_report.json
+
+      - name: Run eval gate CLI on generated golden report
+        run: |
+          python -m evals.eval_gate_cli /tmp/golden_eval_report.json
