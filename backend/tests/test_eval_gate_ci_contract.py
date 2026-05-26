@@ -3,34 +3,29 @@ from pathlib import Path
 from evals.eval_gate_cli import main
 
 
-# 1. Verify that .github/workflows/backend-ci.yml runs the eval gate CLI smoke step
+# 1. Verify that .github/workflows/backend-ci.yml runs the eval gate CLI step
 def test_backend_ci_runs_eval_gate_cli_smoke_step():
     workflow_path = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "backend-ci.yml"
     content = workflow_path.read_text(encoding="utf-8")
     
     assert "python -m evals.eval_gate_cli" in content
-    assert "eval_report_pass.json" in content
+    assert "eval_smoke_report.json" in content
 
 
-# 2. Verify that the CI smoke report structure is a passing report
+# 2. Verify that the CI smoke report generation uses the correct profile
 def test_backend_ci_eval_gate_smoke_uses_passing_report():
     workflow_path = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "backend-ci.yml"
     content = workflow_path.read_text(encoding="utf-8")
 
-    assert '"total": 1' in content
-    assert '"passed": 1' in content
-    assert '"failed": 0' in content
-    assert '"pass_rate": 1.0' in content
+    assert "--profile smoke" in content
 
 
-# 3. Verify that the CI smoke report does not use failing parameters
+# 3. Verify that the CI smoke report command includes the output flag
 def test_backend_ci_eval_gate_smoke_does_not_use_failure_report():
     workflow_path = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "backend-ci.yml"
     content = workflow_path.read_text(encoding="utf-8")
 
-    assert '"failed": 1' not in content
-    assert '"passed": 0' not in content
-    assert '"pass_rate": 0.' not in content
+    assert "--output" in content
 
 
 # 4. Verify that the smoke step does not require secrets, environment variables, or network
@@ -42,7 +37,7 @@ def test_backend_ci_eval_gate_smoke_does_not_use_network_or_secrets():
     lines = content.splitlines()
     in_smoke_step = False
     for line in lines:
-        if "name: Run eval gate CLI smoke" in line:
+        if "name: Run eval gate CLI on generated smoke report" in line:
             in_smoke_step = True
         elif in_smoke_step and line.strip().startswith("- name:"):
             break
