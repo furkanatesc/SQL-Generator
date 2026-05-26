@@ -3,70 +3,22 @@ from app.eval.trace_recorder import RecordingTraceStore
 
 FAKE_SQL_BY_CASE_ID = {
     "smoke_list_customers": "SELECT * FROM customers",
-    "list_customers": "SELECT * FROM customers",
-    "customer_orders_join": """
-        SELECT customers.name, orders.id
-        FROM customers
-        JOIN orders ON customers.id = orders.customer_id
-    """,
-    "orders_count_by_customer": """
-        SELECT customers.id, COUNT(orders.id) AS order_count
-        FROM customers
-        JOIN orders ON customers.id = orders.customer_id
-        GROUP BY customers.id
-    """,
-    "total_sales": """
-        SELECT SUM(amount) AS total_sales
-        FROM orders
-    """,
-    "recent_orders_filter": """
-        SELECT *
-        FROM orders
-        WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
-    """,
-    "top_products_by_sales": """
-        SELECT products.id, SUM(order_items.amount) AS total_sales
-        FROM products
-        JOIN order_items ON products.id = order_items.product_id
-        GROUP BY products.id
-        ORDER BY total_sales DESC
-        LIMIT 10
-    """,
-    "active_users": """
-        SELECT *
-        FROM users
-        WHERE active = TRUE
-    """,
-    "average_order_value": """
-        SELECT AVG(amount) AS average_order_value
-        FROM orders
-    """,
-    "customers_without_orders": """
-        SELECT customers.*
-        FROM customers
-        LEFT JOIN orders ON customers.id = orders.customer_id
-        WHERE orders.id IS NULL
-    """,
-    "sales_by_category": """
-        SELECT products.category, SUM(order_items.amount) AS total_sales
-        FROM products
-        JOIN order_items ON products.id = order_items.product_id
-        GROUP BY products.category
-    """,
+    "golden_select_user_names": "SELECT name FROM users",
+    "golden_select_active_users": "SELECT id, name FROM users WHERE status = 'active'",
+    "golden_count_orders": "SELECT COUNT(*) FROM orders",
+    "golden_join_orders_customers": "SELECT orders.id, customers.name FROM orders JOIN customers ON orders.customer_id = customers.id",
+    "golden_group_orders_by_status": "SELECT status, COUNT(*) FROM orders GROUP BY status",
+    "golden_top_customers_by_created_at": "SELECT id, name FROM customers ORDER BY created_at DESC LIMIT 10",
 }
 
 FAKE_SELECTED_TABLES_BY_CASE_ID = {
     "smoke_list_customers": ["CUSTOMERS"],
-    "list_customers": ["CUSTOMERS"],
-    "customer_orders_join": ["CUSTOMERS", "ORDERS"],
-    "orders_count_by_customer": ["CUSTOMERS", "ORDERS"],
-    "total_sales": ["ORDERS"],
-    "recent_orders_filter": ["ORDERS"],
-    "top_products_by_sales": ["PRODUCTS", "ORDER_ITEMS"],
-    "active_users": ["USERS"],
-    "average_order_value": ["ORDERS"],
-    "customers_without_orders": ["CUSTOMERS", "ORDERS"],
-    "sales_by_category": ["PRODUCTS", "ORDER_ITEMS"],
+    "golden_select_user_names": ["USERS"],
+    "golden_select_active_users": ["USERS"],
+    "golden_count_orders": ["ORDERS"],
+    "golden_join_orders_customers": ["ORDERS", "CUSTOMERS"],
+    "golden_group_orders_by_status": ["ORDERS"],
+    "golden_top_customers_by_created_at": ["CUSTOMERS"],
 }
 
 class DeterministicFakePipeline:
