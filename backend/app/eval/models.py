@@ -18,6 +18,9 @@ class GoldenCase:
 
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    expected_type: str = "success"
+    expected_sql: Optional[str] = None
+
 
 @dataclass(frozen=True)
 class EvalCheckResult:

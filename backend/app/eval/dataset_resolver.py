@@ -17,7 +17,7 @@ def get_cases_for_profile(profile: EvalProfile) -> List[GoldenCase]:
     if profile == EvalProfile.SMOKE:
         return list(SMOKE_CASES)
     elif profile == EvalProfile.GOLDEN:
-        return list(GOLDEN_CASES)
+        return sorted(GOLDEN_CASES, key=lambda c: c.case_id)
     elif profile == EvalProfile.LARGE_SCHEMA:
         raise EvalProfileNotImplementedError("large_schema profile is reserved for future PRs and is not implemented yet.")
     else:
