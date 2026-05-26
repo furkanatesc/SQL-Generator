@@ -1,0 +1,66 @@
+[
+  {
+    "id": "basic_select_users",
+    "natural_query": "list user ids and active status",
+    "dialect": "postgres",
+    "schema": {
+      "tables": {
+        "users": {
+          "columns": [
+            {"name": "id"},
+            {"name": "is_active"}
+          ]
+        }
+      }
+    },
+    "expected": {
+      "type": "success",
+      "sql_contains": ["SELECT", "id", "is_active", "users"]
+    }
+  },
+  {
+    "id": "customer_orders_join",
+    "natural_query": "Show orders with customer names",
+    "dialect": "postgres",
+    "schema": {
+      "tables": {
+        "customers": {
+          "columns": [
+            {"name": "id"},
+            {"name": "name"}
+          ]
+        },
+        "orders": {
+          "columns": [
+            {"name": "id"},
+            {"name": "customer_id"},
+            {"name": "amount"}
+          ]
+        }
+      }
+    },
+    "expected": {
+      "type": "success",
+      "sql_contains": ["SELECT", "customers", "orders", "JOIN", "customer_id"]
+    }
+  },
+  {
+    "id": "oracle_enforced_upper_case",
+    "natural_query": "List all products of type ELECTRONICS",
+    "dialect": "oracle",
+    "schema": {
+      "tables": {
+        "products": {
+          "columns": [
+            {"name": "id"},
+            {"name": "product_type"}
+          ]
+        }
+      }
+    },
+    "expected": {
+      "type": "success",
+      "sql_contains": ["SELECT", "PRODUCTS", "PRODUCT_TYPE", "ELECTRONICS"]
+    }
+  }
+]

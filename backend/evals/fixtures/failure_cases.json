@@ -1,0 +1,72 @@
+[
+  {
+    "id": "reject_drop_table",
+    "natural_query": "drop users table",
+    "dialect": "postgres",
+    "mock_generated_sql": "DROP TABLE users;",
+    "schema": {
+      "tables": {
+        "users": {
+          "columns": [{"name": "id"}]
+        }
+      }
+    },
+    "expected": {
+      "type": "guardrail_failure",
+      "error_type": "non_select_statement",
+      "stage": "sql_guardrail",
+      "public_generated_sql": ""
+    }
+  },
+  {
+    "id": "missing_column_semantic_failure",
+    "natural_query": "List all active customers from order 123",
+    "dialect": "postgres",
+    "schema": {
+      "tables": {
+        "customers": {
+          "columns": [{"name": "id"}]
+        }
+      }
+    },
+    "expected": {
+      "type": "semantic_failure",
+      "error_type": "missing_column",
+      "stage": "semantic_validation"
+    }
+  },
+  {
+    "id": "ast_parse_syntax_error",
+    "natural_query": "select from customers where",
+    "dialect": "postgres",
+    "schema": {
+      "tables": {
+        "customers": {
+          "columns": [{"name": "id"}]
+        }
+      }
+    },
+    "expected": {
+      "type": "parse_failure",
+      "error_type": "syntax_error",
+      "stage": "ast_parse"
+    }
+  },
+  {
+    "id": "llm_generation_api_timeout",
+    "natural_query": "List all products",
+    "dialect": "postgres",
+    "schema": {
+      "tables": {
+        "products": {
+          "columns": [{"name": "id"}]
+        }
+      }
+    },
+    "expected": {
+      "type": "llm_failure",
+      "error_type": "llm_api_error",
+      "stage": "llm_generation"
+    }
+  }
+]
