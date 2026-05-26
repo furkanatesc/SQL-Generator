@@ -15,6 +15,9 @@ def _extract_actual(result: dict) -> dict:
     }
 
 
+from evals.sql_normalizer import sql_equivalent
+
+
 def _evaluate_case(case: dict, result: dict) -> tuple[bool, str | None, dict]:
     expected = case["expected"]
     actual = _extract_actual(result)
@@ -23,10 +26,20 @@ def _evaluate_case(case: dict, result: dict) -> tuple[bool, str | None, dict]:
         if actual["success"] is not True:
             return False, "Expected success but pipeline failed", actual
 
-        sql = (actual["generated_sql"] or "").upper()
-        for fragment in expected.get("sql_contains", []):
-            if fragment.upper() not in sql:
-                return False, f"Missing SQL fragment: {fragment}", actual
+        # If expected_sql is defined, use semantic SQL equivalence check
+        if "expected_sql" in expected:
+            if not sql_equivalent(actual["generated_sql"], expected["expected_sql"], dialect=case["dialect"]):
+                return False, "SQL equivalence mismatch", actual
+
+        # Fallback/alternative: if sql_contains is defined, use fragment search check
+        elif "sql_contains" in expected:
+            sql = (actual["generated_sql"] or "").upper()
+            for fragment in expected.get("sql_contains", []):
+                if fragment.upper() not in sql:
+                    return False, f"Missing SQL fragment: {fragment}", actual
+        
+        else:
+            return False, "No SQL expectation (expected_sql or sql_contains) defined for success case", actual
 
         return True, None, actual
 
