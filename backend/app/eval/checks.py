@@ -69,3 +69,28 @@ def check_forbidden_sql_features(trace: NL2SQLTrace, case: GoldenCase) -> EvalCh
         details={"forbidden": sorted(list(forbidden)), "detected": sorted(list(detected)), "present": present},
     )
 
+
+def check_expected_sql_equivalence(trace: NL2SQLTrace, case: GoldenCase) -> EvalCheckResult:
+    if not case.expected_sql:
+        return EvalCheckResult(
+            name="expected_sql_equivalence",
+            passed=True,
+            message="",
+            details={"expected_sql": None, "generated_sql": trace.generated_sql},
+        )
+
+    generated_sql = trace.generated_sql or ""
+    
+    from evals.sql_normalizer import sql_equivalent
+    passed = sql_equivalent(generated_sql, case.expected_sql)
+
+    return EvalCheckResult(
+        name="expected_sql_equivalence",
+        passed=passed,
+        message="" if passed else "Generated SQL is not equivalent to expected_sql",
+        details={
+            "expected_sql": case.expected_sql,
+            "generated_sql": generated_sql,
+        },
+    )
+

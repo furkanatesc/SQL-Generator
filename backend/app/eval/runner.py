@@ -7,7 +7,8 @@ from app.eval.checks import (
     check_required_sql_fragments,
     check_forbidden_sql_fragments,
     check_required_sql_features,
-    check_forbidden_sql_features
+    check_forbidden_sql_features,
+    check_expected_sql_equivalence
 )
 from app.eval.trace_recorder import RecordingTraceStore
 
@@ -58,6 +59,8 @@ class EvaluationRunner:
         checks: List[EvalCheckResult] = []
         
         checks.append(check_sql_valid(trace))
+        if case.expected_sql:
+            checks.append(check_expected_sql_equivalence(trace, case))
         if case.expected_tables:
             checks.append(check_expected_tables(trace, case))
         if case.required_sql_fragments:
