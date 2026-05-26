@@ -60,6 +60,9 @@ def _evaluate_case(case: dict, result: dict) -> tuple[bool, str | None, dict]:
     return True, None, actual
 
 
+from evals.eval_report import build_eval_report
+
+
 def run_eval_cases(cases: list[dict], *, pipeline_factory: Callable[[dict], Any]) -> dict:
     results = []
     for case in sorted(cases, key=lambda c: c["id"]):
@@ -80,10 +83,4 @@ def run_eval_cases(cases: list[dict], *, pipeline_factory: Callable[[dict], Any]
             "actual": actual,
         })
 
-    passed_count = sum(1 for r in results if r["passed"])
-    return {
-        "total": len(results),
-        "passed": passed_count,
-        "failed": len(results) - passed_count,
-        "results": results,
-    }
+    return build_eval_report(results)
