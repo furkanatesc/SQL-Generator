@@ -43,21 +43,10 @@ jobs:
         run: |
           pytest -q
 
-      - name: Run eval smoke profile
+      - name: Run eval smoke profile and write report
         run: |
-          echo "Running eval smoke profile via deterministic fake pipeline..."
-          python -m app.eval.run_eval --profile smoke --json
+          python -m app.eval.run_eval --profile smoke --json --output /tmp/eval_smoke_report.json
 
-      - name: Run eval gate CLI smoke
+      - name: Run eval gate CLI on generated smoke report
         run: |
-          cat > /tmp/eval_report_pass.json <<'JSON'
-          {
-            "total": 1,
-            "passed": 1,
-            "failed": 0,
-            "pass_rate": 1.0,
-            "results": [],
-            "failed_cases": []
-          }
-          JSON
-          python -m evals.eval_gate_cli /tmp/eval_report_pass.json
+          python -m evals.eval_gate_cli /tmp/eval_smoke_report.json

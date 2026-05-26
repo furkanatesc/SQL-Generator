@@ -1,4 +1,5 @@
 import argparse
+from typing import Any
 import json
 import sys
 from app.eval.dataset_resolver import get_cases_for_profile
@@ -17,6 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=EvalProfile.SMOKE.value,
         help="Evaluation profile to run (smoke, golden, large_schema)"
     )
+    parser.add_argument("--output", type=str, help="Path to write the evaluation report JSON")
     return parser
 
 def build_runner() -> EvaluationRunner:
@@ -51,6 +53,56 @@ def print_text_report(suite_result: EvalSuiteResult) -> None:
                 print(f"  FAIL {c.name}: {msg}")
         print()
 
+def suite_result_to_report_dict(suite_result: EvalSuiteResult) -> dict[str, Any]:
+    results_list = []
+    failed_cases_list = []
+    
+    for r in suite_result.results:
+        reason = None
+        if not r.passed:
+            failed_checks = [c.message for c in r.checks if not c.passed]
+            if failed_checks:
+                reason = failed_checks[0]
+            elif r.error_message:
+                reason = r.error_message
+            else:
+                reason = "Unknown failure"
+                
+        expected_type = "success"
+        
+        actual = {
+            "success": r.passed,
+            "generated_sql": r.generated_sql or "",
+            "error_type": r.error_type,
+            "stage": None,
+        }
+        
+        result_entry = {
+            "id": r.case_id,
+            "expected_type": expected_type,
+            "passed": r.passed,
+            "reason": reason,
+            "actual": actual,
+        }
+        results_list.append(result_entry)
+        
+        if not r.passed:
+            failed_cases_list.append({
+                "id": r.case_id,
+                "expected_type": expected_type,
+                "reason": reason,
+            })
+            
+    return {
+        "total": suite_result.total_cases,
+        "passed": suite_result.passed,
+        "failed": suite_result.failed,
+        "pass_rate": suite_result.pass_rate,
+        "results": sorted(results_list, key=lambda x: x["id"]),
+        "failed_cases": sorted(failed_cases_list, key=lambda x: x["id"]),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -67,6 +119,13 @@ def main(argv: list[str] | None = None) -> int:
 
     runner = build_runner()
     suite_result = runner.run_suite(cases, profile=profile_enum)
+
+    if args.output:
+        report_dict = suite_result_to_report_dict(suite_result)
+        from pathlib import Path
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report_dict, sort_keys=True), encoding="utf-8")
 
     if args.json:
         output = suite_result_to_dict(suite_result)
