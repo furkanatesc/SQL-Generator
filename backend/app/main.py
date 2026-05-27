@@ -167,8 +167,17 @@ def start_job_without_file(
     }
 
 @app.get("/api/jobs", dependencies=[Depends(verify_api_key)], response_model=JobsListResponse)
-def get_jobs_list(limit: int = 50, offset: int = 0):
-    return {"jobs": list_jobs(limit=limit, offset=offset)}
+def get_jobs_list(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    jobs = list_jobs(limit=limit, offset=offset)
+    return {
+        "jobs": jobs,
+        "limit": limit,
+        "offset": offset,
+        "count": len(jobs),
+    }
 
 @app.get("/api/jobs/{job_id}", dependencies=[Depends(verify_api_key)], response_model=JobDetailResponse, responses={404: {"model": ErrorResponse}})
 def get_job_detail(job_id: str):

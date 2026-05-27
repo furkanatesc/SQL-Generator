@@ -49,6 +49,9 @@ class JobEnvelopeResponse(BaseModel):
 
 class JobsListResponse(BaseModel):
     jobs: List[JobDetailResponse]
+    limit: int
+    offset: int
+    count: int
 
 
 class CancelJobResponse(BaseModel):
