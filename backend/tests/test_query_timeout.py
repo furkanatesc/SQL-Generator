@@ -1,6 +1,7 @@
 import sqlite3
 import pytest
 from app.sql_sandbox import ReadOnlySqlSandbox, QueryTimeoutError
+from app.sql_execution_errors import SqlExecutionError
 
 @pytest.fixture
 def temp_db(tmp_path):
@@ -97,15 +98,15 @@ def test_write_blocking_still_enforced(temp_db):
     sandbox = ReadOnlySqlSandbox(temp_db, timeout_seconds=2.0)
     
     # Rejects DML
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("DELETE FROM users WHERE id = 1;")
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("INSERT INTO users (name) VALUES ('Charlie');")
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("UPDATE users SET name = 'Dave' WHERE id = 1;")
         
     # Rejects DDL
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("DROP TABLE users;")
         
     # Verify DB state unchanged

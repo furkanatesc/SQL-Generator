@@ -1,17 +1,17 @@
 import os
 import sqlite3
+import time
 from pathlib import Path
 from typing import List, Dict, Any
 
 from app.sql_safety import SqlSafetyValidator
-
-class QueryTimeoutError(RuntimeError):
-    """Raised when query execution exceeds the configured timeout limit."""
-    pass
-
-class RowLimitExceededError(RuntimeError):
-    """Raised when query execution returns more rows than the configured maximum limit."""
-    pass
+from app.sql_execution_errors import (
+    SqlExecutionError,
+    QueryTimeoutError,
+    RowLimitExceededError,
+    classify_execution_error,
+)
+from app.result_shape_validator import ResultShapeValidator
 
 class ReadOnlySqlSandbox:
     """
@@ -41,29 +41,30 @@ class ReadOnlySqlSandbox:
         Validates the SQL statement for read-only SELECT safety, connects to the
         target SQLite database in strict read-only mode, executes it, and returns the results.
         Enforces configurable query timeout limit and maximum row limit.
+        Uses ResultShapeValidator to ensure correct response format.
+        Categorizes and converts all execution errors through classify_execution_error.
         """
-        # 1. Pre-Execution Safety Validation
-        self.validator.ensure_read_only(sql)
-
-        # 2. Setup Isolated Read-Only SQLite URI
-        abs_path = os.path.abspath(self.db_path)
-        if not os.path.exists(abs_path):
-            raise ValueError(f"Target database does not exist: {abs_path}")
-
-        # Format Path to strict file:// URI with mode=ro query parameter
-        db_uri = Path(abs_path).as_uri() + "?mode=ro"
-
-        # 3. Connection and Execution with Timeout Enforcement
-        import time
         start_time = time.monotonic()
-
-        def check_timeout():
-            if time.monotonic() - start_time > self.timeout_seconds:
-                return 1
-            return 0
-
         conn = None
         try:
+            # 1. Pre-Execution Safety Validation
+            self.validator.ensure_read_only(sql)
+
+            # 2. Setup Isolated Read-Only SQLite URI
+            abs_path = os.path.abspath(self.db_path)
+            if not os.path.exists(abs_path):
+                # Raise SQLite-like OperationalError to trigger correct classification
+                raise sqlite3.OperationalError(f"unable to open database file: {abs_path}")
+
+            # Format Path to strict file:// URI with mode=ro query parameter
+            db_uri = Path(abs_path).as_uri() + "?mode=ro"
+
+            def check_timeout():
+                if time.monotonic() - start_time > self.timeout_seconds:
+                    return 1
+                return 0
+
+            # 3. Connection and Execution with Timeout/Limit Enforcement
             conn = sqlite3.connect(db_uri, uri=True)
             conn.row_factory = sqlite3.Row
             
@@ -78,21 +79,22 @@ class ReadOnlySqlSandbox:
             if len(rows) > self.max_rows:
                 raise RowLimitExceededError(f"Query returned more than {self.max_rows} rows")
             
-            return [dict(row) for row in rows]
-        except sqlite3.OperationalError as e:
-            # Detect if progress handler triggered the timeout abort
-            if time.monotonic() - start_time > self.timeout_seconds:
-                raise QueryTimeoutError("Query execution exceeded timeout")
-            # Map sqlite3 engine level write violations and errors to standard high-level exception
-            raise ValueError(f"Database execution error: {str(e)}")
-        except QueryTimeoutError:
-            # Reraise QueryTimeoutError directly
-            raise
-        except RowLimitExceededError:
-            # Reraise RowLimitExceededError directly
-            raise
+            # Convert SQLite rows to list[dict]
+            result = [dict(row) for row in rows]
+            
+            # 4. Result Shape Validation (prior to returning result)
+            ResultShapeValidator.validate(result)
+            
+            return result
+
         except Exception as e:
-            raise ValueError(f"Sandbox execution failed: {str(e)}")
+            # Detect if progress handler triggered the timeout abort
+            is_timeout = (time.monotonic() - start_time > self.timeout_seconds)
+            if is_timeout:
+                raise classify_execution_error(QueryTimeoutError("Query execution exceeded timeout"))
+            
+            raise classify_execution_error(e)
+            
         finally:
             if conn:
                 conn.close()
