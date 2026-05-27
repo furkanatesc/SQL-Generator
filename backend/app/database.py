@@ -195,9 +195,15 @@ def update_job_status(job_id: str, status: str, result_sql: Optional[str] = None
         conn.commit()
     return get_job(job_id)
 
-def list_jobs(limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+def list_jobs(limit: int = 50, offset: int = 0, status: Optional[str] = None) -> List[Dict[str, Any]]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset))
+        if status:
+            cursor.execute(
+                "SELECT * FROM jobs WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (status, limit, offset)
+            )
+        else:
+            cursor.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset))
         rows = cursor.fetchall()
         return [dict(row) for row in rows]

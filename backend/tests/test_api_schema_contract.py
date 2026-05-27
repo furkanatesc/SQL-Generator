@@ -66,10 +66,11 @@ def test_jobs_list_response_envelope_contract(mock_list):
     res = client.get("/api/jobs")
     assert res.status_code == 200
     body = res.json()
-    assert set(body.keys()) == {"jobs", "limit", "offset", "count"}
+    assert set(body.keys()) == {"jobs", "limit", "offset", "count", "status"}
     assert body["limit"] == 50
     assert body["offset"] == 0
     assert body["count"] == 2
+    assert body["status"] is None
     assert isinstance(body["jobs"], list)
     assert len(body["jobs"]) == 2
     assert body["jobs"][0]["id"] == "job-123"
@@ -232,7 +233,7 @@ def test_openapi_has_response_models_for_public_endpoints():
 
     # 6. JobsListResponse
     assert "JobsListResponse" in components
-    assert set(components["JobsListResponse"]["required"]) == {"jobs", "limit", "offset", "count"}
+    assert set(components["JobsListResponse"]["required"]) == {"jobs", "limit", "offset", "count", "status"}
     assert components["JobsListResponse"]["properties"]["jobs"]["items"]["$ref"] == "#/components/schemas/JobDetailResponse"
 
     # 7. CancelJobResponse
