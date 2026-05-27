@@ -8,9 +8,9 @@ class QueryExecutor:
     """
 
     @staticmethod
-    def execute_sandboxed(sql: str, db_path: str) -> List[Dict[str, Any]]:
+    def execute_sandboxed(sql: str, db_path: str, timeout_seconds: float = 2.0) -> List[Dict[str, Any]]:
         """
         Executes the given SQL statement inside the read-only sandbox.
         """
-        sandbox = ReadOnlySqlSandbox(db_path)
+        sandbox = ReadOnlySqlSandbox(db_path, timeout_seconds=timeout_seconds)
         return sandbox.execute(sql)
