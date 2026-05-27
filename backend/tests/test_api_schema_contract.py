@@ -40,6 +40,7 @@ def test_create_job_without_file_response_envelope_contract(mock_process, mock_c
     assert body["status"] == "success"
     assert isinstance(body["job"], dict)
     assert body["job"]["id"] == "job-123"
+    assert "job_id" not in body["job"]
 
 
 # 3. Negatif request validation: blank/whitespace queries rejected with 422
@@ -69,6 +70,7 @@ def test_jobs_list_response_envelope_contract(mock_list):
     assert isinstance(body["jobs"], list)
     assert len(body["jobs"]) == 2
     assert body["jobs"][0]["id"] == "job-123"
+    assert "job_id" not in body["jobs"][0]
 
 
 # 5. Config get response contract test
@@ -106,6 +108,7 @@ def test_get_job_detail_response_contract(mock_get):
     assert body["status"] == "processing"
     assert body["dialect"] == "sqlite"
     assert body["created_at"] == "2026-05-27T10:00:00"
+    assert "job_id" not in body
 
 
 # 8. Job cancel execution behavior contract test
@@ -119,6 +122,7 @@ def test_cancel_job_response_contract(mock_update, mock_get):
     assert body["message"] == "Job cancellation requested."
     assert body["job"]["id"] == "job-123"
     assert body["job"]["status"] == "cancelled"
+    assert "job_id" not in body["job"]
 
 
 # 9. Excel File upload behavior contract test
@@ -140,6 +144,7 @@ def test_file_upload_response_contract(mock_process, mock_create, mock_config):
     assert "File uploaded successfully" in body["message"]
     assert body["job"]["id"] == "job-excel"
     assert body["job"]["status"] == "pending"
+    assert "job_id" not in body["job"]
 
 
 # 10. Verify OpenAPI schema contains response models and exact required properties/references
