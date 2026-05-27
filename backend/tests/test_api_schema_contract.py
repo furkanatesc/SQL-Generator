@@ -215,6 +215,7 @@ def test_openapi_has_response_models_for_public_endpoints():
     assert set(job_detail_schema["required"]) >= {"id", "status"}
     assert job_detail_schema["properties"]["id"]["type"] == "string"
     assert job_detail_schema["properties"]["status"]["type"] == "string"
+    assert "job_id" not in job_detail_schema["properties"]
 
     # 5. JobEnvelopeResponse
     assert "JobEnvelopeResponse" in components

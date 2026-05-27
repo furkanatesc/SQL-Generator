@@ -31,7 +31,6 @@ class JobCreateRequest(BaseModel):
 
 class JobDetailResponse(BaseModel):
     id: str
-    job_id: Optional[str] = None
     status: str
     file_path: Optional[str] = None
     natural_query: Optional[str] = None
@@ -41,16 +40,6 @@ class JobDetailResponse(BaseModel):
     dialect: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def populate_id_from_job_id(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if "id" not in data and "job_id" in data:
-                data["id"] = data["job_id"]
-            elif "job_id" not in data and "id" in data:
-                data["job_id"] = data["id"]
-        return data
 
 
 class JobEnvelopeResponse(BaseModel):
