@@ -118,3 +118,60 @@ def test_openapi_jobs_list_response_includes_status_filter_metadata():
     assert "anyOf" in properties["status"]
     refs = [item["$ref"] for item in properties["status"]["anyOf"] if "$ref" in item]
     assert "#/components/schemas/JobStatus" in refs
+
+
+# 7. DB-level test: list_jobs filters by status correctly
+def test_list_jobs_filters_by_status():
+    import uuid
+    from app.database import create_job, update_job_status, list_jobs
+
+    pending_id = f"pending-{uuid.uuid4()}"
+    completed_id = f"completed-{uuid.uuid4()}"
+
+    create_job(job_id=pending_id, natural_query="q1", dialect="postgres")
+    create_job(job_id=completed_id, natural_query="q2", dialect="postgres")
+    update_job_status(completed_id, "completed")
+
+    rows = list_jobs(limit=50, offset=0, status="completed")
+    row_ids = [row["id"] for row in rows]
+
+    assert completed_id in row_ids
+    assert pending_id not in row_ids
+
+    completed_rows = [row for row in rows if row["id"] == completed_id]
+    assert len(completed_rows) == 1
+    assert completed_rows[0]["status"] == "completed"
+
+
+# 8. DB-level test: list_jobs preserves limit/offset when filtering by status
+def test_list_jobs_status_filter_preserves_limit_offset_contract():
+    import uuid
+    from app.database import create_job, update_job_status, list_jobs
+
+    id1 = f"comp-1-{uuid.uuid4()}"
+    id2 = f"comp-2-{uuid.uuid4()}"
+
+    create_job(job_id=id1, natural_query="q1", dialect="postgres")
+    create_job(job_id=id2, natural_query="q2", dialect="postgres")
+
+    update_job_status(id1, "completed")
+    update_job_status(id2, "completed")
+
+    # Verify limit=1 works on filtered records
+    rows = list_jobs(limit=1, offset=0, status="completed")
+    assert len(rows) == 1
+
+
+# 9. OpenAPI verification for JobStatus enum values
+def test_openapi_job_status_enum_values_contract():
+    schema = client.get("/openapi.json").json()
+    job_status = schema["components"]["schemas"]["JobStatus"]
+
+    assert set(job_status["enum"]) == {
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "cancelled",
+    }
+    assert job_status["type"] == "string"

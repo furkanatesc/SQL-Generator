@@ -173,13 +173,14 @@ def get_jobs_list(
     offset: int = Query(default=0, ge=0),
     status: Optional[JobStatus] = Query(default=None),
 ):
-    jobs = list_jobs(limit=limit, offset=offset, status=status)
+    status_value = status.value if status else None
+    jobs = list_jobs(limit=limit, offset=offset, status=status_value)
     return {
         "jobs": jobs,
         "limit": limit,
         "offset": offset,
         "count": len(jobs),
-        "status": status,
+        "status": status_value,
     }
 
 @app.get("/api/jobs/{job_id}", dependencies=[Depends(verify_api_key)], response_model=JobDetailResponse, responses={404: {"model": ErrorResponse}})
