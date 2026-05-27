@@ -12,6 +12,8 @@ from app.database import (
 )
 from app.auth import verify_api_key
 from app.api.debug_traces import router as debug_traces_router
+from fastapi.exceptions import RequestValidationError
+from app.api.errors import http_exception_handler, validation_exception_handler
 from app.api.schemas import (
     HealthResponse,
     ConfigUpdateRequest,
@@ -23,6 +25,7 @@ from app.api.schemas import (
     JobsListResponse,
     CancelJobResponse,
     FileUploadResponse,
+    ErrorResponse,
     RelationItem,
     CustomRelationsUpdate,
     DisabledRelationsUpdate,
@@ -53,6 +56,9 @@ app = FastAPI(
     description="SQLGen platformu için lokal FastAPI API katmanı",
     version="0.1.0"
 )
+
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
 app.include_router(debug_traces_router)
 
@@ -85,20 +91,20 @@ def health():
     return {"status": "ok", "version": "0.1.0", "database": "SQLite ready"}
 
 # 1. Config API
-@app.get("/api/configs/{key}", dependencies=[Depends(verify_api_key)], response_model=ConfigResponse)
+@app.get("/api/configs/{key}", dependencies=[Depends(verify_api_key)], response_model=ConfigResponse, responses={404: {"model": ErrorResponse}})
 def get_system_config(key: str):
     val = get_config(key)
     if val is None:
         raise HTTPException(status_code=404, detail=f"Config key '{key}' not found.")
     return {"key": key, "value": val}
 
-@app.post("/api/configs/{key}", dependencies=[Depends(verify_api_key)], response_model=ConfigUpdateResponse)
+@app.post("/api/configs/{key}", dependencies=[Depends(verify_api_key)], response_model=ConfigUpdateResponse, responses={400: {"model": ErrorResponse}})
 def set_system_config(key: str, data: ConfigUpdateRequest):
     set_config(key, data.value)
     return {"status": "success", "key": key, "value": data.value}
 
 # 2. File Upload API
-@app.post("/api/files/upload", dependencies=[Depends(verify_api_key)], response_model=FileUploadResponse)
+@app.post("/api/files/upload", dependencies=[Depends(verify_api_key)], response_model=FileUploadResponse, responses={400: {"model": ErrorResponse}})
 def upload_excel_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -140,7 +146,7 @@ def upload_excel_file(
     }
 
 # 3. Job API
-@app.post("/api/jobs/without-file", dependencies=[Depends(verify_api_key)], response_model=JobEnvelopeResponse)
+@app.post("/api/jobs/without-file", dependencies=[Depends(verify_api_key)], response_model=JobEnvelopeResponse, responses={422: {"model": ErrorResponse}})
 def start_job_without_file(
     request: JobCreateRequest,
     background_tasks: BackgroundTasks
@@ -164,7 +170,7 @@ def start_job_without_file(
 def get_jobs_list(limit: int = 50, offset: int = 0):
     return {"jobs": list_jobs(limit=limit, offset=offset)}
 
-@app.get("/api/jobs/{job_id}", dependencies=[Depends(verify_api_key)], response_model=JobDetailResponse)
+@app.get("/api/jobs/{job_id}", dependencies=[Depends(verify_api_key)], response_model=JobDetailResponse, responses={404: {"model": ErrorResponse}})
 def get_job_detail(job_id: str):
     job = get_job(job_id)
     if not job:
@@ -219,7 +225,7 @@ async def stream_job_logs(job_id: str):
                     
     return StreamingResponse(log_generator(), media_type="text/event-stream")
 
-@app.post("/api/jobs/{job_id}/cancel", dependencies=[Depends(verify_api_key)], response_model=CancelJobResponse)
+@app.post("/api/jobs/{job_id}/cancel", dependencies=[Depends(verify_api_key)], response_model=CancelJobResponse, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
 def cancel_job_execution(job_id: str):
     job = get_job(job_id)
     if not job:
