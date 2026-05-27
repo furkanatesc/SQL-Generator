@@ -195,15 +195,34 @@ def update_job_status(job_id: str, status: str, result_sql: Optional[str] = None
         conn.commit()
     return get_job(job_id)
 
-def list_jobs(limit: int = 50, offset: int = 0, status: Optional[str] = None) -> List[Dict[str, Any]]:
+ALLOWED_JOB_SORT_COLUMNS = {"created_at", "updated_at"}
+ALLOWED_SORT_ORDERS = {"asc", "desc"}
+
+def list_jobs(
+    limit: int = 50,
+    offset: int = 0,
+    status: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc"
+) -> List[Dict[str, Any]]:
+    if sort_by not in ALLOWED_JOB_SORT_COLUMNS:
+        raise ValueError("Invalid sort_by")
+    if sort_order not in ALLOWED_SORT_ORDERS:
+        raise ValueError("Invalid sort_order")
+
+    order_clause = f"{sort_by} {sort_order.upper()}"
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         if status:
             cursor.execute(
-                "SELECT * FROM jobs WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                f"SELECT * FROM jobs WHERE status = ? ORDER BY {order_clause} LIMIT ? OFFSET ?",
                 (status, limit, offset)
             )
         else:
-            cursor.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset))
+            cursor.execute(
+                f"SELECT * FROM jobs ORDER BY {order_clause} LIMIT ? OFFSET ?",
+                (limit, offset)
+            )
         rows = cursor.fetchall()
         return [dict(row) for row in rows]

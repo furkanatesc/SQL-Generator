@@ -24,6 +24,8 @@ from app.api.schemas import (
     JobEnvelopeResponse,
     JobsListResponse,
     JobStatus,
+    JobSortBy,
+    SortOrder,
     CancelJobResponse,
     FileUploadResponse,
     ErrorResponse,
@@ -172,15 +174,28 @@ def get_jobs_list(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     status: Optional[JobStatus] = Query(default=None),
+    sort_by: JobSortBy = Query(default=JobSortBy.created_at),
+    sort_order: SortOrder = Query(default=SortOrder.desc),
 ):
     status_value = status.value if status else None
-    jobs = list_jobs(limit=limit, offset=offset, status=status_value)
+    sort_by_value = sort_by.value
+    sort_order_value = sort_order.value
+
+    jobs = list_jobs(
+        limit=limit,
+        offset=offset,
+        status=status_value,
+        sort_by=sort_by_value,
+        sort_order=sort_order_value,
+    )
     return {
         "jobs": jobs,
         "limit": limit,
         "offset": offset,
         "count": len(jobs),
         "status": status_value,
+        "sort_by": sort_by_value,
+        "sort_order": sort_order_value,
     }
 
 @app.get("/api/jobs/{job_id}", dependencies=[Depends(verify_api_key)], response_model=JobDetailResponse, responses={404: {"model": ErrorResponse}})

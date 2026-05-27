@@ -32,14 +32,16 @@ def test_jobs_list_without_status_filter_preserves_default_contract(mock_list):
     assert res.status_code == 200
     body = res.json()
 
-    assert set(body.keys()) == {"jobs", "limit", "offset", "count", "status"}
+    assert set(body.keys()) == {"jobs", "limit", "offset", "count", "status", "sort_by", "sort_order"}
     assert body["limit"] == 50
     assert body["offset"] == 0
     assert body["count"] == 2
     assert body["status"] is None
+    assert body["sort_by"] == "created_at"
+    assert body["sort_order"] == "desc"
     assert len(body["jobs"]) == 2
 
-    mock_list.assert_called_once_with(limit=50, offset=0, status=None)
+    mock_list.assert_called_once_with(limit=50, offset=0, status=None, sort_by="created_at", sort_order="desc")
 
 
 # 2. Filter by pending status
@@ -56,7 +58,7 @@ def test_jobs_list_filters_by_pending_status(mock_list):
     assert body["count"] == 1
     assert body["jobs"][0]["status"] == "pending"
 
-    mock_list.assert_called_once_with(limit=50, offset=0, status="pending")
+    mock_list.assert_called_once_with(limit=50, offset=0, status="pending", sort_by="created_at", sort_order="desc")
 
 
 # 3. Filter by completed status
@@ -73,7 +75,7 @@ def test_jobs_list_filters_by_completed_status(mock_list):
     assert body["count"] == 1
     assert body["jobs"][0]["status"] == "completed"
 
-    mock_list.assert_called_once_with(limit=50, offset=0, status="completed")
+    mock_list.assert_called_once_with(limit=50, offset=0, status="completed", sort_by="created_at", sort_order="desc")
 
 
 # 4. Reject invalid status (returns 422 standard error envelope)
