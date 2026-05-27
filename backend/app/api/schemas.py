@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List, Literal
+from enum import Enum
 
 
 # PR 11.1 - Core API schemas
@@ -47,11 +48,20 @@ class JobEnvelopeResponse(BaseModel):
     job: JobDetailResponse
 
 
+class JobStatus(str, Enum):
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
 class JobsListResponse(BaseModel):
     jobs: List[JobDetailResponse]
     limit: int
     offset: int
     count: int
+    status: Optional[JobStatus]
 
 
 class CancelJobResponse(BaseModel):
