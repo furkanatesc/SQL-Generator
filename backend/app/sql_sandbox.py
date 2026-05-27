@@ -9,6 +9,10 @@ class QueryTimeoutError(RuntimeError):
     """Raised when query execution exceeds the configured timeout limit."""
     pass
 
+class RowLimitExceededError(RuntimeError):
+    """Raised when query execution returns more rows than the configured maximum limit."""
+    pass
+
 class ReadOnlySqlSandbox:
     """
     Read-Only Isolation SQL Sandbox
@@ -18,19 +22,25 @@ class ReadOnlySqlSandbox:
     Designed with a simple execute boundary to support future database adapter strategies (e.g., PostgreSQL/Oracle).
     """
 
-    def __init__(self, db_path: str, timeout_seconds: float = 2.0):
+    def __init__(self, db_path: str, timeout_seconds: float = 2.0, max_rows: int = 1000):
         """
-        Initializes the SQLite Read-Only Isolation Sandbox with the target DB file path and timeout.
+        Initializes the SQLite Read-Only Isolation Sandbox with the target DB file path, timeout, and max row limit.
         """
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be greater than 0")
+        if max_rows <= 0:
+            raise ValueError("max_rows must be greater than 0")
+
         self.db_path = db_path
         self.timeout_seconds = timeout_seconds
+        self.max_rows = max_rows
         self.validator = SqlSafetyValidator()
 
     def execute(self, sql: str) -> List[Dict[str, Any]]:
         """
         Validates the SQL statement for read-only SELECT safety, connects to the
         target SQLite database in strict read-only mode, executes it, and returns the results.
-        Enforces configurable query timeout limit.
+        Enforces configurable query timeout limit and maximum row limit.
         """
         # 1. Pre-Execution Safety Validation
         self.validator.ensure_read_only(sql)
@@ -62,7 +72,11 @@ class ReadOnlySqlSandbox:
             
             cursor = conn.cursor()
             cursor.execute(sql)
-            rows = cursor.fetchall()
+            
+            # Fetch up to max_rows + 1 to detect limit violation
+            rows = cursor.fetchmany(self.max_rows + 1)
+            if len(rows) > self.max_rows:
+                raise RowLimitExceededError(f"Query returned more than {self.max_rows} rows")
             
             return [dict(row) for row in rows]
         except sqlite3.OperationalError as e:
@@ -73,6 +87,9 @@ class ReadOnlySqlSandbox:
             raise ValueError(f"Database execution error: {str(e)}")
         except QueryTimeoutError:
             # Reraise QueryTimeoutError directly
+            raise
+        except RowLimitExceededError:
+            # Reraise RowLimitExceededError directly
             raise
         except Exception as e:
             raise ValueError(f"Sandbox execution failed: {str(e)}")
