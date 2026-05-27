@@ -120,3 +120,61 @@ def test_openapi_contains_error_response_schema():
     assert set(error_body_schema["required"]) == {"code", "message"}
     assert error_body_schema["properties"]["code"]["type"] == "string"
     assert error_body_schema["properties"]["message"]["type"] == "string"
+
+
+# 8. Auth failure: Missing API key
+def test_missing_api_key_returns_standard_403_error():
+    app.dependency_overrides.clear()
+
+    res = client.get("/api/jobs")
+
+    assert res.status_code == 403
+    body = res.json()
+    assert_error_contract(body, code="FORBIDDEN")
+    assert body["error"]["details"] is None
+    assert "api key" in body["error"]["message"].lower()
+
+
+# 9. Auth failure: Invalid API key
+@patch("app.auth.get_config", return_value="expected-key")
+def test_invalid_api_key_returns_standard_403_error(mock_get_config):
+    app.dependency_overrides.clear()
+
+    res = client.get("/api/jobs", headers={"X-API-Key": "wrong-key"})
+
+    assert res.status_code == 403
+    body = res.json()
+    assert_error_contract(body, code="FORBIDDEN")
+    assert body["error"]["details"] is None
+    assert "invalid api key" in body["error"]["message"].lower()
+
+
+# 10. Auth failure: API Key not configured
+@patch("app.auth.get_config", return_value=None)
+def test_api_key_not_configured_returns_standard_500_error(mock_get_config):
+    app.dependency_overrides.clear()
+
+    res = client.get("/api/jobs", headers={"X-API-Key": "some-key"})
+
+    assert res.status_code == 500
+    body = res.json()
+    assert_error_contract(body, code="INTERNAL_SERVER_ERROR")
+    assert body["error"]["details"] is None
+    assert "not configured" in body["error"]["message"].lower()
+
+
+# 11. OpenAPI: Endpoint-level error response Ref lock
+def test_openapi_endpoints_expose_error_response():
+    schema = client.get("/openapi.json").json()
+    
+    def assert_error_response_ref(schema, method, path, status_code):
+        response = schema["paths"][path][method]["responses"][str(status_code)]
+        ref = response["content"]["application/json"]["schema"]["$ref"]
+        assert ref == "#/components/schemas/ErrorResponse"
+        
+    assert_error_response_ref(schema, "get", "/api/configs/{key}", 404)
+    assert_error_response_ref(schema, "post", "/api/files/upload", 400)
+    assert_error_response_ref(schema, "post", "/api/jobs/without-file", 422)
+    assert_error_response_ref(schema, "get", "/api/jobs/{job_id}", 404)
+    assert_error_response_ref(schema, "post", "/api/jobs/{job_id}/cancel", 400)
+    assert_error_response_ref(schema, "post", "/api/jobs/{job_id}/cancel", 404)

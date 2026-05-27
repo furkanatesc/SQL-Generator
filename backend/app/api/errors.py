@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from typing import Any
 
 
@@ -27,7 +28,7 @@ def normalize_message(detail: Any, status_code: int) -> str:
 def normalize_details(detail: Any) -> Any:
     if isinstance(detail, str):
         return None
-    return detail
+    return jsonable_encoder(detail)
 
 
 async def http_exception_handler(request: Any, exc: HTTPException) -> JSONResponse:
@@ -54,7 +55,7 @@ async def http_exception_handler(request: Any, exc: HTTPException) -> JSONRespon
 
 
 async def validation_exception_handler(request: Any, exc: RequestValidationError) -> JSONResponse:
-    errors = exc.errors()
+    errors = jsonable_encoder(exc.errors())
     return JSONResponse(
         status_code=422,
         content={
