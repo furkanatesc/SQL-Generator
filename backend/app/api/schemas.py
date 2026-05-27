@@ -56,12 +56,24 @@ class JobStatus(str, Enum):
     cancelled = "cancelled"
 
 
+class JobSortBy(str, Enum):
+    created_at = "created_at"
+    updated_at = "updated_at"
+
+
+class SortOrder(str, Enum):
+    asc = "asc"
+    desc = "desc"
+
+
 class JobsListResponse(BaseModel):
     jobs: List[JobDetailResponse]
     limit: int
     offset: int
     count: int
     status: Optional[JobStatus]
+    sort_by: JobSortBy
+    sort_order: SortOrder
 
 
 class CancelJobResponse(BaseModel):
