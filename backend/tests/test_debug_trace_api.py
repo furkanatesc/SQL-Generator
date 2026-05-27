@@ -72,18 +72,24 @@ def test_get_trace(test_client, mock_store):
 def test_get_trace_missing(test_client, mock_store):
     response = test_client.get("/api/debug/traces/missing_id", headers=auth_headers())
     assert response.status_code == 404
-    assert response.json()["detail"] == "Trace not found"
+    data = response.json()
+    assert data["error"]["code"] == "NOT_FOUND"
+    assert data["error"]["message"] == "Trace not found"
 
 def test_debug_traces_disabled(monkeypatch, test_client, mock_store):
     monkeypatch.setenv("NL2SQL_DEBUG_ENDPOINTS_ENABLED", "false")
     
     response = test_client.get("/api/debug/traces", headers=auth_headers())
     assert response.status_code == 404
-    assert response.json()["detail"] == "Not found"
+    data = response.json()
+    assert data["error"]["code"] == "NOT_FOUND"
+    assert data["error"]["message"] == "Not found"
 
     response = test_client.get("/api/debug/traces/t1", headers=auth_headers())
     assert response.status_code == 404
-    assert response.json()["detail"] == "Not found"
+    data2 = response.json()
+    assert data2["error"]["code"] == "NOT_FOUND"
+    assert data2["error"]["message"] == "Not found"
 
 def test_debug_traces_filters_by_sql_valid(test_client, mock_store):
     mock_store.save(NL2SQLTrace(trace_id="t1", sql_valid=True))

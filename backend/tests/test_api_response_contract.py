@@ -98,6 +98,7 @@ def test_get_job_detail_not_found_shape(mock_get_job):
     assert response.status_code == 404
     data = response.json()
     
-    # Assert FastAPI standard HTTP exception contract
-    assert "detail" in data
-    assert "not found" in data["detail"].lower()
+    # Assert standard ErrorResponse contract
+    assert "error" in data
+    assert data["error"]["code"] == "NOT_FOUND"
+    assert "not found" in data["error"]["message"].lower()

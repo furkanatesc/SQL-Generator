@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 from typing import Optional, Dict, Any, List, Literal
 
 
@@ -100,3 +100,14 @@ class RAGSearchRequest(BaseModel):
     query: str
     collection: str
     limit: Optional[int] = 3
+
+
+# PR 11.2 - Error response schemas
+class ErrorBody(BaseModel):
+    code: str
+    message: str
+    details: Optional[Any] = None
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorBody
