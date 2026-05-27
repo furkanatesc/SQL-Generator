@@ -15,6 +15,7 @@ logger = logging.getLogger("sql_pipeline")
 
 from app.sql_validator import SQLValidator
 from app.sql_guardrail import SQLGuardrailValidator
+from app.sql_safety import SqlSafetyValidator
 from app.trace.builders import build_trace_from_pruned_schema
 from app.trace.store import TraceStore
 from app.schema_graph import TraversalPolicy
@@ -396,6 +397,27 @@ class SQLGenerationPipeline:
                     else:
                         break
 
+                # --- Sandbox Safety Validation ---
+                try:
+                    SqlSafetyValidator().ensure_read_only(current_sql)
+                except sqlglot.errors.ParseError:
+                    # Let the syntax parse errors be caught standardly by the pipeline's AST validator
+                    pass
+                except ValueError as safety_err:
+                    last_error = str(safety_err)
+                    attempt_info["valid"] = False
+                    attempt_info["error"] = last_error
+                    attempt_info["validation_errors"] = [{
+                        "type": "unsafe_sql",
+                        "stage": "sql_sandbox_safety",
+                        "message": last_error
+                    }]
+                    result["attempts"].append(attempt_info)
+                    validation_errors.append(attempt_info["validation_errors"][0])
+                    if log_callback:
+                        log_callback(f"Sandbox güvenlik doğrulaması BAŞARISIZ: {last_error}", 4)
+                    break
+
                 # AST Doğrulama (sqlglot)
                 try:
                     sqlglot.parse_one(current_sql, read=dialect)
@@ -471,7 +493,7 @@ class SQLGenerationPipeline:
             if result["attempts"]:
                 last_attempt = result["attempts"][-1]
                 has_guardrail_error = any(
-                    err.get("stage") == "sql_guardrail" 
+                    err.get("stage") in ["sql_guardrail", "sql_sandbox_safety"] 
                     for err in last_attempt.get("validation_errors", [])
                 )
                 if has_guardrail_error:
