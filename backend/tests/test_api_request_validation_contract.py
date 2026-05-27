@@ -12,7 +12,7 @@ def override_auth():
     app.dependency_overrides.clear()
 
 FAKE_JOB = {
-    "job_id": "job-val-1234",
+    "id": "job-val-1234",
     "status": "pending",
     "natural_query": "show me users",
     "previous_sql": None,

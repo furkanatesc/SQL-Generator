@@ -12,7 +12,7 @@ def override_auth():
     app.dependency_overrides.clear()
 
 FAKE_JOB_PENDING = {
-    "job_id": "job-123",
+    "id": "job-123",
     "status": "processing",
     "natural_query": "show me users",
     "file_path": None,
@@ -21,7 +21,7 @@ FAKE_JOB_PENDING = {
 }
 
 FAKE_JOB_FAILED = {
-    "job_id": "job-failed-123",
+    "id": "job-failed-123",
     "status": "failed",
     "natural_query": "show me users",
     "previous_sql": None,
@@ -33,7 +33,7 @@ FAKE_JOB_FAILED = {
 
 def assert_minimum_job_shape(job: dict):
     assert isinstance(job, dict)
-    assert "job_id" in job
+    assert "id" in job
     assert "status" in job
     assert "natural_query" in job
     assert "previous_sql" in job

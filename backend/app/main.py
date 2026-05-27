@@ -12,6 +12,25 @@ from app.database import (
 )
 from app.auth import verify_api_key
 from app.api.debug_traces import router as debug_traces_router
+from app.api.schemas import (
+    HealthResponse,
+    ConfigUpdateRequest,
+    ConfigResponse,
+    ConfigUpdateResponse,
+    JobCreateRequest,
+    JobDetailResponse,
+    JobEnvelopeResponse,
+    JobsListResponse,
+    CancelJobResponse,
+    FileUploadResponse,
+    RelationItem,
+    CustomRelationsUpdate,
+    DisabledRelationsUpdate,
+    SchemaFilterUpdate,
+    BusinessRuleIndexRequest,
+    SQLHistoryIndexRequest,
+    RAGSearchRequest,
+)
 
 # Global thread-safe logs ve stream yapıları
 import queue
@@ -60,34 +79,26 @@ def startup_event():
     except Exception as e:
         print(f"RAG Manager initialization failed: {e}")
 
-# Pydantic şemaları
-class ConfigUpdate(BaseModel):
-    value: str
-
-class JobCreateRequest(BaseModel):
-    natural_query: str
-    previous_sql: Optional[str] = None
-
 # API test endpoint'i
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 def health():
     return {"status": "ok", "version": "0.1.0", "database": "SQLite ready"}
 
 # 1. Config API
-@app.get("/api/configs/{key}", dependencies=[Depends(verify_api_key)])
+@app.get("/api/configs/{key}", dependencies=[Depends(verify_api_key)], response_model=ConfigResponse)
 def get_system_config(key: str):
     val = get_config(key)
     if val is None:
         raise HTTPException(status_code=404, detail=f"Config key '{key}' not found.")
     return {"key": key, "value": val}
 
-@app.post("/api/configs/{key}", dependencies=[Depends(verify_api_key)])
-def set_system_config(key: str, data: ConfigUpdate):
+@app.post("/api/configs/{key}", dependencies=[Depends(verify_api_key)], response_model=ConfigUpdateResponse)
+def set_system_config(key: str, data: ConfigUpdateRequest):
     set_config(key, data.value)
     return {"status": "success", "key": key, "value": data.value}
 
 # 2. File Upload API
-@app.post("/api/files/upload", dependencies=[Depends(verify_api_key)])
+@app.post("/api/files/upload", dependencies=[Depends(verify_api_key)], response_model=FileUploadResponse)
 def upload_excel_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -129,7 +140,7 @@ def upload_excel_file(
     }
 
 # 3. Job API
-@app.post("/api/jobs/without-file", dependencies=[Depends(verify_api_key)])
+@app.post("/api/jobs/without-file", dependencies=[Depends(verify_api_key)], response_model=JobEnvelopeResponse)
 def start_job_without_file(
     request: JobCreateRequest,
     background_tasks: BackgroundTasks
@@ -149,11 +160,11 @@ def start_job_without_file(
         "job": job
     }
 
-@app.get("/api/jobs", dependencies=[Depends(verify_api_key)])
+@app.get("/api/jobs", dependencies=[Depends(verify_api_key)], response_model=JobsListResponse)
 def get_jobs_list(limit: int = 50, offset: int = 0):
     return {"jobs": list_jobs(limit=limit, offset=offset)}
 
-@app.get("/api/jobs/{job_id}", dependencies=[Depends(verify_api_key)])
+@app.get("/api/jobs/{job_id}", dependencies=[Depends(verify_api_key)], response_model=JobDetailResponse)
 def get_job_detail(job_id: str):
     job = get_job(job_id)
     if not job:
@@ -208,7 +219,7 @@ async def stream_job_logs(job_id: str):
                     
     return StreamingResponse(log_generator(), media_type="text/event-stream")
 
-@app.post("/api/jobs/{job_id}/cancel", dependencies=[Depends(verify_api_key)])
+@app.post("/api/jobs/{job_id}/cancel", dependencies=[Depends(verify_api_key)], response_model=CancelJobResponse)
 def cancel_job_execution(job_id: str):
     job = get_job(job_id)
     if not job:
@@ -355,18 +366,6 @@ def refresh_database_schema():
         )
 
 # Custom and Disabled Relations API
-class RelationItem(BaseModel):
-    source: str
-    source_col: str
-    target: str
-    target_col: str
-
-class CustomRelationsUpdate(BaseModel):
-    relations: List[RelationItem]
-
-class DisabledRelationsUpdate(BaseModel):
-    relations: List[RelationItem]
-
 @app.get("/api/schema/custom-relations", dependencies=[Depends(verify_api_key)])
 def get_custom_relations():
     from app.database import get_config
@@ -403,10 +402,6 @@ def save_disabled_relations(data: DisabledRelationsUpdate):
     set_config(f"disabled_relations_{db_type}", json.dumps(relations_list, ensure_ascii=False))
     return {"status": "success", "message": "Devre dışı bırakılmış ilişkiler başarıyla kaydedildi."}
 
-class SchemaFilterUpdate(BaseModel):
-    hidden_tables: List[str]
-    hidden_columns: Dict[str, List[str]]
-
 @app.get("/api/schema/filters", dependencies=[Depends(verify_api_key)])
 def get_schema_filters():
     from app.database import get_config
@@ -429,22 +424,6 @@ def save_schema_filters(data: SchemaFilterUpdate):
     set_config(f"hidden_tables_{db_type}", json.dumps(data.hidden_tables, ensure_ascii=False))
     set_config(f"hidden_columns_{db_type}", json.dumps(data.hidden_columns, ensure_ascii=False))
     return {"status": "success", "message": "Şema filtreleri başarıyla kaydedildi."}
-
-# 5. RAG API
-class BusinessRuleIndexRequest(BaseModel):
-    rule_id: str
-    rule_text: str
-    sql_mapping: str
-
-class SQLHistoryIndexRequest(BaseModel):
-    history_id: str
-    natural_query: str
-    sql: str
-
-class RAGSearchRequest(BaseModel):
-    query: str
-    collection: str
-    limit: Optional[int] = 3
 
 @app.get("/api/rag/stats", dependencies=[Depends(verify_api_key)])
 def get_rag_stats():
