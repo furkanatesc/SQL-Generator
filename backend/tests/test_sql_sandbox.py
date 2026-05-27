@@ -1,6 +1,7 @@
 import sqlite3
 import pytest
 from app.sql_sandbox import ReadOnlySqlSandbox
+from app.sql_execution_errors import SqlExecutionError
 
 @pytest.fixture
 def temp_db(tmp_path):
@@ -45,19 +46,19 @@ def test_sandbox_write_blocked_and_state_unchanged(temp_db):
     assert before_count == 2
     
     # Blocked write attempt: DELETE
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("DELETE FROM users WHERE id = 1;")
         
     # Blocked write attempt: INSERT
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("INSERT INTO users (name) VALUES ('Charlie');")
         
     # Blocked write attempt: UPDATE
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("UPDATE users SET name = 'Dave' WHERE id = 1;")
 
     # Blocked write attempt: DROP TABLE
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("DROP TABLE users;")
         
     # Confirm DB state remains completely unchanged after blocked write attempts
@@ -76,7 +77,7 @@ def test_database_driver_level_readonly_isolation(temp_db):
     sandbox.validator.ensure_read_only = lambda sql: None
     
     # Try to execute a write statement. It should pass validation but fail at the DB engine/driver level.
-    with pytest.raises(ValueError, match="Database execution error: attempt to write a readonly database"):
+    with pytest.raises(SqlExecutionError, match="attempt to write a readonly database"):
         sandbox.execute("DELETE FROM users WHERE id = 1;")
         
     # Confirm record count remains 2

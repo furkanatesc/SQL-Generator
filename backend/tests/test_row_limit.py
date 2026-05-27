@@ -1,6 +1,7 @@
 import sqlite3
 import pytest
 from app.sql_sandbox import ReadOnlySqlSandbox, RowLimitExceededError, QueryTimeoutError
+from app.sql_execution_errors import SqlExecutionError
 from app.query_executor import QueryExecutor
 
 @pytest.fixture
@@ -83,9 +84,9 @@ def test_write_blocking_still_fully_enforced(temp_db):
     # PR 12.1 write blocking security constraints must remain completely functional
     sandbox = ReadOnlySqlSandbox(temp_db, max_rows=10)
     
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("DELETE FROM users WHERE id = 1;")
-    with pytest.raises(ValueError):
+    with pytest.raises(SqlExecutionError):
         sandbox.execute("INSERT INTO users (name) VALUES ('Dave');")
         
     # Assert DB state is untouched
