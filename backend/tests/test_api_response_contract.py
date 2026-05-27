@@ -12,7 +12,7 @@ def override_auth():
     app.dependency_overrides.clear()
 
 FAKE_JOB = {
-    "job_id": "job-1234",
+    "id": "job-1234",
     "status": "pending",
     "natural_query": "show me users",
     "previous_sql": None,
@@ -27,7 +27,7 @@ def assert_minimum_job_shape(job: dict):
     Asserts that the provided job dictionary conforms to the required minimum API shape contract.
     """
     assert isinstance(job, dict)
-    assert "job_id" in job
+    assert "id" in job
     assert "status" in job
     assert "natural_query" in job
     assert "previous_sql" in job
@@ -55,7 +55,7 @@ def test_create_job_without_file_response_shape(mock_process, mock_create, mock_
     
     # Assert job shape
     assert_minimum_job_shape(data["job"])
-    assert data["job"]["job_id"] == "job-1234"
+    assert data["job"]["id"] == "job-1234"
     
     # Ensure background task was added but not actually executed synchronously
     # Background tasks in TestClient are executed after response is sent if we don't mock it,
@@ -72,7 +72,7 @@ def test_get_job_detail_response_shape(mock_get_job):
     
     # GET /api/jobs/{job_id} returns the raw job object directly
     assert_minimum_job_shape(data)
-    assert data["job_id"] == "job-1234"
+    assert data["id"] == "job-1234"
     assert mock_get_job.called
 
 @patch("app.main.list_jobs", return_value=[FAKE_JOB, FAKE_JOB])
