@@ -149,7 +149,7 @@ def test_database_list_jobs_orders_by_created_at_desc():
     time.sleep(0.05)
     create_job(job_id=id2, natural_query="second", dialect="postgres")
 
-    rows = list_jobs(limit=10, offset=0, sort_by="created_at", sort_order="desc")
+    rows = list_jobs(limit=1000, offset=0, sort_by="created_at", sort_order="desc")
     row_ids = [row["id"] for row in rows if row["id"] in (id1, id2)]
 
     # In desc order, the most recent (id2) should be first
@@ -170,8 +170,20 @@ def test_database_list_jobs_orders_by_updated_at_asc():
     time.sleep(0.05)
     update_job_status(id2, "processing")
 
-    rows = list_jobs(limit=10, offset=0, sort_by="updated_at", sort_order="asc")
+    rows = list_jobs(limit=1000, offset=0, sort_by="updated_at", sort_order="asc")
     row_ids = [row["id"] for row in rows if row["id"] in (id1, id2)]
 
     # In asc order, the older update (id1) should be first
     assert row_ids == [id1, id2]
+
+
+# 10. DB whitelist test: list_jobs rejects invalid sort_by (SQL Injection Guard)
+def test_database_list_jobs_rejects_invalid_sort_by():
+    with pytest.raises(ValueError, match="Invalid sort_by"):
+        list_jobs(sort_by="id; DROP TABLE jobs", sort_order="desc")
+
+
+# 11. DB whitelist test: list_jobs rejects invalid sort_order (SQL Injection Guard)
+def test_database_list_jobs_rejects_invalid_sort_order():
+    with pytest.raises(ValueError, match="Invalid sort_order"):
+        list_jobs(sort_by="created_at", sort_order="desc; DROP TABLE jobs")
