@@ -18,6 +18,7 @@ from app.api.schemas import (
     ConfigResponse,
     ConfigUpdateResponse,
     JobCreateRequest,
+    JobDetailResponse,
     JobEnvelopeResponse,
     JobsListResponse,
     CancelJobResponse,
@@ -163,7 +164,7 @@ def start_job_without_file(
 def get_jobs_list(limit: int = 50, offset: int = 0):
     return {"jobs": list_jobs(limit=limit, offset=offset)}
 
-@app.get("/api/jobs/{job_id}", dependencies=[Depends(verify_api_key)], response_model=Dict[str, Any])
+@app.get("/api/jobs/{job_id}", dependencies=[Depends(verify_api_key)], response_model=JobDetailResponse)
 def get_job_detail(job_id: str):
     job = get_job(job_id)
     if not job:

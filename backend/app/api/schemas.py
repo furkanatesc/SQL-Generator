@@ -29,25 +29,39 @@ class JobCreateRequest(BaseModel):
     previous_sql: Optional[str] = None
 
 
+class JobDetailResponse(BaseModel):
+    id: Optional[str] = None
+    job_id: Optional[str] = None
+    status: str
+    file_path: Optional[str] = None
+    natural_query: Optional[str] = None
+    previous_sql: Optional[str] = None
+    result_sql: Optional[str] = None
+    error_message: Optional[str] = None
+    dialect: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
 class JobEnvelopeResponse(BaseModel):
     status: Literal["success"]
-    job: Dict[str, Any]
+    job: JobDetailResponse
 
 
 class JobsListResponse(BaseModel):
-    jobs: List[Dict[str, Any]]
+    jobs: List[JobDetailResponse]
 
 
 class CancelJobResponse(BaseModel):
     status: Literal["success"]
     message: str
-    job: Dict[str, Any]
+    job: JobDetailResponse
 
 
 class FileUploadResponse(BaseModel):
     status: Literal["success"]
     message: str
-    job: Dict[str, Any]
+    job: JobDetailResponse
 
 
 # Additional schemas from main.py moved for central organization
