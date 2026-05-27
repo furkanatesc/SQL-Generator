@@ -32,13 +32,14 @@ def test_jobs_list_default_pagination_contract(mock_list):
     assert res.status_code == 200
     body = res.json()
 
-    assert set(body.keys()) == {"jobs", "limit", "offset", "count"}
+    assert set(body.keys()) == {"jobs", "limit", "offset", "count", "status"}
     assert body["limit"] == 50
     assert body["offset"] == 0
     assert body["count"] == 2
+    assert body["status"] is None
     assert len(body["jobs"]) == 2
 
-    mock_list.assert_called_once_with(limit=50, offset=0)
+    mock_list.assert_called_once_with(limit=50, offset=0, status=None)
 
 
 # 2. Custom limit/offset pagination contract test
@@ -54,8 +55,9 @@ def test_jobs_list_custom_limit_offset_contract(mock_list):
     assert body["limit"] == 10
     assert body["offset"] == 20
     assert body["count"] == 1
+    assert body["status"] is None
 
-    mock_list.assert_called_once_with(limit=10, offset=20)
+    mock_list.assert_called_once_with(limit=10, offset=20, status=None)
 
 
 # 3. Reject limit below min
@@ -123,7 +125,7 @@ def test_openapi_jobs_list_response_pagination_fields():
     
     # Assert required fields
     required_fields = set(jobs_list_schema["required"])
-    assert required_fields == {"jobs", "limit", "offset", "count"}
+    assert required_fields == {"jobs", "limit", "offset", "count", "status"}
     
     # Assert property types
     properties = jobs_list_schema["properties"]
