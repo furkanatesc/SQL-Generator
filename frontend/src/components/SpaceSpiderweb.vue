@@ -31,7 +31,7 @@ const blackHoleState = { strength: 0 };
 let isMouseListenerActive = false;
 let isRenderLoopRunning = false;
 let isSchemaMode = false;
-const SCHEMA_FPS_INTERVAL = 200; // ~5 FPS on schema tab
+const SCHEMA_FPS_INTERVAL = 66; // ~15 FPS on schema tab (smooth enough, 75% GPU savings)
 let lastSchemaRenderTime = 0;
 
 const onMouseMove = (e: MouseEvent) => {
