@@ -220,7 +220,13 @@ class SchemaPruner:
                 "original_table_count": len(schema["tables"]),
                 "pruned_table_count": 0,
                 "tables": {},
-                "graph": {"nodes": [], "edges": []}
+                "graph": {"nodes": [], "edges": []},
+                "debug_trace": {
+                    "rag_matches": resolve_trace.get("rag_matches", []),
+                    "candidate_signals": [],
+                    "selected_tables": [],
+                    "graph_trace": {},
+                }
             }
             
         selected_tables, graph_trace = self.graph_pruner.select_subgraph(
@@ -240,6 +246,7 @@ class SchemaPruner:
                 "debug_trace": {
                     "rag_matches": resolve_trace.get("rag_matches", []),
                     "candidate_signals": [c.to_dict() for c in candidates],
+                    "selected_tables": [],
                     "graph_trace": graph_trace,
                 },
             }
