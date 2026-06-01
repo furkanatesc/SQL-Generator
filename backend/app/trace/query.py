@@ -11,3 +11,11 @@ class TraceQuery:
     dialect: Optional[str] = None
     created_after: Optional[str] = None
     created_before: Optional[str] = None
+    trace_type: Optional[str] = None
+    request_id: Optional[str] = None
+
+    def __post_init__(self):
+        if self.limit < 1:
+            raise ValueError("limit must be >= 1")
+        if self.offset < 0:
+            raise ValueError("offset must be >= 0")

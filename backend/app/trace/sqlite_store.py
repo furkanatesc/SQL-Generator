@@ -150,7 +150,7 @@ class SQLiteTraceStore(TraceStore):
         except json.JSONDecodeError:
             return default
 
-    def save(self, trace: NL2SQLTrace) -> None:
+    def save(self, trace: NL2SQLTrace) -> NL2SQLTrace:
         with self._lock:
             conn = self._connect()
             conn.execute("""
@@ -204,6 +204,7 @@ class SQLiteTraceStore(TraceStore):
                 self._json_dumps(trace.metadata, {}),
             ))
             conn.commit()
+        return trace
 
     def get(self, trace_id: str) -> Optional[NL2SQLTrace]:
         with self._lock:

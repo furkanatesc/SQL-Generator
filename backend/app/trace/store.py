@@ -1,20 +1,18 @@
-from abc import ABC, abstractmethod
-from typing import List, Optional
-from app.trace.models import NL2SQLTrace
+from typing import TypeVar, Protocol, runtime_checkable, List, Optional
 from app.trace.query import TraceQuery
 
-class TraceStore(ABC):
-    @abstractmethod
-    def save(self, trace: NL2SQLTrace) -> None:
-        pass
+T_Trace = TypeVar("T_Trace")
 
-    @abstractmethod
-    def get(self, trace_id: str) -> Optional[NL2SQLTrace]:
-        pass
+@runtime_checkable
+class TraceStore(Protocol[T_Trace]):
+    def save(self, trace: T_Trace) -> T_Trace:
+        ...
 
-    @abstractmethod
-    def list_traces(self, query: TraceQuery) -> List[NL2SQLTrace]:
-        pass
+    def get(self, trace_id: str) -> Optional[T_Trace]:
+        ...
 
-    def list_recent(self, limit: int = 50) -> List[NL2SQLTrace]:
+    def list_traces(self, query: Optional[TraceQuery] = None) -> List[T_Trace]:
+        ...
+
+    def list_recent(self, limit: int = 50) -> List[T_Trace]:
         return self.list_traces(TraceQuery(limit=limit))
