@@ -1,71 +1,138 @@
 import pytest
-from app.trace.models import NL2SQLTrace
+import time
+from datetime import datetime
 from app.trace.memory_store import InMemoryTraceStore
-from app.trace.sqlite_store import SQLiteTraceStore
+from app.trace.models import TraceRecord, DuplicateTraceError, TraceSerializationError
 from app.trace.query import TraceQuery
 
-@pytest.fixture(params=["memory", "sqlite"])
-def store(request, tmp_path):
-    if request.param == "memory":
-        yield InMemoryTraceStore()
-    else:
-        db_path = tmp_path / "traces.db"
-        store = SQLiteTraceStore(str(db_path))
-        yield store
-        store.close()
+def test_in_memory_trace_store_save_and_get():
+    store = InMemoryTraceStore()
 
-def test_list_recent_backward_compatibility(store):
-    for i in range(3):
-        store.save(NL2SQLTrace(trace_id=f"t{i}", created_at=f"2026-01-0{i+1}T00:00:00+00:00"))
-    
-    recent = store.list_recent(limit=2)
-    assert len(recent) == 2
-    assert recent[0].trace_id == "t2"
-    assert recent[1].trace_id == "t1"
-
-def test_trace_store_contract_orders_deterministically(store):
-    ts = "2026-01-01T00:00:00+00:00"
-    store.save(NL2SQLTrace(trace_id="A", created_at=ts))
-    store.save(NL2SQLTrace(trace_id="C", created_at=ts))
-    store.save(NL2SQLTrace(trace_id="B", created_at=ts))
-    
-    res = store.list_traces(TraceQuery())
-    assert len(res) == 3
-    # Order should be created_at DESC, trace_id DESC
-    assert res[0].trace_id == "C"
-    assert res[1].trace_id == "B"
-    assert res[2].trace_id == "A"
-
-def test_trace_store_contract_filters_with_and_semantics(store):
-    store.save(NL2SQLTrace(trace_id="t1", sql_valid=True, error_type="e1"))
-    store.save(NL2SQLTrace(trace_id="t2", sql_valid=False, error_type="e1"))
-    store.save(NL2SQLTrace(trace_id="t3", sql_valid=False, error_type="e2"))
-    
-    res = store.list_traces(TraceQuery(sql_valid=False, error_type="e1"))
-    assert len(res) == 1
-    assert res[0].trace_id == "t2"
-
-def test_trace_store_contract_round_trips_attempts_and_validation_errors(store):
-    trace = NL2SQLTrace(
-        trace_id="t1",
-        last_generated_sql="SELECT *",
-        sql_valid=False,
-        sql_validation_errors=[{"type": "unsafe_sql", "stage": "sql_guardrail"}],
-        attempts=[{"attempt": 1, "valid": False, "validation_errors": [{"type": "unsafe_sql"}]}]
+    record = TraceRecord(
+        trace_id="trace_1",
+        trace_type="sql_pipeline",
+        payload={"success": True},
+        job_id="job_1",
     )
-    store.save(trace)
+
+    saved = store.save(record)
+
+    assert saved.trace_id == "trace_1"
+    assert store.get("trace_1") == saved
+
+def test_trace_store_generates_trace_id_when_missing():
+    store = InMemoryTraceStore()
+
+    record = TraceRecord(
+        trace_id="",
+        trace_type="sql_pipeline",
+        payload={},
+    )
+
+    saved = store.save(record)
+
+    assert saved.trace_id.startswith("trace_")
+    assert store.get(saved.trace_id) == saved
+
+def test_trace_store_rejects_duplicate_trace_id():
+    store = InMemoryTraceStore()
+
+    store.save(TraceRecord(trace_id="trace_1", trace_type="debug", payload={}))
+
+    with pytest.raises(DuplicateTraceError):
+        store.save(TraceRecord(trace_id="trace_1", trace_type="debug", payload={}))
+
+def test_trace_store_lists_newest_first():
+    store = InMemoryTraceStore()
     
-    loaded = store.get("t1")
-    assert loaded.last_generated_sql == "SELECT *"
-    assert loaded.sql_valid is False
-    assert loaded.sql_validation_errors == [{"type": "unsafe_sql", "stage": "sql_guardrail"}]
-    assert loaded.attempts == [{"attempt": 1, "valid": False, "validation_errors": [{"type": "unsafe_sql"}]}]
+    # Save traces with a slight delay to ensure different created_at
+    store.save(TraceRecord(trace_id="trace_old", trace_type="debug", payload={}))
+    time.sleep(0.01)
+    store.save(TraceRecord(trace_id="trace_new", trace_type="debug", payload={}))
 
-def test_trace_store_contract_filters_by_job_id_and_dialect(store):
-    store.save(NL2SQLTrace(trace_id="t1", metadata={"job_id": "j1", "dialect": "pg"}))
-    store.save(NL2SQLTrace(trace_id="t2", metadata={"job_id": "j1", "dialect": "mysql"}))
-    store.save(NL2SQLTrace(trace_id="t3", metadata={"job_id": "j2", "dialect": "pg"}))
+    traces = store.list_traces()
+    assert len(traces) == 2
+    assert traces[0].trace_id == "trace_new"
+    assert traces[1].trace_id == "trace_old"
+    assert traces[0].created_at >= traces[1].created_at
 
-    res = store.list_traces(TraceQuery(job_id="j1", dialect="pg"))
-    assert len(res) == 1
-    assert res[0].trace_id == "t1"
+def test_trace_store_filters_by_trace_type():
+    store = InMemoryTraceStore()
+    store.save(TraceRecord(trace_type="sql_pipeline", payload={}))
+    store.save(TraceRecord(trace_type="schema_pruning", payload={}))
+
+    result = store.list_traces(TraceQuery(trace_type="sql_pipeline"))
+
+    assert len(result) == 1
+    assert result[0].trace_type == "sql_pipeline"
+
+def test_trace_store_filters_by_job_id():
+    store = InMemoryTraceStore()
+    store.save(TraceRecord(trace_type="sql_pipeline", job_id="job_a", payload={}))
+    store.save(TraceRecord(trace_type="sql_pipeline", job_id="job_b", payload={}))
+
+    result = store.list_traces(TraceQuery(job_id="job_b"))
+
+    assert len(result) == 1
+    assert result[0].job_id == "job_b"
+
+def test_trace_store_limit_offset():
+    store = InMemoryTraceStore()
+    for i in range(10):
+        # Time sleep to ensure ordering is strict (newest first)
+        time.sleep(0.001)
+        store.save(TraceRecord(trace_id=f"trace_{i}", trace_type="debug", payload={}))
+
+    # Expect traces to be ordered from trace_9 down to trace_0
+    result = store.list_traces(TraceQuery(limit=3, offset=2))
+
+    assert len(result) == 3
+    # trace_9 is offset 0, trace_8 is offset 1, trace_7 is offset 2
+    assert result[0].trace_id == "trace_7"
+    assert result[1].trace_id == "trace_6"
+    assert result[2].trace_id == "trace_5"
+
+def test_trace_store_rejects_non_json_serializable_payload():
+    store = InMemoryTraceStore()
+
+    with pytest.raises(TraceSerializationError):
+        store.save(TraceRecord(
+            trace_id="trace_bad",
+            trace_type="sql_pipeline",
+            payload={"bad": object()},
+        ))
+
+def test_trace_record_rejects_naive_created_at():
+    with pytest.raises(ValueError, match="timezone-aware"):
+        TraceRecord(
+            trace_type="debug",
+            payload={},
+            created_at=datetime.utcnow(),
+        )
+
+def test_trace_store_filters_by_request_id():
+    store = InMemoryTraceStore()
+    store.save(TraceRecord(trace_type="sql_pipeline", request_id="req_a", payload={}))
+    store.save(TraceRecord(trace_type="sql_pipeline", request_id="req_b", payload={}))
+
+    result = store.list_traces(TraceQuery(request_id="req_b"))
+
+    assert len(result) == 1
+    assert result[0].request_id == "req_b"
+
+def test_trace_record_rejects_non_dict_payload():
+    with pytest.raises(TypeError, match="payload must be a dictionary"):
+        TraceRecord(trace_type="debug", payload="not a dict")  # type: ignore
+
+    with pytest.raises(TypeError, match="payload must be a dictionary"):
+        TraceRecord(trace_type="debug", payload=[1, 2, 3])  # type: ignore
+
+def test_trace_query_validation():
+    with pytest.raises(ValueError, match="limit must be >= 1"):
+        TraceQuery(limit=0)
+
+    with pytest.raises(ValueError, match="limit must be >= 1"):
+        TraceQuery(limit=-5)
+
+    with pytest.raises(ValueError, match="offset must be >= 0"):
+        TraceQuery(offset=-1)
