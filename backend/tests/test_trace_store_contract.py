@@ -1,13 +1,9 @@
 import pytest
 import time
 from datetime import datetime
-from app.trace_store import (
-    InMemoryTraceStore,
-    TraceRecord,
-    TraceQuery,
-    DuplicateTraceError,
-    TraceSerializationError,
-)
+from app.trace.memory_store import InMemoryTraceStore
+from app.trace.models import TraceRecord, DuplicateTraceError, TraceSerializationError
+from app.trace.query import TraceQuery
 
 def test_in_memory_trace_store_save_and_get():
     store = InMemoryTraceStore()
@@ -54,7 +50,7 @@ def test_trace_store_lists_newest_first():
     time.sleep(0.01)
     store.save(TraceRecord(trace_id="trace_new", trace_type="debug", payload={}))
 
-    traces = store.list()
+    traces = store.list_traces()
     assert len(traces) == 2
     assert traces[0].trace_id == "trace_new"
     assert traces[1].trace_id == "trace_old"
@@ -65,7 +61,7 @@ def test_trace_store_filters_by_trace_type():
     store.save(TraceRecord(trace_type="sql_pipeline", payload={}))
     store.save(TraceRecord(trace_type="schema_pruning", payload={}))
 
-    result = store.list(TraceQuery(trace_type="sql_pipeline"))
+    result = store.list_traces(TraceQuery(trace_type="sql_pipeline"))
 
     assert len(result) == 1
     assert result[0].trace_type == "sql_pipeline"
@@ -75,7 +71,7 @@ def test_trace_store_filters_by_job_id():
     store.save(TraceRecord(trace_type="sql_pipeline", job_id="job_a", payload={}))
     store.save(TraceRecord(trace_type="sql_pipeline", job_id="job_b", payload={}))
 
-    result = store.list(TraceQuery(job_id="job_b"))
+    result = store.list_traces(TraceQuery(job_id="job_b"))
 
     assert len(result) == 1
     assert result[0].job_id == "job_b"
@@ -88,7 +84,7 @@ def test_trace_store_limit_offset():
         store.save(TraceRecord(trace_id=f"trace_{i}", trace_type="debug", payload={}))
 
     # Expect traces to be ordered from trace_9 down to trace_0
-    result = store.list(TraceQuery(limit=3, offset=2))
+    result = store.list_traces(TraceQuery(limit=3, offset=2))
 
     assert len(result) == 3
     # trace_9 is offset 0, trace_8 is offset 1, trace_7 is offset 2
@@ -119,7 +115,7 @@ def test_trace_store_filters_by_request_id():
     store.save(TraceRecord(trace_type="sql_pipeline", request_id="req_a", payload={}))
     store.save(TraceRecord(trace_type="sql_pipeline", request_id="req_b", payload={}))
 
-    result = store.list(TraceQuery(request_id="req_b"))
+    result = store.list_traces(TraceQuery(request_id="req_b"))
 
     assert len(result) == 1
     assert result[0].request_id == "req_b"

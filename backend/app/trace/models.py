@@ -2,6 +2,38 @@ from dataclasses import dataclass, field
 import datetime as dt
 from typing import Any, Dict, List, Optional
 import uuid
+import json
+
+class DuplicateTraceError(Exception):
+    pass
+
+class TraceSerializationError(ValueError):
+    pass
+
+def generate_trace_id() -> str:
+    return f"trace_{uuid.uuid4().hex}"
+
+def ensure_json_serializable(payload: dict[str, Any]) -> None:
+    try:
+        json.dumps(payload)
+    except (TypeError, ValueError) as e:
+        raise TraceSerializationError(f"Payload is not JSON serializable: {e}")
+
+@dataclass
+class TraceRecord:
+    trace_type: str
+    payload: dict[str, Any]
+    trace_id: str = field(default_factory=generate_trace_id)
+    created_at: dt.datetime = field(default_factory=lambda: dt.datetime.now(dt.timezone.utc))
+    job_id: str | None = None
+    request_id: str | None = None
+
+    def __post_init__(self):
+        if not self.trace_id:
+            self.trace_id = generate_trace_id()
+        if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
+            raise ValueError("created_at must be timezone-aware")
+        ensure_json_serializable(self.payload)
 
 @dataclass
 class NL2SQLTrace:
