@@ -131,11 +131,18 @@ const tick = () => {
 watch(() => props.activeTab, (newTab) => {
   updateMouseListener(newTab);
   if (newTab === 'schema') {
-    stopRenderLoop();
+    if (renderer) {
+      startRenderLoop();
+    }
     gsap.to(blackHoleState, {
       strength: 1.0,
       duration: 2.0,
-      ease: 'power2.out'
+      ease: 'power2.out',
+      onComplete: () => {
+        if (props.activeTab === 'schema') {
+          stopRenderLoop();
+        }
+      }
     });
   } else {
     if (renderer) {
@@ -443,6 +450,10 @@ onMounted(() => {
   
   if (props.activeTab !== 'schema') {
     startRenderLoop();
+  } else {
+    // If mounted directly onto the schema tab, pre-warp the space backdrop instantly and hold the single frame
+    blackHoleState.strength = 1.0;
+    renderer.render(scene, camera);
   }
 
   // 9. Resize Handling

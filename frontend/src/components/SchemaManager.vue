@@ -826,7 +826,7 @@ const initGraph = () => {
     .attr('marker-end', 'url(#arrow)')
     .style('opacity', 0.5)
     .style('pointer-events', 'none')
-    .style('transition', 'opacity 0.2s, stroke 0.2s, stroke-width 0.2s');
+    .style('transition', 'stroke 0.15s, stroke-width 0.15s');
 
   // Hover durumunda kolon eşleştirmesini gösterecek metin etiketi (only if not large graph)
   let linkLabels: d3.Selection<SVGTextElement, LinkItem, d3.BaseType, unknown>;
@@ -949,8 +949,8 @@ const initGraph = () => {
     nodes.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
   });
 
-  // Hover mouseover handler expression with dynamic context
-  const handleMouseOver = function(this: any, _event: any, d: NodeItem) {
+  // Hover mouseenter handler expression with dynamic context
+  const handleMouseEnter = function(this: any, _event: any, d: NodeItem) {
     // Üzerine gelinen düğümü büyüt ve parlat
     d3.select(this).select('circle')
       .attr('r', 21)
@@ -1005,8 +1005,8 @@ const initGraph = () => {
     }
   };
 
-  // Hover mouseout handler expression with dynamic context
-  const handleMouseOut = function(this: any) {
+  // Hover mouseleave handler expression with dynamic context
+  const handleMouseLeave = function(this: any) {
     // Düğümü eski boyutuna/rengine döndür
     d3.select(this).select('circle')
       .attr('r', 18)
@@ -1040,11 +1040,11 @@ const initGraph = () => {
   const enableHoverHighlight = nodesData.length <= HOVER_NODE_THRESHOLD && linksData.length <= HOVER_LINK_THRESHOLD;
 
   if (!enableHoverHighlight) {
-    nodes.on('mouseover', null);
-    nodes.on('mouseout', null);
+    nodes.on('mouseenter', null);
+    nodes.on('mouseleave', null);
   } else {
-    nodes.on('mouseover', handleMouseOver);
-    nodes.on('mouseout', handleMouseOut);
+    nodes.on('mouseenter', handleMouseEnter);
+    nodes.on('mouseleave', handleMouseLeave);
   }
 
   // Tıklanınca Odaklan ve Sol Listeden Seç
