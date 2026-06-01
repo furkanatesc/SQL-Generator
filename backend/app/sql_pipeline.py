@@ -18,6 +18,7 @@ from app.sql_guardrail import SQLGuardrailValidator
 from app.sql_safety import SqlSafetyValidator
 from app.trace.builders import build_trace_from_pruned_schema
 from app.trace.store import TraceStore
+from app.trace.models import NL2SQLTrace
 from app.schema_graph import TraversalPolicy
 
 import time
@@ -154,7 +155,10 @@ class SQLGenerationPipeline:
         if not self.trace_store:
             return
         try:
-            self.trace_store.save(trace)
+            if isinstance(trace, NL2SQLTrace) and hasattr(self.trace_store, "save_legacy"):
+                self.trace_store.save_legacy(trace)
+            else:
+                self.trace_store.save(trace)
         except Exception as e:
             logger.error(f"Failed to save NL2SQL trace: {e}")
 

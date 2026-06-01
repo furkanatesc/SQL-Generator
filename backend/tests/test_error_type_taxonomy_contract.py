@@ -25,7 +25,7 @@ ALLOWED_ERROR_TYPES = {
 
 
 def test_pipeline_input_error_uses_stable_error_type():
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(trace_store=trace_store)
     
     result = pipeline.run_pipeline(
@@ -51,7 +51,7 @@ def test_pipeline_llm_exception_uses_stable_validation_error_type(mock_prompt):
     mock_llm_provider = MagicMock()
     mock_llm_provider.generate_sql.side_effect = Exception("API Failed")
     
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider
@@ -110,7 +110,7 @@ def test_pipeline_semantic_failure_uses_stable_validation_error_type(mock_prompt
     mock_response.sql = "SELECT invalid_col FROM users"
     mock_llm_provider.generate_sql.return_value = mock_response
     
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider
@@ -145,7 +145,7 @@ def test_all_pipeline_validation_error_types_are_known_taxonomy_values(mock_prom
     mock_response.sql = "SELECT * FROM"  # syntax error
     mock_llm_provider.generate_sql.return_value = mock_response
     
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider
@@ -175,3 +175,4 @@ def test_all_pipeline_validation_error_types_are_known_taxonomy_values(mock_prom
     for err in trace_val_errors or []:
         assert err["type"] in ALLOWED_ERROR_TYPES
         assert "stage" in err
+
