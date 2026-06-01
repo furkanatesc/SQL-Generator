@@ -1,6 +1,5 @@
 import pytest
-import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from app.trace.memory_store import InMemoryTraceStore
 from app.trace.sqlite_store import SQLiteTraceStore
 from app.trace.models import TraceRecord, DuplicateTraceError, TraceSerializationError
@@ -46,84 +45,71 @@ def test_contract_duplicate_raises_error(trace_store):
     with pytest.raises(DuplicateTraceError):
         trace_store.save(record2)
 
-    # Verify no silent overwrite occurred
     loaded = trace_store.get("dup1")
     assert loaded.trace_id == "dup1"
 
 def test_contract_serialization_error(trace_store):
     with pytest.raises(TraceSerializationError):
         rec = TraceRecord(trace_id="t_bad", trace_type="debug", payload={})
-        rec.payload = {"bad": object()}  # bypass post_init validation via mutation
+        rec.payload = {"bad": object()}  # type: ignore # bypass post_init validation via mutation
         trace_store.save(rec)
 
-def test_contract_query_filtering(trace_store):
-    # Setup some test records
-    base_time = datetime(2026, 6, 1, 10, 0, 0, tzinfo=timezone.utc)
-    
-    # Trace 1
-    t1 = TraceRecord(
-        trace_id="t1",
-        trace_type="sql_pipeline",
-        payload={"dialect": "postgres"},
-        created_at=datetime(2026, 6, 1, 10, 0, 1, tzinfo=timezone.utc),
-        job_id="job1",
-        request_id="req1"
-    )
-    # Trace 2
-    t2 = TraceRecord(
-        trace_id="t2",
-        trace_type="schema_pruning",
-        payload={"dialect": "mysql"},
-        created_at=datetime(2026, 6, 1, 10, 0, 2, tzinfo=timezone.utc),
-        job_id="job1",
-        request_id="req2"
-    )
-    # Trace 3
-    t3 = TraceRecord(
-        trace_id="t3",
-        trace_type="sql_pipeline",
-        payload={"dialect": "postgres"},
-        created_at=datetime(2026, 6, 1, 10, 0, 3, tzinfo=timezone.utc),
-        job_id="job2",
-        request_id="req1"
-    )
+# Scoped filter tests to ensure Failure Locality
 
-    trace_store.save(t1)
-    trace_store.save(t2)
-    trace_store.save(t3)
+def test_contract_filter_by_trace_type(trace_store):
+    trace_store.save(TraceRecord(trace_id="t1", trace_type="sql_pipeline", payload={}))
+    trace_store.save(TraceRecord(trace_id="t2", trace_type="schema_pruning", payload={}))
 
-    # Filter by trace_type
     res = trace_store.list_traces(TraceQuery(trace_type="sql_pipeline"))
-    assert len(res) == 2
-    assert {t.trace_id for t in res} == {"t1", "t3"}
+    assert len(res) == 1
+    assert res[0].trace_id == "t1"
 
-    # Filter by request_id
+def test_contract_filter_by_request_id(trace_store):
+    trace_store.save(TraceRecord(trace_id="t1", trace_type="debug", payload={}, request_id="req1"))
+    trace_store.save(TraceRecord(trace_id="t2", trace_type="debug", payload={}, request_id="req2"))
+
     res = trace_store.list_traces(TraceQuery(request_id="req1"))
-    assert len(res) == 2
-    assert {t.trace_id for t in res} == {"t1", "t3"}
+    assert len(res) == 1
+    assert res[0].trace_id == "t1"
 
-    # Filter by job_id
+def test_contract_filter_by_job_id(trace_store):
+    trace_store.save(TraceRecord(trace_id="t1", trace_type="debug", payload={}, job_id="job1"))
+    trace_store.save(TraceRecord(trace_id="t2", trace_type="debug", payload={}, job_id="job2"))
+
     res = trace_store.list_traces(TraceQuery(job_id="job1"))
-    assert len(res) == 2
-    assert {t.trace_id for t in res} == {"t1", "t2"}
+    assert len(res) == 1
+    assert res[0].trace_id == "t1"
 
-    # Filter by dialect
+def test_contract_filter_by_dialect(trace_store):
+    trace_store.save(TraceRecord(trace_id="t1", trace_type="debug", payload={"dialect": "postgres"}))
+    trace_store.save(TraceRecord(trace_id="t2", trace_type="debug", payload={"dialect": "mysql"}))
+
     res = trace_store.list_traces(TraceQuery(dialect="postgres"))
-    assert len(res) == 2
-    assert {t.trace_id for t in res} == {"t1", "t3"}
+    assert len(res) == 1
+    assert res[0].trace_id == "t1"
 
-    # Filter by created_after (t2 & t3)
+def test_contract_filter_by_created_after(trace_store):
+    trace_store.save(TraceRecord(trace_id="t1", trace_type="debug", payload={}, created_at=datetime(2026, 6, 1, 10, 0, 1, tzinfo=timezone.utc)))
+    trace_store.save(TraceRecord(trace_id="t2", trace_type="debug", payload={}, created_at=datetime(2026, 6, 1, 10, 0, 3, tzinfo=timezone.utc)))
+
     res = trace_store.list_traces(TraceQuery(created_after="2026-06-01T10:00:02+00:00"))
-    assert len(res) == 2
-    assert {t.trace_id for t in res} == {"t2", "t3"}
+    assert len(res) == 1
+    assert res[0].trace_id == "t2"
 
-    # Filter by created_before (t1 & t2)
+def test_contract_filter_by_created_before(trace_store):
+    trace_store.save(TraceRecord(trace_id="t1", trace_type="debug", payload={}, created_at=datetime(2026, 6, 1, 10, 0, 1, tzinfo=timezone.utc)))
+    trace_store.save(TraceRecord(trace_id="t2", trace_type="debug", payload={}, created_at=datetime(2026, 6, 1, 10, 0, 3, tzinfo=timezone.utc)))
+
     res = trace_store.list_traces(TraceQuery(created_before="2026-06-01T10:00:02+00:00"))
-    assert len(res) == 2
-    assert {t.trace_id for t in res} == {"t1", "t2"}
+    assert len(res) == 1
+    assert res[0].trace_id == "t1"
 
-    # Limit and offset
-    # Sorted desc by created_at: t3 (newest), t2, t1 (oldest)
+def test_contract_limit_and_offset(trace_store):
+    # Sort order DESC: t3 (newest), t2, t1 (oldest)
+    trace_store.save(TraceRecord(trace_id="t1", trace_type="debug", payload={}, created_at=datetime(2026, 6, 1, 10, 0, 1, tzinfo=timezone.utc)))
+    trace_store.save(TraceRecord(trace_id="t2", trace_type="debug", payload={}, created_at=datetime(2026, 6, 1, 10, 0, 2, tzinfo=timezone.utc)))
+    trace_store.save(TraceRecord(trace_id="t3", trace_type="debug", payload={}, created_at=datetime(2026, 6, 1, 10, 0, 3, tzinfo=timezone.utc)))
+
     res = trace_store.list_traces(TraceQuery(limit=2, offset=1))
     assert len(res) == 2
     assert res[0].trace_id == "t2"
@@ -132,7 +118,6 @@ def test_contract_query_filtering(trace_store):
 def test_contract_ordering_determinism(trace_store):
     same_time = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
     
-    # Save three traces with the exact same created_at
     trace_store.save(TraceRecord(trace_id="trace-b", trace_type="debug", payload={}, created_at=same_time))
     trace_store.save(TraceRecord(trace_id="trace-c", trace_type="debug", payload={}, created_at=same_time))
     trace_store.save(TraceRecord(trace_id="trace-a", trace_type="debug", payload={}, created_at=same_time))
@@ -140,5 +125,38 @@ def test_contract_ordering_determinism(trace_store):
     res = trace_store.list_traces(TraceQuery(limit=10))
     assert len(res) == 3
     # Expected ordering: created_at DESC, trace_id DESC
-    # Since created_at is identical, it must fall back to trace_id descending: trace-c, trace-b, trace-a
     assert [t.trace_id for t in res] == ["trace-c", "trace-b", "trace-a"]
+
+def test_contract_timezone_offset_ordering(trace_store):
+    # Chronological instant sort check with varying timezone offsets:
+    # 1. t_newest: 11:00 UTC / 14:00 +03:00 (newest)
+    # 2. t_middle: 10:30 UTC / 10:30 +00:00 (middle)
+    # 3. t_oldest: 10:00 UTC / 13:00 +03:00 (oldest)
+    
+    t_oldest = TraceRecord(
+        trace_id="t_oldest",
+        trace_type="debug",
+        payload={},
+        created_at=datetime(2026, 6, 1, 13, 0, 0, tzinfo=timezone(timedelta(hours=3)))
+    )
+    t_middle = TraceRecord(
+        trace_id="t_middle",
+        trace_type="debug",
+        payload={},
+        created_at=datetime(2026, 6, 1, 10, 30, 0, tzinfo=timezone.utc)
+    )
+    t_newest = TraceRecord(
+        trace_id="t_newest",
+        trace_type="debug",
+        payload={},
+        created_at=datetime(2026, 6, 1, 14, 0, 0, tzinfo=timezone(timedelta(hours=3)))
+    )
+    
+    trace_store.save(t_middle)
+    trace_store.save(t_newest)
+    trace_store.save(t_oldest)
+    
+    res = trace_store.list_traces(TraceQuery(limit=10))
+    assert len(res) == 3
+    # Sorted newest first (instant chronology)
+    assert [t.trace_id for t in res] == ["t_newest", "t_middle", "t_oldest"]

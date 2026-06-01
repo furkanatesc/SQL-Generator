@@ -25,13 +25,16 @@ class InMemoryTraceStore(Generic[T_Trace]):
     def list_traces(self, query: Optional[TraceQuery] = None) -> List[T_Trace]:
         query = query or TraceQuery()
 
-        def get_created_at_str(t):
-            cat = getattr(t, "created_at", "")
-            if isinstance(cat, dt.datetime):
-                return cat.isoformat()
-            return str(cat)
+        def get_created_at_dt(t):
+            cat = getattr(t, "created_at")
+            if isinstance(cat, str):
+                try:
+                    return dt.datetime.fromisoformat(cat)
+                except ValueError:
+                    pass
+            return cat
 
-        items = sorted(self._traces.values(), key=lambda t: (get_created_at_str(t), getattr(t, "trace_id")), reverse=True)
+        items = sorted(self._traces.values(), key=lambda t: (get_created_at_dt(t), getattr(t, "trace_id")), reverse=True)
 
         if query.sql_valid is not None:
             items = [t for t in items if getattr(t, "sql_valid", None) is query.sql_valid or (isinstance(getattr(t, "payload", None), dict) and t.payload.get("sql_valid") is query.sql_valid)]
@@ -46,10 +49,18 @@ class InMemoryTraceStore(Generic[T_Trace]):
             items = [t for t in items if getattr(t, "metadata", {}).get("dialect") == query.dialect or (isinstance(getattr(t, "payload", None), dict) and t.payload.get("dialect") == query.dialect)]
 
         if query.created_after:
-            items = [t for t in items if get_created_at_str(t) >= query.created_after]
+            try:
+                created_after_dt = dt.datetime.fromisoformat(query.created_after)
+            except ValueError:
+                created_after_dt = query.created_after
+            items = [t for t in items if get_created_at_dt(t) >= created_after_dt]
 
         if query.created_before:
-            items = [t for t in items if get_created_at_str(t) <= query.created_before]
+            try:
+                created_before_dt = dt.datetime.fromisoformat(query.created_before)
+            except ValueError:
+                created_before_dt = query.created_before
+            items = [t for t in items if get_created_at_dt(t) <= created_before_dt]
 
         if query.trace_type is not None:
             items = [t for t in items if getattr(t, "trace_type", None) == query.trace_type]

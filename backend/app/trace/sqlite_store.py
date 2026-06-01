@@ -10,7 +10,7 @@ from app.trace.store import TraceStore
 from app.trace.query import TraceQuery
 
 
-class SQLiteTraceStore(TraceStore):
+class SQLiteTraceStore(TraceStore[TraceRecord]):
     def __init__(self, db_path: str, timeout: float = 5.0):
         self.db_path = str(db_path)
         self.timeout = timeout
@@ -164,151 +164,85 @@ class SQLiteTraceStore(TraceStore):
         except json.JSONDecodeError:
             return default
 
-    def save(self, trace: Any) -> Any:
-        if isinstance(trace, TraceRecord):
-            # Check JSON serializability
+    def save(self, trace: TraceRecord) -> TraceRecord:
+        # Check JSON serializability
+        try:
+            payload_json = json.dumps(trace.payload, ensure_ascii=False)
+        except (TypeError, ValueError) as exc:
+            raise TraceSerializationError(f"Payload is not JSON serializable: {exc}") from exc
+
+        # Extract fields for index/filters
+        job_id = trace.job_id
+        request_id = trace.request_id
+        dialect = None
+        sql_valid = None
+        error_type = None
+
+        if isinstance(trace.payload, dict):
+            dialect = trace.payload.get("dialect") or trace.payload.get("metadata", {}).get("dialect")
+            sql_val = trace.payload.get("sql_valid")
+            if sql_val is not None:
+                sql_valid = 1 if sql_val else 0
+            error_type = trace.payload.get("error_type")
+
+        with self._lock:
+            conn = self._connect()
             try:
-                payload_json = json.dumps(trace.payload, ensure_ascii=False)
-            except (TypeError, ValueError) as exc:
-                raise TraceSerializationError(f"Payload is not JSON serializable: {exc}") from exc
-
-            # Extract fields for index/filters
-            job_id = trace.job_id
-            request_id = trace.request_id
-            dialect = None
-            sql_valid = None
-            error_type = None
-
-            if isinstance(trace.payload, dict):
-                dialect = trace.payload.get("dialect") or trace.payload.get("metadata", {}).get("dialect")
-                sql_val = trace.payload.get("sql_valid")
-                if sql_val is not None:
-                    sql_valid = 1 if sql_val else 0
-                error_type = trace.payload.get("error_type")
-
-            with self._lock:
-                conn = self._connect()
-                try:
-                    conn.execute("""
-                        INSERT INTO traces (
-                            trace_id,
-                            trace_type,
-                            payload_json,
-                            created_at,
-                            job_id,
-                            request_id,
-                            dialect,
-                            sql_valid,
-                            error_type
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        trace.trace_id,
-                        trace.trace_type,
+                conn.execute("""
+                    INSERT INTO traces (
+                        trace_id,
+                        trace_type,
                         payload_json,
-                        trace.created_at.isoformat(),
+                        created_at,
                         job_id,
                         request_id,
                         dialect,
                         sql_valid,
-                        error_type,
-                    ))
-                    conn.commit()
-                except sqlite3.IntegrityError as exc:
-                    raise DuplicateTraceError(f"Trace with id {trace.trace_id} already exists") from exc
-            return trace
-
-        with self._lock:
-            conn = self._connect()
-            conn.execute("""
-                INSERT OR REPLACE INTO nl2sql_traces (
-                    trace_id,
-                    created_at,
-                    raw_query,
-                    normalized_query,
-                    candidate_signals_json,
-                    rag_matches_json,
-                    graph_trace_json,
-                    selected_tables_json,
-                    dropped_tables_json,
-                    estimated_tokens,
-                    confidence,
-                    generated_sql,
-                    last_generated_sql,
-                    attempts_json,
+                        error_type
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    trace.trace_id,
+                    trace.trace_type,
+                    payload_json,
+                    trace.created_at.astimezone(dt.timezone.utc).isoformat(),
                     job_id,
+                    request_id,
                     dialect,
                     sql_valid,
-                    sql_validation_errors_json,
                     error_type,
-                    error_message,
-                    latency_ms_json,
-                    metadata_json
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                trace.trace_id,
-                trace.created_at,
-                trace.raw_query,
-                trace.normalized_query,
-                self._json_dumps(trace.candidate_signals, []),
-                self._json_dumps(trace.rag_matches, []),
-                self._json_dumps(trace.graph_trace, {}),
-                self._json_dumps(trace.selected_tables, []),
-                self._json_dumps(trace.dropped_tables, []),
-                trace.estimated_tokens,
-                trace.confidence,
-                trace.generated_sql,
-                trace.last_generated_sql,
-                self._json_dumps(trace.attempts, []),
-                trace.metadata.get("job_id"),
-                trace.metadata.get("dialect"),
-                None if trace.sql_valid is None else int(trace.sql_valid),
-                self._json_dumps(trace.sql_validation_errors, []),
-                trace.error_type,
-                trace.error_message,
-                self._json_dumps(trace.latency_ms, {}),
-                self._json_dumps(trace.metadata, {}),
-            ))
-            conn.commit()
+                ))
+                conn.commit()
+            except sqlite3.IntegrityError as exc:
+                raise DuplicateTraceError(f"Trace with id {trace.trace_id} already exists") from exc
         return trace
 
-    def get(self, trace_id: str) -> Optional[Any]:
+    def get(self, trace_id: str) -> Optional[TraceRecord]:
         with self._lock:
             conn = self._connect()
-            # Try new traces table first
             row = conn.execute(
                 "SELECT * FROM traces WHERE trace_id = ?",
                 (trace_id,)
             ).fetchone()
-            if row is not None:
-                try:
-                    payload = json.loads(row["payload_json"])
-                except (TypeError, ValueError) as exc:
-                    raise TraceSerializationError(f"Failed to deserialize payload: {exc}") from exc
-                
-                created_at = dt.datetime.fromisoformat(row["created_at"])
-                return TraceRecord(
-                    trace_type=row["trace_type"],
-                    payload=payload,
-                    trace_id=row["trace_id"],
-                    created_at=created_at,
-                    job_id=row["job_id"],
-                    request_id=row["request_id"],
-                )
+            if row is None:
+                return None
+            try:
+                payload = json.loads(row["payload_json"])
+            except (TypeError, ValueError) as exc:
+                raise TraceSerializationError(f"Failed to deserialize payload: {exc}") from exc
+            
+            created_at = dt.datetime.fromisoformat(row["created_at"])
+            return TraceRecord(
+                trace_type=row["trace_type"],
+                payload=payload,
+                trace_id=row["trace_id"],
+                created_at=created_at,
+                job_id=row["job_id"],
+                request_id=row["request_id"],
+            )
 
-            # Fallback to legacy nl2sql_traces table
-            row = conn.execute(
-                "SELECT * FROM nl2sql_traces WHERE trace_id = ?",
-                (trace_id,)
-            ).fetchone()
-
-        if row is None:
-            return None
-
-        return self._row_to_trace(row)
-
-    def _query_traces_table(self, query: TraceQuery) -> List[TraceRecord]:
+    def list_traces(self, query: Optional[TraceQuery] = None) -> List[TraceRecord]:
+        query = query or TraceQuery()
         with self._lock:
             conn = self._connect()
             where = []
@@ -332,11 +266,21 @@ class SQLiteTraceStore(TraceStore):
                 where.append("error_type = ?")
                 params.append(query.error_type)
             if query.created_after is not None:
+                try:
+                    created_after_dt = dt.datetime.fromisoformat(query.created_after).astimezone(dt.timezone.utc)
+                    created_after_val = created_after_dt.isoformat()
+                except ValueError:
+                    created_after_val = query.created_after
                 where.append("created_at >= ?")
-                params.append(query.created_after)
+                params.append(created_after_val)
             if query.created_before is not None:
+                try:
+                    created_before_dt = dt.datetime.fromisoformat(query.created_before).astimezone(dt.timezone.utc)
+                    created_before_val = created_before_dt.isoformat()
+                except ValueError:
+                    created_before_val = query.created_before
                 where.append("created_at <= ?")
-                params.append(query.created_before)
+                params.append(created_before_val)
 
             where_clause = ""
             if where:
@@ -369,118 +313,117 @@ class SQLiteTraceStore(TraceStore):
                 ))
             return res
 
-    def list_traces(self, query: TraceQuery) -> List[Any]:
-        # If query has TraceRecord-only filters, just query traces table
-        if query.trace_type is not None or query.request_id is not None:
-            return self._query_traces_table(query)
+    # --- Legacy NL2SQLTrace Methods for backward compatibility ---
 
-        # Otherwise, query both and merge them in Python
-        max_rows = query.limit + query.offset
-
+    def save_legacy(self, trace: NL2SQLTrace) -> NL2SQLTrace:
         with self._lock:
             conn = self._connect()
-            
-            # 1. Query traces table
-            where_t = []
-            params_t = []
-            if query.job_id is not None:
-                where_t.append("job_id = ?")
-                params_t.append(query.job_id)
-            if query.dialect is not None:
-                where_t.append("dialect = ?")
-                params_t.append(query.dialect)
-            if query.sql_valid is not None:
-                where_t.append("sql_valid = ?")
-                params_t.append(1 if query.sql_valid else 0)
-            if query.error_type is not None:
-                where_t.append("error_type = ?")
-                params_t.append(query.error_type)
-            if query.created_after is not None:
-                where_t.append("created_at >= ?")
-                params_t.append(query.created_after)
-            if query.created_before is not None:
-                where_t.append("created_at <= ?")
-                params_t.append(query.created_before)
-
-            where_t_clause = ""
-            if where_t:
-                where_t_clause = "WHERE " + " AND ".join(where_t)
-
-            sql_t = f"""
-                SELECT * FROM traces
-                {where_t_clause}
-                ORDER BY created_at DESC, trace_id DESC
-                LIMIT ?
-            """
-            p_t = list(params_t)
-            p_t.append(max_rows)
-            rows_t = conn.execute(sql_t, tuple(p_t)).fetchall()
-
-            traces_t = []
-            for row in rows_t:
-                try:
-                    payload = json.loads(row["payload_json"])
-                except (TypeError, ValueError) as exc:
-                    raise TraceSerializationError(f"Failed to deserialize payload: {exc}") from exc
-                created_at = dt.datetime.fromisoformat(row["created_at"])
-                traces_t.append(TraceRecord(
-                    trace_type=row["trace_type"],
-                    payload=payload,
-                    trace_id=row["trace_id"],
-                    created_at=created_at,
-                    job_id=row["job_id"],
-                    request_id=row["request_id"]
+            try:
+                conn.execute("""
+                    INSERT INTO nl2sql_traces (
+                        trace_id,
+                        created_at,
+                        raw_query,
+                        normalized_query,
+                        candidate_signals_json,
+                        rag_matches_json,
+                        graph_trace_json,
+                        selected_tables_json,
+                        dropped_tables_json,
+                        estimated_tokens,
+                        confidence,
+                        generated_sql,
+                        last_generated_sql,
+                        attempts_json,
+                        job_id,
+                        dialect,
+                        sql_valid,
+                        sql_validation_errors_json,
+                        error_type,
+                        error_message,
+                        latency_ms_json,
+                        metadata_json
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    trace.trace_id,
+                    trace.created_at,
+                    trace.raw_query,
+                    trace.normalized_query,
+                    self._json_dumps(trace.candidate_signals, []),
+                    self._json_dumps(trace.rag_matches, []),
+                    self._json_dumps(trace.graph_trace, {}),
+                    self._json_dumps(trace.selected_tables, []),
+                    self._json_dumps(trace.dropped_tables, []),
+                    trace.estimated_tokens,
+                    trace.confidence,
+                    trace.generated_sql,
+                    trace.last_generated_sql,
+                    self._json_dumps(trace.attempts, []),
+                    trace.metadata.get("job_id"),
+                    trace.metadata.get("dialect"),
+                    None if trace.sql_valid is None else int(trace.sql_valid),
+                    self._json_dumps(trace.sql_validation_errors, []),
+                    trace.error_type,
+                    trace.error_message,
+                    self._json_dumps(trace.latency_ms, {}),
+                    self._json_dumps(trace.metadata, {}),
                 ))
+                conn.commit()
+            except sqlite3.IntegrityError as exc:
+                raise DuplicateTraceError(f"Trace with id {trace.trace_id} already exists") from exc
+        return trace
 
-            # 2. Query nl2sql_traces table
-            where_n = []
-            params_n = []
+    def get_legacy(self, trace_id: str) -> Optional[NL2SQLTrace]:
+        with self._lock:
+            conn = self._connect()
+            row = conn.execute(
+                "SELECT * FROM nl2sql_traces WHERE trace_id = ?",
+                (trace_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_trace(row)
+
+    def list_traces_legacy(self, query: Optional[TraceQuery] = None) -> List[NL2SQLTrace]:
+        query = query or TraceQuery()
+        with self._lock:
+            conn = self._connect()
+            where = []
+            params = []
             if query.sql_valid is not None:
-                where_n.append("sql_valid = ?")
-                params_n.append(int(query.sql_valid))
+                where.append("sql_valid = ?")
+                params.append(int(query.sql_valid))
             if query.error_type:
-                where_n.append("error_type = ?")
-                params_n.append(query.error_type)
+                where.append("error_type = ?")
+                params.append(query.error_type)
             if query.job_id:
-                where_n.append("job_id = ?")
-                params_n.append(query.job_id)
+                where.append("job_id = ?")
+                params.append(query.job_id)
             if query.dialect:
-                where_n.append("dialect = ?")
-                params_n.append(query.dialect)
+                where.append("dialect = ?")
+                params.append(query.dialect)
             if query.created_after:
-                where_n.append("created_at >= ?")
-                params_n.append(query.created_after)
+                where.append("created_at >= ?")
+                params.append(query.created_after)
             if query.created_before:
-                where_n.append("created_at <= ?")
-                params_n.append(query.created_before)
+                where.append("created_at <= ?")
+                params.append(query.created_before)
 
-            where_n_clause = ""
-            if where_n:
-                where_n_clause = "WHERE " + " AND ".join(where_n)
+            where_clause = ""
+            if where:
+                where_clause = "WHERE " + " AND ".join(where)
 
-            sql_n = f"""
+            sql = f"""
                 SELECT * FROM nl2sql_traces
-                {where_n_clause}
+                {where_clause}
                 ORDER BY created_at DESC, trace_id DESC
-                LIMIT ?
+                LIMIT ? OFFSET ?
             """
-            p_n = list(params_n)
-            p_n.append(max_rows)
-            rows_n = conn.execute(sql_n, tuple(p_n)).fetchall()
-            traces_n = [self._row_to_trace(row) for row in rows_n]
-
-        # Combine and sort in Python
-        combined = traces_t + traces_n
-
-        def get_sort_key(t):
-            cat = getattr(t, "created_at")
-            if isinstance(cat, dt.datetime):
-                return cat.isoformat()
-            return str(cat)
-
-        combined.sort(key=lambda t: (get_sort_key(t), getattr(t, "trace_id")), reverse=True)
-
-        return combined[query.offset : query.offset + query.limit]
+            p = list(params)
+            p.extend([query.limit, query.offset])
+            rows = conn.execute(sql, tuple(p)).fetchall()
+        return [self._row_to_trace(row) for row in rows]
 
     def _row_to_trace(self, row) -> NL2SQLTrace:
         sql_valid = row["sql_valid"]
