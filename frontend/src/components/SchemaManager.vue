@@ -29,7 +29,10 @@ const maxNodesLimit = ref(5); // GECICI COZUM: Tarayıcı performansını koruma
 const visibleTablesLimit = ref(50); // Sol paneldeki tabloların lazy-loading limiti
 const visibleRelationsLimit = ref(50); // Sağ paneldeki ilişkilerin lazy-loading limiti
 
+const isTransitioning = ref(false);
+
 const toggleGraphExpand = () => {
+  isTransitioning.value = true;
   if (!isGraphExpanded.value) {
     const mainEl = document.getElementById('main-scroll-container');
     if (mainEl) mainEl.scrollTo({ top: 0, behavior: 'smooth' });
@@ -40,6 +43,9 @@ const toggleGraphExpand = () => {
       isGraphExpanded.value = true;
       setTimeout(() => {
         handleResize();
+        setTimeout(() => {
+          isTransitioning.value = false;
+        }, 100);
       }, 750);
     }, 450);
   } else {
@@ -49,6 +55,9 @@ const toggleGraphExpand = () => {
       isHidingElements.value = false;
       setTimeout(() => {
         handleResize();
+        setTimeout(() => {
+          isTransitioning.value = false;
+        }, 100);
       }, 750);
     }, 600);
   }
@@ -512,7 +521,9 @@ const initGraph = () => {
   const gContainer = svg.append('g').attr('class', 'graph-container');
 
   // Spacetime Coordinate Grid Group (Background, inside zoomable container)
-  const gridGroup = gContainer.append('g').attr('class', 'spacetime-grid');
+  const gridGroup = gContainer.append('g')
+    .attr('class', 'spacetime-grid')
+    .style('pointer-events', 'none');
 
   const centerX = width / 2;
   const centerY = height / 2;
@@ -592,7 +603,9 @@ const initGraph = () => {
     .attr('transform', `translate(${centerX}, ${centerY})`);
 
   // Swirling space dust particles inside D3 coordinate system (centered on the black hole)
-  const dustGroup = blackHoleGroup.append('g').attr('class', 'dust-particles-group');
+  const dustGroup = blackHoleGroup.append('g')
+    .attr('class', 'dust-particles-group')
+    .style('pointer-events', 'none');
   for (let i = 0; i < 50; i++) {
     const radius = 30 + Math.random() * 200; // spread from 30px to 230px
     const angle = Math.random() * 2 * Math.PI;
@@ -753,6 +766,7 @@ const initGraph = () => {
     })
     .attr('marker-end', 'url(#arrow)')
     .style('opacity', 0.5)
+    .style('pointer-events', 'none')
     .style('transition', 'opacity 0.2s, stroke 0.2s, stroke-width 0.2s');
 
   // Hover durumunda kolon eşleştirmesini gösterecek metin etiketi
@@ -1066,7 +1080,8 @@ onUnmounted(() => {
   <div class="relative">
     <!-- Header and DB Card Wrapper -->
     <div :class="[
-      'transition-[max-height,transform,opacity] duration-700 ease-in-out flex flex-col relative z-30',
+      isTransitioning ? 'transition-[max-height,transform,opacity] duration-700 ease-in-out' : '',
+      'flex flex-col relative z-30',
       isHidingElements ? 'transform translate-x-[120%] opacity-0' : 'transform translate-x-0 opacity-100',
       isGraphExpanded ? 'max-h-0 gap-0 overflow-hidden' : 'max-h-[400px] gap-6'
     ]">
@@ -1114,7 +1129,7 @@ onUnmounted(() => {
   </div>
 
   <!-- Active DB Connection Info Card -->
-    <div class="relative z-20 bg-black/10 backdrop-blur-[1px] rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div class="relative z-20 bg-zinc-950/70 rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
         <div class="w-12 h-12 rounded-xl bg-zinc-950 border border-zinc-850 flex items-center justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1147,17 +1162,19 @@ onUnmounted(() => {
 
     <!-- Tables & Graph Split Flex Layout -->
     <div :class="[
-      'transition-[margin,gap] duration-700 ease-in-out flex flex-col lg:flex-row',
+      isTransitioning ? 'transition-[margin,gap] duration-700 ease-in-out' : '',
+      'flex flex-col lg:flex-row',
       isGraphExpanded ? 'gap-0 mt-0' : 'gap-6 mt-6'
     ]">
       
       <!-- Tables List (Left) -->
       <div :class="[
-        'transition-[width,height,transform,opacity] duration-700 ease-in-out shrink-0',
+        isTransitioning ? 'transition-[width,height,transform,opacity] duration-700 ease-in-out' : '',
+        'shrink-0',
         isHidingElements ? 'transform translate-x-[120%] opacity-0' : 'transform translate-x-0 opacity-100',
         isGraphExpanded ? 'w-0 h-0 overflow-hidden opacity-0 m-0' : 'w-full lg:w-[41.666667%] space-y-4'
       ]">
-        <div class="bg-black/10 backdrop-blur-[1px] rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 min-h-[400px] flex flex-col justify-start">
+        <div class="bg-zinc-950/70 rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 min-h-[400px] flex flex-col justify-start">
           <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4 text-left">Şema Tabloları</h3>
 
           <div v-if="loading && !schema" class="flex-1 flex flex-col items-center justify-center space-y-2">
@@ -1334,11 +1351,13 @@ onUnmounted(() => {
 
       <!-- Graph Visualization Container (Right) -->
       <div :class="[
-        'transition-[width,flex] duration-700 ease-in-out flex-1 flex flex-col min-w-0',
+        isTransitioning ? 'transition-[width,flex] duration-700 ease-in-out' : '',
+        'flex-1 flex flex-col min-w-0',
         isGraphExpanded ? 'w-full' : ''
       ]">
         <div :class="[
-          'bg-black/10 backdrop-blur-[1px] rounded-2xl border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col justify-between relative overflow-hidden transition-[height,opacity] duration-700 ease-in-out w-full',
+          'bg-zinc-950/70 rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col justify-between relative overflow-hidden w-full',
+          isTransitioning ? 'transition-[height,opacity] duration-700 ease-in-out' : '',
           isGraphExpanded ? 'h-[calc(100vh-4rem)]' : 'min-h-[460px] h-[600px]'
         ]">
           <div class="flex items-center justify-between mb-4 z-10">
@@ -1364,7 +1383,7 @@ onUnmounted(() => {
           </div>
 
           <!-- D3.js Live Graph View -->
-          <div class="flex-1 bg-zinc-950/20 backdrop-blur-[2px] border border-zinc-850 rounded-xl relative overflow-hidden min-h-[360px] shadow-inner flex items-center justify-center live-graph-container">
+          <div class="flex-1 bg-zinc-950/80 border border-zinc-850 rounded-xl relative overflow-hidden min-h-[360px] shadow-inner flex items-center justify-center live-graph-container">
             <div class="absolute inset-0 bg-radial-gradient pointer-events-none"></div>
             
             <svg 
@@ -1392,7 +1411,7 @@ onUnmounted(() => {
             <div v-if="schema && schema.graph && schema.graph.nodes.length > 0" class="absolute bottom-4 right-4 flex items-center gap-2 z-10">
               <button 
                 @click="resetZoom"
-                class="h-8 w-8 bg-zinc-900/80 hover:bg-zinc-850 backdrop-blur border border-zinc-800 hover:border-zinc-750 text-zinc-400 hover:text-white rounded-lg flex items-center justify-center transition-colors shadow-lg active:scale-95"
+                class="h-8 w-8 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-750 text-zinc-400 hover:text-white rounded-lg flex items-center justify-center transition-colors shadow-lg active:scale-95"
                 title="Kamerayı Sıfırla"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1401,7 +1420,7 @@ onUnmounted(() => {
               </button>
               <button 
                 @click="togglePhysics"
-                class="h-8 px-2.5 bg-zinc-900/80 hover:bg-zinc-850 backdrop-blur border border-zinc-800 hover:border-zinc-750 text-zinc-400 hover:text-white rounded-lg flex items-center gap-1.5 transition-colors shadow-lg text-[10px] font-bold active:scale-95"
+                class="h-8 px-2.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-750 text-zinc-400 hover:text-white rounded-lg flex items-center gap-1.5 transition-colors shadow-lg text-[10px] font-bold active:scale-95"
                 :title="isPhysicsActive ? 'Fizik simülasyonunu durdur' : 'Fizik simülasyonunu aktifleştir'"
               >
                 <span class="w-1.5 h-1.5 rounded-full transition-colors" :class="isPhysicsActive ? 'bg-emerald-400 shadow-md shadow-emerald-400/50' : 'bg-zinc-500'"></span>
@@ -1418,7 +1437,8 @@ onUnmounted(() => {
     </div>
     <!-- Sanal İlişki ve Bağlantı Editörü (Virtual Relationship Manager) -->
     <div :class="[
-      'bg-black/10 backdrop-blur-[1px] rounded-2xl border-white/10 shadow-black/30 text-left transition-[max-height,transform,opacity,padding,margin] duration-700 ease-in-out overflow-hidden',
+      'bg-zinc-950/70 border border-white/10 shadow-black/30 text-left overflow-hidden',
+      isTransitioning ? 'transition-[max-height,transform,opacity,padding,margin] duration-700 ease-in-out' : '',
       isHidingElements ? 'transform translate-x-[120%] opacity-0' : 'transform translate-x-0 opacity-100',
       isGraphExpanded ? 'max-h-0 p-0 border-0 mt-0 shadow-none space-y-0' : 'max-h-[1500px] p-6 border shadow-lg mt-6 space-y-6'
     ]">
