@@ -11,6 +11,7 @@ const containerRef = ref<HTMLElement | null>(null);
 
 let animationFrameId: number;
 let renderer: THREE.WebGLRenderer;
+let camera: THREE.PerspectiveCamera;
 let coreGeometry: THREE.BufferGeometry;
 let coreMaterial: THREE.ShaderMaterial;
 let innerGeometry: THREE.BufferGeometry;
@@ -22,6 +23,42 @@ let virtualScroll = 0; // The actual smooth scroll value
 let targetVirtualScroll = 0; // The target scroll value set by the wheel
 
 const blackHoleState = { strength: 0 };
+
+let isMouseListenerActive = false;
+
+const onMouseMove = (e: MouseEvent) => {
+  if (!camera) return;
+  const mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+  const mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+  
+  gsap.to(camera.position, {
+    x: mouseX * 40,
+    y: mouseY * 40,
+    duration: 2.0,
+    ease: "power2.out"
+  });
+  
+  gsap.to(camera.rotation, {
+    x: mouseY * 0.08,
+    y: -mouseX * 0.08,
+    duration: 2.0,
+    ease: "power2.out"
+  });
+};
+
+const updateMouseListener = (tab: string) => {
+  if (tab === 'schema') {
+    if (isMouseListenerActive) {
+      window.removeEventListener('mousemove', onMouseMove);
+      isMouseListenerActive = false;
+    }
+  } else {
+    if (!isMouseListenerActive) {
+      window.addEventListener('mousemove', onMouseMove);
+      isMouseListenerActive = true;
+    }
+  }
+};
 
 watch(() => props.activeTab, (newTab) => {
   updateMouseListener(newTab);
@@ -48,7 +85,7 @@ onMounted(() => {
   scene.fog = new THREE.FogExp2(0x000000, 0.0015);
 
   // 2. Camera Setup
-  const camera = new THREE.PerspectiveCamera(
+  camera = new THREE.PerspectiveCamera(
     85,
     window.innerWidth / window.innerHeight,
     0.1,
@@ -327,41 +364,7 @@ onMounted(() => {
   };
   window.addEventListener('wheel', onWheel, { passive: true });
 
-  // 7. Mouse Tracking via GSAP
-  let isMouseListenerActive = false;
-  
-  const onMouseMove = (e: MouseEvent) => {
-    const mouseX = (e.clientX / window.innerWidth) * 2 - 1;
-    const mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
-    
-    gsap.to(camera.position, {
-      x: mouseX * 40,
-      y: mouseY * 40,
-      duration: 2.0,
-      ease: "power2.out"
-    });
-    
-    gsap.to(camera.rotation, {
-      x: mouseY * 0.08,
-      y: -mouseX * 0.08,
-      duration: 2.0,
-      ease: "power2.out"
-    });
-  };
-
-  const updateMouseListener = (tab: string) => {
-    if (tab === 'schema') {
-      if (isMouseListenerActive) {
-        window.removeEventListener('mousemove', onMouseMove);
-        isMouseListenerActive = false;
-      }
-    } else {
-      if (!isMouseListenerActive) {
-        window.addEventListener('mousemove', onMouseMove);
-        isMouseListenerActive = true;
-      }
-    }
-  };
+  // 7. Mouse Tracking is now managed dynamically in the top-level script scope
 
   // 8. The Render Loop
   const clock = new THREE.Clock();
