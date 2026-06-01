@@ -30,6 +30,9 @@ const blackHoleState = { strength: 0 };
 
 let isMouseListenerActive = false;
 let isRenderLoopRunning = false;
+let isSchemaMode = false;
+const SCHEMA_FPS_INTERVAL = 200; // ~5 FPS on schema tab
+let lastSchemaRenderTime = 0;
 
 const onMouseMove = (e: MouseEvent) => {
   if (!camera) return;
@@ -88,6 +91,16 @@ const tick = () => {
     return;
   }
 
+  // Throttle rendering on schema tab to ~5 FPS to keep visuals alive with minimal overhead
+  if (isSchemaMode) {
+    const now = performance.now();
+    if (now - lastSchemaRenderTime < SCHEMA_FPS_INTERVAL) {
+      animationFrameId = requestAnimationFrame(tick);
+      return;
+    }
+    lastSchemaRenderTime = now;
+  }
+
   const elapsedTime = clock.getElapsedTime();
   const deltaTime = Math.min(elapsedTime - lastTime, 0.1); // Clamp deltaTime to prevent jumps on tab focus switch
   lastTime = elapsedTime;
@@ -131,21 +144,18 @@ const tick = () => {
 watch(() => props.activeTab, (newTab) => {
   updateMouseListener(newTab);
   if (newTab === 'schema') {
-    if (renderer) {
+    isSchemaMode = true;
+    if (renderer && !isRenderLoopRunning) {
       startRenderLoop();
     }
     gsap.to(blackHoleState, {
       strength: 1.0,
       duration: 2.0,
-      ease: 'power2.out',
-      onComplete: () => {
-        if (props.activeTab === 'schema') {
-          stopRenderLoop();
-        }
-      }
+      ease: 'power2.out'
     });
   } else {
-    if (renderer) {
+    isSchemaMode = false;
+    if (renderer && !isRenderLoopRunning) {
       startRenderLoop();
     }
     gsap.to(blackHoleState, {
@@ -448,13 +458,11 @@ onMounted(() => {
   // 8. The Render Loop
   clock = new THREE.Clock();
   
-  if (props.activeTab !== 'schema') {
-    startRenderLoop();
-  } else {
-    // If mounted directly onto the schema tab, pre-warp the space backdrop instantly and hold the single frame
+  isSchemaMode = props.activeTab === 'schema';
+  if (isSchemaMode) {
     blackHoleState.strength = 1.0;
-    renderer.render(scene, camera);
   }
+  startRenderLoop();
 
   // 9. Resize Handling
   const onResize = () => {

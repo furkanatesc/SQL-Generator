@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue';
+import { ref, shallowRef, markRaw, computed, onMounted, watch, nextTick, onUnmounted } from 'vue';
 import { apiService } from '../services/api';
 import * as d3 from 'd3';
 import PlanetDbSelector from './PlanetDbSelector.vue';
@@ -16,7 +16,7 @@ interface LinkItem extends d3.SimulationLinkDatum<NodeItem> {
   type?: string;
 }
 
-const schema = ref<any>(null);
+const schema = shallowRef<any>(null);
 // Performance thresholds and timing constants
 const LARGE_GRAPH_NODE_THRESHOLD = 30;
 const LARGE_GRAPH_LINK_THRESHOLD = 60;
@@ -36,6 +36,38 @@ const isPhysicsActive = ref(false); // Default physics to disabled
 const maxNodesLimit = ref(5); // GECICI COZUM: Tarayıcı performansını korumak için geçici olarak sadece 5 tablo render ediliyor (0 = Limitsiz)
 const visibleTablesLimit = ref(50); // Sol paneldeki tabloların lazy-loading limiti
 const visibleRelationsLimit = ref(50); // Sağ paneldeki ilişkilerin lazy-loading limiti
+
+// Pre-computed graph preview: degree hesaplama, sort ve filter burada cached olarak yapılır.
+// initGraph() bu preview'ı doğrudan tüketir — full edge scan/sort tekrarlanmaz.
+const graphPreview = computed(() => {
+  if (!schema.value?.graph) return null;
+  const edges = schema.value.graph.edges;
+  const nodes = schema.value.graph.nodes;
+  const MAX = maxNodesLimit.value;
+
+  const degree = new Map<string, number>();
+  for (const e of edges) {
+    degree.set(e.source, (degree.get(e.source) || 0) + 1);
+    degree.set(e.target, (degree.get(e.target) || 0) + 1);
+  }
+
+  const topNodes = MAX > 0
+    ? [...nodes].sort((a: string, b: string) => (degree.get(b) || 0) - (degree.get(a) || 0)).slice(0, MAX)
+    : [...nodes];
+  const topSet = new Set(topNodes);
+
+  return {
+    nodes: topNodes,
+    edges: edges.filter((e: any) => topSet.has(e.source) && topSet.has(e.target)),
+  };
+});
+
+// Total schema büyüklüğüne göre dekoratif SVG kararı — render edilen node sayısına DEĞİL
+const isLargeSchema = computed(() => {
+  if (!schema.value?.graph) return false;
+  return schema.value.graph.nodes.length > LARGE_GRAPH_NODE_THRESHOLD
+      || schema.value.graph.edges.length > LARGE_GRAPH_LINK_THRESHOLD;
+});
 
 const isTransitioning = ref(false);
 
@@ -156,27 +188,7 @@ const allRelations = computed(() => {
   return list;
 });
 
-// Performans optimizasyonu: Tablolara gelen ilişkileri (FK) önceden eşleyen computed map - O(1) arama sağlar
-const incomingRelationsMap = computed(() => {
-  const map: Record<string, any[]> = {};
-  if (!schema.value || !schema.value.tables) return map;
-  
-  for (const [sourceTable, meta] of Object.entries(schema.value.tables)) {
-    const fks = (meta as any).foreign_keys || [];
-    for (const fk of fks) {
-      const refTbl = fk.referenced_table;
-      if (!map[refTbl]) {
-        map[refTbl] = [];
-      }
-      map[refTbl].push({
-        source_table: sourceTable,
-        source_column: fk.column,
-        target_column: fk.referenced_column
-      });
-    }
-  }
-  return map;
-});
+// incomingRelationsMap kaldırıldı — upfront hesaplama yerine lazy getIncomingRelations kullanılıyor
 
 const visibleTables = computed(() => {
   if (!schema.value || !schema.value.tables) return {};
@@ -378,7 +390,7 @@ const loadSchema = async (force = false) => {
     }
 
     const res = force ? await apiService.refreshSchema() : await apiService.getSchema();
-    schema.value = res.schema || null;
+    schema.value = res.schema ? markRaw(res.schema) : null;
   } catch (e: any) {
     console.error('Schema load failed', e);
   } finally {
@@ -404,8 +416,23 @@ const toggleTable = (tableName: string) => {
   }
 };
 
+// Lazy incoming relations: sadece expanded table için hesaplanır, upfront map yok
 const getIncomingRelations = (targetTableName: string) => {
-  return incomingRelationsMap.value[targetTableName] || [];
+  if (!schema.value?.tables) return [];
+  const result: any[] = [];
+  for (const [sourceTable, meta] of Object.entries(schema.value.tables)) {
+    const fks = (meta as any).foreign_keys || [];
+    for (const fk of fks) {
+      if (fk.referenced_table === targetTableName) {
+        result.push({
+          source_table: sourceTable,
+          source_column: fk.column,
+          target_column: fk.referenced_column
+        });
+      }
+    }
+  }
+  return result;
 };
 
 const cleanupGraph = () => {
@@ -421,10 +448,11 @@ const cleanupGraph = () => {
   }
 };
 
-// D3.js Şema Grafik Çizimi
+// D3.js Şema Grafik Çizimi — graphPreview computed'ından beslenir, full schema taramaz
 const initGraph = () => {
   cleanupGraph();
-  if (!svgRef.value || !schema.value || !schema.value.graph) return;
+  const preview = graphPreview.value;
+  if (!svgRef.value || !preview || preview.nodes.length === 0) return;
 
   const containerElement = svgRef.value.parentElement;
   const width = containerElement ? containerElement.clientWidth : 500;
@@ -432,37 +460,18 @@ const initGraph = () => {
 
   const svg = d3.select(svgRef.value);
 
-  // D3 mutasyonundan korumak için derin kopya alalım, ve maxNodesLimit ile sınırlandıralım
-  const MAX_NODES = maxNodesLimit.value;
-  
-  // Önce en çok bağlantısı olan (hub) tabloları bulalım
-  const nodeDegrees: Record<string, number> = {};
-  schema.value.graph.edges.forEach((edge: any) => {
-    nodeDegrees[edge.source] = (nodeDegrees[edge.source] || 0) + 1;
-    nodeDegrees[edge.target] = (nodeDegrees[edge.target] || 0) + 1;
-  });
+  // graphPreview'dan direkt tüket — degree/sort/filter burada tekrarlanmaz
+  const nodesData: NodeItem[] = preview.nodes.map((table: string) => ({ id: table }));
+  const linksData: LinkItem[] = preview.edges.map((edge: any) => ({
+    source: edge.source,
+    target: edge.target,
+    source_col: edge.source_col,
+    target_col: edge.target_col,
+    type: edge.type || 'explicit'
+  }));
 
-  // Tabloları bağlantı sayısına göre sıralayalım
-  const sortedNodes = [...schema.value.graph.nodes].sort((a, b) => (nodeDegrees[b] || 0) - (nodeDegrees[a] || 0));
-  
-  // Eğer MAX_NODES 0'dan büyükse sınırla, değilse (0 veya boşsa) hepsini al
-  const topNodes = MAX_NODES > 0 ? sortedNodes.slice(0, MAX_NODES) : sortedNodes;
-  const topNodesSet = new Set(topNodes);
-
-  const nodesData: NodeItem[] = topNodes.map((table: string) => ({ id: table }));
-  const linksData: LinkItem[] = schema.value.graph.edges
-    .filter((edge: any) => topNodesSet.has(edge.source) && topNodesSet.has(edge.target))
-    .map((edge: any) => ({
-      source: edge.source,
-      target: edge.target,
-      source_col: edge.source_col,
-      target_col: edge.target_col,
-      type: edge.type || 'explicit'
-    }));
-
-  if (nodesData.length === 0) return;
-
-  const isLargeGraph = nodesData.length > LARGE_GRAPH_NODE_THRESHOLD || linksData.length > LARGE_GRAPH_LINK_THRESHOLD;
+  // Dekoratif SVG kararı total schema büyüklüğüne göre (render edilen 5 node'a değil)
+  const isLargeGraph = isLargeSchema.value;
 
   // Marker ve Efektlerin Tanımlanması (Defs)
   const defs = svg.append('defs');
@@ -1131,8 +1140,8 @@ const togglePhysics = () => {
   }
 };
 
-// Şema Değişimini Dinle ve Grafiği Çiz
-watch(schema, () => {
+// graphPreview değişimini dinle ve grafiği çiz (schema yerine preview — gereksiz rebuild yok)
+watch(graphPreview, () => {
   nextTick(() => {
     initGraph();
   });
@@ -1185,8 +1194,7 @@ onUnmounted(() => {
           <div class="flex items-center gap-2 bg-black/30 px-3 py-1.5 rounded-lg border border-zinc-800">
             <label class="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Node Limiti (0=Sınırsız):</label>
             <input 
-              v-model.number="maxNodesLimit" 
-              @change="initGraph"
+              v-model.number="maxNodesLimit"
               type="number" 
               min="0"
               class="w-16 h-6 bg-zinc-900 border border-zinc-700 rounded text-xs text-center text-white focus:outline-none focus:border-indigo-500" 
