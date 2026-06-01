@@ -1066,7 +1066,7 @@ onUnmounted(() => {
   <div class="relative">
     <!-- Header and DB Card Wrapper -->
     <div :class="[
-      'transition-all duration-700 ease-in-out flex flex-col relative z-30',
+      'transition-[max-height,transform,opacity] duration-700 ease-in-out flex flex-col relative z-30',
       isHidingElements ? 'transform translate-x-[120%] opacity-0' : 'transform translate-x-0 opacity-100',
       isGraphExpanded ? 'max-h-0 gap-0 overflow-hidden' : 'max-h-[400px] gap-6'
     ]">
@@ -1147,13 +1147,13 @@ onUnmounted(() => {
 
     <!-- Tables & Graph Split Flex Layout -->
     <div :class="[
-      'transition-all duration-700 ease-in-out flex flex-col lg:flex-row',
+      'transition-[margin,gap] duration-700 ease-in-out flex flex-col lg:flex-row',
       isGraphExpanded ? 'gap-0 mt-0' : 'gap-6 mt-6'
     ]">
       
       <!-- Tables List (Left) -->
       <div :class="[
-        'transition-all duration-700 ease-in-out shrink-0',
+        'transition-[width,height,transform,opacity] duration-700 ease-in-out shrink-0',
         isHidingElements ? 'transform translate-x-[120%] opacity-0' : 'transform translate-x-0 opacity-100',
         isGraphExpanded ? 'w-0 h-0 overflow-hidden opacity-0 m-0' : 'w-full lg:w-[41.666667%] space-y-4'
       ]">
@@ -1321,7 +1321,7 @@ onUnmounted(() => {
             <button 
               v-if="totalTablesCount > visibleTablesLimit"
               @click="loadMoreTables"
-              class="w-full mt-4 py-2.5 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+              class="w-full mt-4 py-2.5 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-[background-color,border-color,color] duration-200 active:scale-[0.98]"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
@@ -1334,11 +1334,11 @@ onUnmounted(() => {
 
       <!-- Graph Visualization Container (Right) -->
       <div :class="[
-        'transition-all duration-700 ease-in-out flex-1 flex flex-col min-w-0',
+        'transition-[width,flex] duration-700 ease-in-out flex-1 flex flex-col min-w-0',
         isGraphExpanded ? 'w-full' : ''
       ]">
         <div :class="[
-          'bg-black/10 backdrop-blur-[1px] rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col justify-between relative overflow-hidden transition-all duration-700 ease-in-out w-full',
+          'bg-black/10 backdrop-blur-[1px] rounded-2xl border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col justify-between relative overflow-hidden transition-[height,opacity] duration-700 ease-in-out w-full',
           isGraphExpanded ? 'h-[calc(100vh-4rem)]' : 'min-h-[460px] h-[600px]'
         ]">
           <div class="flex items-center justify-between mb-4 z-10">
@@ -1369,6 +1369,7 @@ onUnmounted(() => {
             
             <svg 
               ref="svgRef" 
+              data-lenis-prevent
               class="relative w-full h-full select-none cursor-grab active:cursor-grabbing z-10"
               style="min-height: 360px;"
             ></svg>
@@ -1417,7 +1418,7 @@ onUnmounted(() => {
     </div>
     <!-- Sanal İlişki ve Bağlantı Editörü (Virtual Relationship Manager) -->
     <div :class="[
-      'bg-black/10 backdrop-blur-[1px] rounded-2xl border-white/10 shadow-black/30 text-left transition-all duration-700 ease-in-out overflow-hidden',
+      'bg-black/10 backdrop-blur-[1px] rounded-2xl border-white/10 shadow-black/30 text-left transition-[max-height,transform,opacity,padding,margin] duration-700 ease-in-out overflow-hidden',
       isHidingElements ? 'transform translate-x-[120%] opacity-0' : 'transform translate-x-0 opacity-100',
       isGraphExpanded ? 'max-h-0 p-0 border-0 mt-0 shadow-none space-y-0' : 'max-h-[1500px] p-6 border shadow-lg mt-6 space-y-6'
     ]">
