@@ -119,3 +119,20 @@ def test_trace_store_filters_by_request_id():
 
     assert len(result) == 1
     assert result[0].request_id == "req_b"
+
+def test_trace_record_rejects_non_dict_payload():
+    with pytest.raises(TypeError, match="payload must be a dictionary"):
+        TraceRecord(trace_type="debug", payload="not a dict")  # type: ignore
+
+    with pytest.raises(TypeError, match="payload must be a dictionary"):
+        TraceRecord(trace_type="debug", payload=[1, 2, 3])  # type: ignore
+
+def test_trace_query_validation():
+    with pytest.raises(ValueError, match="limit must be >= 1"):
+        TraceQuery(limit=0)
+
+    with pytest.raises(ValueError, match="limit must be >= 1"):
+        TraceQuery(limit=-5)
+
+    with pytest.raises(ValueError, match="offset must be >= 0"):
+        TraceQuery(offset=-1)

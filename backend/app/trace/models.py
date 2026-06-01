@@ -31,6 +31,8 @@ class TraceRecord:
     def __post_init__(self):
         if not self.trace_id:
             self.trace_id = generate_trace_id()
+        if not isinstance(self.payload, dict):
+            raise TypeError("payload must be a dictionary")
         if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
             raise ValueError("created_at must be timezone-aware")
         ensure_json_serializable(self.payload)
