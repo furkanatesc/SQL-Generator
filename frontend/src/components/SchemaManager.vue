@@ -17,6 +17,14 @@ interface LinkItem extends d3.SimulationLinkDatum<NodeItem> {
 }
 
 const schema = ref<any>(null);
+// Performance thresholds and timing constants
+const LARGE_GRAPH_NODE_THRESHOLD = 30;
+const LARGE_GRAPH_LINK_THRESHOLD = 60;
+const HOVER_NODE_THRESHOLD = 50;
+const HOVER_LINK_THRESHOLD = 100;
+const PHYSICS_AUTOSTOP_MS = 1200;
+const RESIZE_DEBOUNCE_MS = 150;
+
 const loading = ref(false);
 const expandedTable = ref<string | null>(null);
 const targetDbType = ref('sqlite');
@@ -24,14 +32,31 @@ const targetDbName = ref('');
 const showIncoming = ref(false);
 const isHidingElements = ref(false);
 const isGraphExpanded = ref(false);
-const isPhysicsActive = ref(true);
+const isPhysicsActive = ref(false); // Default physics to disabled
 const maxNodesLimit = ref(5); // GECICI COZUM: Tarayıcı performansını korumak için geçici olarak sadece 5 tablo render ediliyor (0 = Limitsiz)
 const visibleTablesLimit = ref(50); // Sol paneldeki tabloların lazy-loading limiti
 const visibleRelationsLimit = ref(50); // Sağ paneldeki ilişkilerin lazy-loading limiti
 
 const isTransitioning = ref(false);
 
+const transitionTimers: number[] = [];
+
+const setTransitionTimer = (fn: () => void, delay: number) => {
+  const id = window.setTimeout(() => {
+    transitionTimers.splice(transitionTimers.indexOf(id), 1);
+    fn();
+  }, delay);
+  transitionTimers.push(id);
+  return id;
+};
+
+const clearTransitionTimers = () => {
+  transitionTimers.forEach(window.clearTimeout);
+  transitionTimers.length = 0;
+};
+
 const toggleGraphExpand = () => {
+  clearTransitionTimers();
   isTransitioning.value = true;
   if (!isGraphExpanded.value) {
     const mainEl = document.getElementById('main-scroll-container');
@@ -39,11 +64,11 @@ const toggleGraphExpand = () => {
     
     isHidingElements.value = true;
     
-    setTimeout(() => {
+    setTransitionTimer(() => {
       isGraphExpanded.value = true;
-      setTimeout(() => {
+      setTransitionTimer(() => {
         handleResize();
-        setTimeout(() => {
+        setTransitionTimer(() => {
           isTransitioning.value = false;
         }, 100);
       }, 750);
@@ -51,11 +76,11 @@ const toggleGraphExpand = () => {
   } else {
     isGraphExpanded.value = false;
     
-    setTimeout(() => {
+    setTransitionTimer(() => {
       isHidingElements.value = false;
-      setTimeout(() => {
+      setTransitionTimer(() => {
         handleResize();
-        setTimeout(() => {
+        setTransitionTimer(() => {
           isTransitioning.value = false;
         }, 100);
       }, 750);
@@ -383,17 +408,29 @@ const getIncomingRelations = (targetTableName: string) => {
   return incomingRelationsMap.value[targetTableName] || [];
 };
 
+const cleanupGraph = () => {
+  if (simulation) {
+    simulation.stop();
+    simulation.on('tick', null);
+    simulation = null;
+  }
+  if (svgRef.value) {
+    d3.select(svgRef.value).interrupt();
+    d3.select(svgRef.value).selectAll('*').interrupt();
+    d3.select(svgRef.value).selectAll('*').remove();
+  }
+};
+
 // D3.js Şema Grafik Çizimi
 const initGraph = () => {
+  cleanupGraph();
   if (!svgRef.value || !schema.value || !schema.value.graph) return;
 
   const containerElement = svgRef.value.parentElement;
   const width = containerElement ? containerElement.clientWidth : 500;
   const height = containerElement ? containerElement.clientHeight : 400;
 
-  // SVG temizliği
   const svg = d3.select(svgRef.value);
-  svg.selectAll('*').remove();
 
   // D3 mutasyonundan korumak için derin kopya alalım, ve maxNodesLimit ile sınırlandıralım
   const MAX_NODES = maxNodesLimit.value;
@@ -425,6 +462,8 @@ const initGraph = () => {
 
   if (nodesData.length === 0) return;
 
+  const isLargeGraph = nodesData.length > LARGE_GRAPH_NODE_THRESHOLD || linksData.length > LARGE_GRAPH_LINK_THRESHOLD;
+
   // Marker ve Efektlerin Tanımlanması (Defs)
   const defs = svg.append('defs');
   
@@ -441,81 +480,83 @@ const initGraph = () => {
     .attr('d', 'M0,-3L8,0L0,3')
     .attr('fill', '#818cf8'); // Indigo 400
 
-  // Neon Parlama Filtresi
-  const filter = defs.append('filter')
-    .attr('id', 'glow')
-    .attr('x', '-30%')
-    .attr('y', '-30%')
-    .attr('width', '160%')
-    .attr('height', '160%');
-  
-  filter.append('feGaussianBlur')
-    .attr('stdDeviation', '4')
-    .attr('result', 'blur');
-  
-  filter.append('feComposite')
-    .attr('in', 'SourceGraphic')
-    .attr('in2', 'blur')
-    .attr('operator', 'over');
+  if (!isLargeGraph) {
+    // Neon Parlama Filtresi
+    const filter = defs.append('filter')
+      .attr('id', 'glow')
+      .attr('x', '-30%')
+      .attr('y', '-30%')
+      .attr('width', '160%')
+      .attr('height', '160%');
+    
+    filter.append('feGaussianBlur')
+      .attr('stdDeviation', '4')
+      .attr('result', 'blur');
+    
+    filter.append('feComposite')
+      .attr('in', 'SourceGraphic')
+      .attr('in2', 'blur')
+      .attr('operator', 'over');
 
-  // Radial Gradients for the Black Hole Singularity and Accretion Disk
-  const radialGrad = defs.append('radialGradient')
-    .attr('id', 'singularity-gradient')
-    .attr('cx', '50%')
-    .attr('cy', '50%')
-    .attr('r', '50%');
-  radialGrad.append('stop')
-    .attr('offset', '0%')
-    .attr('stop-color', '#000000');
-  radialGrad.append('stop')
-    .attr('offset', '70%')
-    .attr('stop-color', '#09090b');
-  radialGrad.append('stop')
-    .attr('offset', '100%')
-    .attr('stop-color', '#818cf8')
-    .attr('stop-opacity', '0.4');
+    // Radial Gradients for the Black Hole Singularity and Accretion Disk
+    const radialGrad = defs.append('radialGradient')
+      .attr('id', 'singularity-gradient')
+      .attr('cx', '50%')
+      .attr('cy', '50%')
+      .attr('r', '50%');
+    radialGrad.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', '#000000');
+    radialGrad.append('stop')
+      .attr('offset', '70%')
+      .attr('stop-color', '#09090b');
+    radialGrad.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', '#818cf8')
+      .attr('stop-opacity', '0.4');
 
-  const accretionGrad = defs.append('radialGradient')
-    .attr('id', 'accretion-gradient')
-    .attr('cx', '50%')
-    .attr('cy', '50%')
-    .attr('r', '50%');
-  accretionGrad.append('stop')
-    .attr('offset', '0%')
-    .attr('stop-color', '#c084fc')
-    .attr('stop-opacity', '0.8');
-  accretionGrad.append('stop')
-    .attr('offset', '40%')
-    .attr('stop-color', '#818cf8')
-    .attr('stop-opacity', '0.4');
-  accretionGrad.append('stop')
-    .attr('offset', '80%')
-    .attr('stop-color', '#fbbf24')
-    .attr('stop-opacity', '0.15');
-  accretionGrad.append('stop')
-    .attr('offset', '100%')
-    .attr('stop-color', '#000000')
-    .attr('stop-opacity', '0');
+    const accretionGrad = defs.append('radialGradient')
+      .attr('id', 'accretion-gradient')
+      .attr('cx', '50%')
+      .attr('cy', '50%')
+      .attr('r', '50%');
+    accretionGrad.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', '#c084fc')
+      .attr('stop-opacity', '0.8');
+    accretionGrad.append('stop')
+      .attr('offset', '40%')
+      .attr('stop-color', '#818cf8')
+      .attr('stop-opacity', '0.4');
+    accretionGrad.append('stop')
+      .attr('offset', '80%')
+      .attr('stop-color', '#fbbf24')
+      .attr('stop-opacity', '0.15');
+    accretionGrad.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', '#000000')
+      .attr('stop-opacity', '0');
 
-  // Intense neon black hole glow filter
-  const bhGlow = defs.append('filter')
-    .attr('id', 'black-hole-glow')
-    .attr('x', '-50%')
-    .attr('y', '-50%')
-    .attr('width', '200%')
-    .attr('height', '200%');
-  bhGlow.append('feGaussianBlur')
-    .attr('stdDeviation', '10')
-    .attr('result', 'blur');
-  bhGlow.append('feComponentTransfer')
-    .append('feFuncA')
-    .attr('type', 'linear')
-    .attr('slope', '2');
-  bhGlow.append('feMerge').selectAll('feMergeNode')
-    .data(['blur', 'SourceGraphic'])
-    .enter()
-    .append('feMergeNode')
-    .attr('in', (d: string) => d);
+    // Intense neon black hole glow filter
+    const bhGlow = defs.append('filter')
+      .attr('id', 'black-hole-glow')
+      .attr('x', '-50%')
+      .attr('y', '-50%')
+      .attr('width', '200%')
+      .attr('height', '200%');
+    bhGlow.append('feGaussianBlur')
+      .attr('stdDeviation', '10')
+      .attr('result', 'blur');
+    bhGlow.append('feComponentTransfer')
+      .append('feFuncA')
+      .attr('type', 'linear')
+      .attr('slope', '2');
+    bhGlow.append('feMerge').selectAll('feMergeNode')
+      .data(['blur', 'SourceGraphic'])
+      .enter()
+      .append('feMergeNode')
+      .attr('in', (d: string) => d);
+  }
 
   // Grafik Ana Kapsayıcı Grubu (Zoom/Pan için)
   const gContainer = svg.append('g').attr('class', 'graph-container');
@@ -568,33 +609,35 @@ const initGraph = () => {
   const minY = -height * 0.25;
   const maxY = height * 1.25;
 
-  for (let x = Math.floor(minX / gridSpacing) * gridSpacing; x <= maxX; x += gridSpacing) {
-    gridGroup.append('path')
-      .attr('d', getWarpedVerticalPath(x))
-      .attr('fill', 'none')
-      .attr('stroke', '#4f46e5')
-      .attr('stroke-width', 0.5)
-      .attr('opacity', 0.12);
-  }
-  for (let y = Math.floor(minY / gridSpacing) * gridSpacing; y <= maxY; y += gridSpacing) {
-    gridGroup.append('path')
-      .attr('d', getWarpedHorizontalPath(y))
-      .attr('fill', 'none')
-      .attr('stroke', '#4f46e5')
-      .attr('stroke-width', 0.5)
-      .attr('opacity', 0.12);
-  }
+  if (!isLargeGraph) {
+    for (let x = Math.floor(minX / gridSpacing) * gridSpacing; x <= maxX; x += gridSpacing) {
+      gridGroup.append('path')
+        .attr('d', getWarpedVerticalPath(x))
+        .attr('fill', 'none')
+        .attr('stroke', '#4f46e5')
+        .attr('stroke-width', 0.5)
+        .attr('opacity', 0.12);
+    }
+    for (let y = Math.floor(minY / gridSpacing) * gridSpacing; y <= maxY; y += gridSpacing) {
+      gridGroup.append('path')
+        .attr('d', getWarpedHorizontalPath(y))
+        .attr('fill', 'none')
+        .attr('stroke', '#4f46e5')
+        .attr('stroke-width', 0.5)
+        .attr('opacity', 0.12);
+    }
 
-  for (let r = 50; r <= 350; r += 50) {
-    gridGroup.append('circle')
-      .attr('cx', centerX)
-      .attr('cy', centerY)
-      .attr('r', r)
-      .attr('fill', 'none')
-      .attr('stroke', '#c084fc')
-      .attr('stroke-width', 0.5)
-      .attr('opacity', Math.max(0.02, 0.15 - (r / 350) * 0.12))
-      .attr('stroke-dasharray', '4 4');
+    for (let r = 50; r <= 350; r += 50) {
+      gridGroup.append('circle')
+        .attr('cx', centerX)
+        .attr('cy', centerY)
+        .attr('r', r)
+        .attr('fill', 'none')
+        .attr('stroke', '#c084fc')
+        .attr('stroke-width', 0.5)
+        .attr('opacity', Math.max(0.02, 0.15 - (r / 350) * 0.12))
+        .attr('stroke-dasharray', '4 4');
+    }
   }
 
   // Central Black Hole Group
@@ -602,107 +645,109 @@ const initGraph = () => {
     .attr('class', 'black-hole-group')
     .attr('transform', `translate(${centerX}, ${centerY})`);
 
-  // Swirling space dust particles inside D3 coordinate system (centered on the black hole)
-  const dustGroup = blackHoleGroup.append('g')
-    .attr('class', 'dust-particles-group')
-    .style('pointer-events', 'none');
-  for (let i = 0; i < 50; i++) {
-    const radius = 30 + Math.random() * 200; // spread from 30px to 230px
-    const angle = Math.random() * 2 * Math.PI;
-    const x = radius * Math.cos(angle);
-    const y = radius * Math.sin(angle);
-    const size = 0.8 + Math.random() * 2.2;
-    
-    let color = '#818cf8'; // Indigo
-    if (i % 3 === 0) color = '#fbbf24'; // Amber
-    else if (i % 3 === 1) color = '#22d3ee'; // Cyan
+  if (!isLargeGraph) {
+    // Swirling space dust particles inside D3 coordinate system (centered on the black hole)
+    const dustGroup = blackHoleGroup.append('g')
+      .attr('class', 'dust-particles-group')
+      .style('pointer-events', 'none');
+    for (let i = 0; i < 50; i++) {
+      const radius = 30 + Math.random() * 200; // spread from 30px to 230px
+      const angle = Math.random() * 2 * Math.PI;
+      const x = radius * Math.cos(angle);
+      const y = radius * Math.sin(angle);
+      const size = 0.8 + Math.random() * 2.2;
+      
+      let color = '#818cf8'; // Indigo
+      if (i % 3 === 0) color = '#fbbf24'; // Amber
+      else if (i % 3 === 1) color = '#22d3ee'; // Cyan
 
-    dustGroup.append('circle')
-      .attr('cx', x.toFixed(1))
-      .attr('cy', y.toFixed(1))
-      .attr('r', size.toFixed(1))
-      .attr('fill', color)
-      .attr('opacity', (0.3 + Math.random() * 0.45).toFixed(2))
-      .attr('class', 'dust-particle')
-      .style('animation-delay', `${(-Math.random() * 20).toFixed(1)}s`)
-      .style('animation-duration', `${6 + Math.random() * 10}s`)
-      .style('pointer-events', 'none')
-      .style('filter', 'url(#glow)');
-  }
-
-  blackHoleGroup.append('circle')
-    .attr('r', 180)
-    .attr('fill', 'url(#accretion-gradient)')
-    .style('pointer-events', 'none')
-    .attr('class', 'accretion-disk-aura');
-
-  const getSpiralPath = (a: number, b: number, startAngle: number) => {
-    let points: string[] = [];
-    const numPoints = 80;
-    for (let i = 0; i < numPoints; i++) {
-      const theta = startAngle - (i * 0.08);
-      const r = a * Math.exp(b * (i * 0.08));
-      if (r < 10) break;
-      const x = r * Math.cos(theta);
-      const y = r * Math.sin(theta);
-      points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      dustGroup.append('circle')
+        .attr('cx', x.toFixed(1))
+        .attr('cy', y.toFixed(1))
+        .attr('r', size.toFixed(1))
+        .attr('fill', color)
+        .attr('opacity', (0.3 + Math.random() * 0.45).toFixed(2))
+        .attr('class', 'dust-particle')
+        .style('animation-delay', `${(-Math.random() * 20).toFixed(1)}s`)
+        .style('animation-duration', `${6 + Math.random() * 10}s`)
+        .style('pointer-events', 'none')
+        .style('filter', 'url(#glow)');
     }
-    return 'M' + points.join(' L');
-  };
 
-  for (let i = 0; i < 4; i++) {
-    const angle = (i * Math.PI) / 2;
-    blackHoleGroup.append('path')
-      .attr('d', getSpiralPath(180, -0.32, angle))
+    blackHoleGroup.append('circle')
+      .attr('r', 180)
+      .attr('fill', 'url(#accretion-gradient)')
+      .style('pointer-events', 'none')
+      .attr('class', 'accretion-disk-aura');
+
+    const getSpiralPath = (a: number, b: number, startAngle: number) => {
+      let points: string[] = [];
+      const numPoints = 80;
+      for (let i = 0; i < numPoints; i++) {
+        const theta = startAngle - (i * 0.08);
+        const r = a * Math.exp(b * (i * 0.08));
+        if (r < 10) break;
+        const x = r * Math.cos(theta);
+        const y = r * Math.sin(theta);
+        points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+      return 'M' + points.join(' L');
+    };
+
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI) / 2;
+      blackHoleGroup.append('path')
+        .attr('d', getSpiralPath(180, -0.32, angle))
+        .attr('fill', 'none')
+        .attr('stroke', i % 2 === 0 ? '#fbbf24' : '#c084fc')
+        .attr('stroke-width', 1.5 + Math.random() * 1.5)
+        .attr('opacity', 0.45)
+        .attr('class', `vortex-spiral-arm vortex-spiral-${i + 1}`)
+        .style('pointer-events', 'none')
+        .style('filter', 'url(#glow)');
+    }
+
+    blackHoleGroup.append('circle')
+      .attr('r', 120)
       .attr('fill', 'none')
-      .attr('stroke', i % 2 === 0 ? '#fbbf24' : '#c084fc')
-      .attr('stroke-width', 1.5 + Math.random() * 1.5)
-      .attr('opacity', 0.45)
-      .attr('class', `vortex-spiral-arm vortex-spiral-${i + 1}`)
+      .attr('stroke', '#a855f7')
+      .attr('stroke-width', 1.5)
+      .attr('stroke-dasharray', '80 40 120 30')
+      .attr('opacity', 0.4)
+      .attr('class', 'vortex-ring-outer')
+      .style('pointer-events', 'none')
+      .style('filter', 'url(#glow)');
+
+    blackHoleGroup.append('circle')
+      .attr('r', 75)
+      .attr('fill', 'none')
+      .attr('stroke', '#f59e0b')
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '60 30 90 20')
+      .attr('opacity', 0.65)
+      .attr('class', 'vortex-ring-middle')
+      .style('pointer-events', 'none')
+      .style('filter', 'url(#glow)');
+
+    blackHoleGroup.append('circle')
+      .attr('r', 45)
+      .attr('fill', 'none')
+      .attr('stroke', '#fb7185')
+      .attr('stroke-width', 2.5)
+      .attr('stroke-dasharray', '30 15 45 10')
+      .attr('opacity', 0.75)
+      .attr('class', 'vortex-ring-inner')
       .style('pointer-events', 'none')
       .style('filter', 'url(#glow)');
   }
-
-  blackHoleGroup.append('circle')
-    .attr('r', 120)
-    .attr('fill', 'none')
-    .attr('stroke', '#a855f7')
-    .attr('stroke-width', 1.5)
-    .attr('stroke-dasharray', '80 40 120 30')
-    .attr('opacity', 0.4)
-    .attr('class', 'vortex-ring-outer')
-    .style('pointer-events', 'none')
-    .style('filter', 'url(#glow)');
-
-  blackHoleGroup.append('circle')
-    .attr('r', 75)
-    .attr('fill', 'none')
-    .attr('stroke', '#f59e0b')
-    .attr('stroke-width', 2)
-    .attr('stroke-dasharray', '60 30 90 20')
-    .attr('opacity', 0.65)
-    .attr('class', 'vortex-ring-middle')
-    .style('pointer-events', 'none')
-    .style('filter', 'url(#glow)');
-
-  blackHoleGroup.append('circle')
-    .attr('r', 45)
-    .attr('fill', 'none')
-    .attr('stroke', '#fb7185')
-    .attr('stroke-width', 2.5)
-    .attr('stroke-dasharray', '30 15 45 10')
-    .attr('opacity', 0.75)
-    .attr('class', 'vortex-ring-inner')
-    .style('pointer-events', 'none')
-    .style('filter', 'url(#glow)');
 
   blackHoleGroup.append('circle')
     .attr('r', 25)
-    .attr('fill', 'url(#singularity-gradient)')
+    .attr('fill', isLargeGraph ? '#09090b' : 'url(#singularity-gradient)')
     .attr('stroke', '#818cf8')
     .attr('stroke-width', 2)
     .attr('class', 'singularity-core')
-    .style('filter', 'url(#black-hole-glow)')
+    .style('filter', isLargeGraph ? 'none' : 'url(#black-hole-glow)')
     .style('cursor', 'pointer')
     .on('click', () => {
       if (simulation) {
@@ -742,6 +787,20 @@ const initGraph = () => {
     .force('radial', d3.forceRadial(140, width / 2, height / 2).strength(0.35))
     .force('collide', d3.forceCollide().radius(55));
 
+  if (isLargeGraph) {
+    // Large Graph Layout: precompute node layout instantly using 80 tick burst on CPU, then freeze
+    simulation.tick(80);
+    simulation.stop();
+  } else {
+    // Small Graph Layout: run active simulation, but automatically stop after bounded layout window
+    simulation.alpha(0.5).restart();
+    window.setTimeout(() => {
+      if (!isPhysicsActive.value) {
+        simulation?.stop();
+      }
+    }, PHYSICS_AUTOSTOP_MS);
+  }
+
   // Kenarları (Edges) Çiz
   const links = linkGroup.selectAll('g.link-item')
     .data(linksData)
@@ -769,17 +828,20 @@ const initGraph = () => {
     .style('pointer-events', 'none')
     .style('transition', 'opacity 0.2s, stroke 0.2s, stroke-width 0.2s');
 
-  // Hover durumunda kolon eşleştirmesini gösterecek metin etiketi
-  const linkLabels = links.append('text')
-    .attr('font-size', '8px')
-    .attr('font-family', 'monospace')
-    .attr('fill', '#a1a1aa') // Zinc 400
-    .attr('text-anchor', 'middle')
-    .attr('dy', -4)
-    .style('opacity', 0)
-    .style('pointer-events', 'none')
-    .style('transition', 'opacity 0.2s')
-    .text((d: any) => `${d.source_col} ➔ ${d.target_col}`);
+  // Hover durumunda kolon eşleştirmesini gösterecek metin etiketi (only if not large graph)
+  let linkLabels: d3.Selection<SVGTextElement, LinkItem, d3.BaseType, unknown>;
+  if (!isLargeGraph) {
+    linkLabels = links.append('text')
+      .attr('font-size', '8px')
+      .attr('font-family', 'monospace')
+      .attr('fill', '#a1a1aa') // Zinc 400
+      .attr('text-anchor', 'middle')
+      .attr('dy', -4)
+      .style('opacity', 0)
+      .style('pointer-events', 'none')
+      .style('transition', 'opacity 0.2s')
+      .text((d: any) => `${d.source_col} ➔ ${d.target_col}`);
+  }
 
   // Düğümleri (Nodes) Çiz
   const nodes = nodeGroup.selectAll('g.node-item')
@@ -799,7 +861,7 @@ const initGraph = () => {
     .attr('fill', '#09090b') // Zinc 950
     .attr('stroke', '#3f3f46') // Zinc 700
     .attr('stroke-width', 2)
-    .style('filter', 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45))')
+    .style('filter', isLargeGraph ? 'none' : 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45))')
     .style('cursor', 'pointer')
     .style('transition', 'r 0.2s, stroke 0.2s, fill 0.2s');
 
@@ -847,8 +909,9 @@ const initGraph = () => {
 
   // Fizik Güncelleme Adımları (Tick Listener)
   simulation.on('tick', () => {
-    // Dynamic Black Hole Keplerian & Accretion Vortex Physics
-    if (isPhysicsActive.value) {
+    // Dynamic Black Hole Keplerian & Accretion Vortex Physics (only if enabled and not large graph)
+    const enableVortexPhysics = isPhysicsActive.value && !isLargeGraph;
+    if (enableVortexPhysics) {
       nodesData.forEach((d: any) => {
         if (d.fx !== undefined && d.fx !== null) return;
 
@@ -877,21 +940,23 @@ const initGraph = () => {
       .attr('x2', (d: any) => d.target.x)
       .attr('y2', (d: any) => d.target.y);
 
-    linkLabels
-      .attr('x', (d: any) => ((d.source.x + d.target.x) / 2))
-      .attr('y', (d: any) => ((d.source.y + d.target.y) / 2));
+    if (!isLargeGraph && linkLabels) {
+      linkLabels
+        .attr('x', (d: any) => ((d.source.x + d.target.x) / 2))
+        .attr('y', (d: any) => ((d.source.y + d.target.y) / 2));
+    }
 
     nodes.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
   });
 
-  // Etkileşimler: 1-Hop Komşuluk Aydınlatması (Hover Highlight)
-  nodes.on('mouseover', function(_event, d: NodeItem) {
+  // Hover mouseover handler expression with dynamic context
+  const handleMouseOver = function(this: any, _event: any, d: NodeItem) {
     // Üzerine gelinen düğümü büyüt ve parlat
     d3.select(this).select('circle')
       .attr('r', 21)
       .attr('stroke', '#818cf8')
       .attr('fill', '#1e1b4b') // Indigo 950
-      .style('filter', 'url(#glow)');
+      .style('filter', isLargeGraph ? 'none' : 'url(#glow)');
 
     d3.select(this).select('text')
       .attr('fill', '#ffffff')
@@ -933,18 +998,21 @@ const initGraph = () => {
       return connected ? 3 : (l.type === 'implicit' ? 1.5 : 2);
     });
 
-    linkLabels.style('opacity', (l: any) => {
-      return (l.source.id === d.id || l.target.id === d.id) ? 1 : 0;
-    });
-  });
+    if (!isLargeGraph && linkLabels) {
+      linkLabels.style('opacity', (l: any) => {
+        return (l.source.id === d.id || l.target.id === d.id) ? 1 : 0;
+      });
+    }
+  };
 
-  nodes.on('mouseout', function() {
+  // Hover mouseout handler expression with dynamic context
+  const handleMouseOut = function(this: any) {
     // Düğümü eski boyutuna/rengine döndür
     d3.select(this).select('circle')
       .attr('r', 18)
       .attr('stroke', '#3f3f46')
       .attr('fill', '#09090b')
-      .style('filter', 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45))');
+      .style('filter', isLargeGraph ? 'none' : 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45))');
 
     d3.select(this).select('text')
       .attr('fill', '#d4d4d8')
@@ -963,8 +1031,21 @@ const initGraph = () => {
       })
       .attr('stroke-width', (l: any) => l.type === 'implicit' ? 1.5 : 2);
 
-    linkLabels.style('opacity', 0);
-  });
+    if (!isLargeGraph && linkLabels) {
+      linkLabels.style('opacity', 0);
+    }
+  };
+
+  // Determine hover threshold limit binding
+  const enableHoverHighlight = nodesData.length <= HOVER_NODE_THRESHOLD && linksData.length <= HOVER_LINK_THRESHOLD;
+
+  if (!enableHoverHighlight) {
+    nodes.on('mouseover', null);
+    nodes.on('mouseout', null);
+  } else {
+    nodes.on('mouseover', handleMouseOver);
+    nodes.on('mouseout', handleMouseOut);
+  }
 
   // Tıklanınca Odaklan ve Sol Listeden Seç
   nodes.on('click', (event, d: NodeItem) => {
@@ -1057,11 +1138,16 @@ watch(schema, () => {
   });
 });
 
-// Window resize olduğunda grafiği yeniden yapılandır
+let resizeTimer: number | undefined;
+
+// Window resize olduğunda grafiği yeniden yapılandır (Debounced)
 const handleResize = () => {
-  if (svgRef.value && schema.value) {
-    initGraph();
-  }
+  if (resizeTimer) window.clearTimeout(resizeTimer);
+  resizeTimer = window.setTimeout(() => {
+    if (svgRef.value && schema.value) {
+      initGraph();
+    }
+  }, RESIZE_DEBOUNCE_MS);
 };
 
 onMounted(() => {
@@ -1072,7 +1158,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
-  if (simulation) simulation.stop();
+  cleanupGraph();
+  clearTransitionTimers();
+  if (resizeTimer) window.clearTimeout(resizeTimer);
 });
 </script>
 

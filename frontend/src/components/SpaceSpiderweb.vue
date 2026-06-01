@@ -9,8 +9,9 @@ const props = defineProps<{
 
 const containerRef = ref<HTMLElement | null>(null);
 
-let animationFrameId: number;
+let animationFrameId: number | null = null;
 let renderer: THREE.WebGLRenderer;
+let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
 let coreGeometry: THREE.BufferGeometry;
 let coreMaterial: THREE.ShaderMaterial;
@@ -19,12 +20,16 @@ let innerMaterial: THREE.ShaderMaterial;
 let innerMesh: THREE.Mesh;
 let starsGeometry: THREE.BufferGeometry;
 let starsMaterial: THREE.ShaderMaterial;
+let particleSystem: THREE.Points;
+let outerTunnel: THREE.Mesh;
+let clock: THREE.Clock;
 let virtualScroll = 0; // The actual smooth scroll value
 let targetVirtualScroll = 0; // The target scroll value set by the wheel
 
 const blackHoleState = { strength: 0 };
 
 let isMouseListenerActive = false;
+let isRenderLoopRunning = false;
 
 const onMouseMove = (e: MouseEvent) => {
   if (!camera) return;
@@ -60,15 +65,82 @@ const updateMouseListener = (tab: string) => {
   }
 };
 
+const startRenderLoop = () => {
+  if (isRenderLoopRunning) return;
+  isRenderLoopRunning = true;
+  tick();
+};
+
+const stopRenderLoop = () => {
+  isRenderLoopRunning = false;
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+};
+
+let lastTime = 0;
+let blackHoleAngle = 0;
+const tick = () => {
+  if (!isRenderLoopRunning) return;
+  if (!clock || !renderer || !scene || !camera) {
+    animationFrameId = requestAnimationFrame(tick);
+    return;
+  }
+
+  const elapsedTime = clock.getElapsedTime();
+  const deltaTime = Math.min(elapsedTime - lastTime, 0.1); // Clamp deltaTime to prevent jumps on tab focus switch
+  lastTime = elapsedTime;
+
+  // Accumulate black hole rotation angle smoothly without time-dependent speed jump
+  if (blackHoleState.strength > 0) {
+    blackHoleAngle += deltaTime * blackHoleState.strength * 0.15;
+  }
+  
+  // Ambient forward flow: push the target forward slowly (slowed down for cinematic flow)
+  targetVirtualScroll += 0.12;
+  
+  // LERP (Linear Interpolation) for buttery smooth scroll / rewind
+  virtualScroll += (targetVirtualScroll - virtualScroll) * 0.05;
+  
+  // Update Shader Uniforms
+  starsMaterial.uniforms.time.value = elapsedTime;
+  starsMaterial.uniforms.scrollZ.value = virtualScroll;
+  starsMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
+  starsMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
+  
+  coreMaterial.uniforms.time.value = elapsedTime;
+  coreMaterial.uniforms.scrollZ.value = virtualScroll;
+  coreMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
+  coreMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
+  
+  innerMaterial.uniforms.time.value = elapsedTime;
+  innerMaterial.uniforms.scrollZ.value = virtualScroll;
+  innerMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
+  innerMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
+
+  // Slowly rotate layers independently for depth (slowed down for premium feel)
+  particleSystem.rotation.z = elapsedTime * 0.012;
+  innerMesh.rotation.y = elapsedTime * 0.008;
+  innerMesh.rotation.x = Math.sin(elapsedTime * 0.08) * 0.04;
+
+  renderer.render(scene, camera);
+  animationFrameId = requestAnimationFrame(tick);
+};
+
 watch(() => props.activeTab, (newTab) => {
   updateMouseListener(newTab);
   if (newTab === 'schema') {
+    stopRenderLoop();
     gsap.to(blackHoleState, {
       strength: 1.0,
       duration: 2.0,
       ease: 'power2.out'
     });
   } else {
+    if (renderer) {
+      startRenderLoop();
+    }
     gsap.to(blackHoleState, {
       strength: 0.0,
       duration: 1.5,
@@ -81,7 +153,7 @@ onMounted(() => {
   if (!containerRef.value) return;
 
   // 1. Scene Setup
-  const scene = new THREE.Scene();
+  scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x000000, 0.0015);
 
   // 2. Camera Setup
@@ -213,7 +285,7 @@ onMounted(() => {
     transparent: true,
   });
 
-  const particleSystem = new THREE.Points(starsGeometry, starsMaterial);
+  particleSystem = new THREE.Points(starsGeometry, starsMaterial);
   scene.add(particleSystem);
 
 
@@ -331,7 +403,7 @@ onMounted(() => {
     extensions: { derivatives: true }
   });
 
-  const outerTunnel = new THREE.Mesh(coreGeometry, coreMaterial);
+  outerTunnel = new THREE.Mesh(coreGeometry, coreMaterial);
   scene.add(outerTunnel);
 
   // Secondary layer: Dodecahedron (pentagonal faces - smaller inner structure)
@@ -367,53 +439,11 @@ onMounted(() => {
   // 7. Mouse Tracking is now managed dynamically in the top-level script scope
 
   // 8. The Render Loop
-  const clock = new THREE.Clock();
-  let lastTime = 0;
-  let blackHoleAngle = 0;
+  clock = new THREE.Clock();
   
-  const tick = () => {
-    const elapsedTime = clock.getElapsedTime();
-    const deltaTime = Math.min(elapsedTime - lastTime, 0.1); // Clamp deltaTime to prevent jumps on tab focus switch
-    lastTime = elapsedTime;
-
-    // Accumulate black hole rotation angle smoothly without time-dependent speed jump
-    if (blackHoleState.strength > 0) {
-      blackHoleAngle += deltaTime * blackHoleState.strength * 0.15;
-    }
-    
-    // Ambient forward flow: push the target forward slowly (slowed down for cinematic flow)
-    targetVirtualScroll += 0.12;
-    
-    // LERP (Linear Interpolation) for buttery smooth scroll / rewind
-    // This removes the "frame by frame" choppy mouse wheel feel
-    virtualScroll += (targetVirtualScroll - virtualScroll) * 0.05;
-    
-    // Update Shader Uniforms
-    starsMaterial.uniforms.time.value = elapsedTime;
-    starsMaterial.uniforms.scrollZ.value = virtualScroll;
-    starsMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
-    starsMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
-    
-    coreMaterial.uniforms.time.value = elapsedTime;
-    coreMaterial.uniforms.scrollZ.value = virtualScroll;
-    coreMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
-    coreMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
-    
-    innerMaterial.uniforms.time.value = elapsedTime;
-    innerMaterial.uniforms.scrollZ.value = virtualScroll;
-    innerMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
-    innerMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
-
-    // Slowly rotate layers independently for depth (slowed down for premium feel)
-    particleSystem.rotation.z = elapsedTime * 0.012;
-    innerMesh.rotation.y = elapsedTime * 0.008;
-    innerMesh.rotation.x = Math.sin(elapsedTime * 0.08) * 0.04;
-
-    renderer.render(scene, camera);
-    animationFrameId = requestAnimationFrame(tick);
-  };
-  
-  tick();
+  if (props.activeTab !== 'schema') {
+    startRenderLoop();
+  }
 
   // 9. Resize Handling
   const onResize = () => {
@@ -430,7 +460,7 @@ onMounted(() => {
       window.removeEventListener('mousemove', onMouseMove);
     }
     window.removeEventListener('wheel', onWheel);
-    cancelAnimationFrame(animationFrameId);
+    stopRenderLoop();
     starsGeometry.dispose();
     starsMaterial.dispose();
     coreGeometry.dispose();
