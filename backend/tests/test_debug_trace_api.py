@@ -203,3 +203,39 @@ def test_debug_trace_api_combines_filters_with_and_semantics(test_client, mock_s
     
     assert data["filters"]["error_type"] == "e1"
     assert data["filters"]["job_id"] == "j1"
+
+def test_debug_traces_api_sqlite_legacy_integration(tmp_path, test_client):
+    from app.trace.sqlite_store import SQLiteTraceStore
+    db_path = tmp_path / "traces.db"
+    sqlite_store = SQLiteTraceStore(str(db_path))
+
+    # Setup legacy trace
+    trace = NL2SQLTrace(
+        trace_id="legacy-sqlite-1",
+        raw_query="doktor listele",
+        selected_tables=["HST_DOKTOR"],
+        sql_valid=True,
+    )
+    sqlite_store.save_legacy(trace)
+
+    # Override store to use our SQLiteTraceStore
+    app.dependency_overrides[get_trace_store] = lambda: sqlite_store
+    try:
+        # 1. Test GET /api/debug/traces
+        response = test_client.get("/api/debug/traces", headers=auth_headers())
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 1
+        assert data["traces"][0]["trace_id"] == "legacy-sqlite-1"
+        assert data["traces"][0]["raw_query"] == "doktor listele"
+
+        # 2. Test GET /api/debug/traces/{trace_id}
+        response_single = test_client.get("/api/debug/traces/legacy-sqlite-1", headers=auth_headers())
+        assert response_single.status_code == 200
+        data_single = response_single.json()
+        assert data_single["trace_id"] == "legacy-sqlite-1"
+        assert data_single["raw_query"] == "doktor listele"
+        assert data_single["sql_valid"] is True
+    finally:
+        app.dependency_overrides.clear()
+        sqlite_store.close()

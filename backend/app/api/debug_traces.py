@@ -44,7 +44,10 @@ def list_traces(
         created_before=created_before,
     )
 
-    rows = store.list_traces(query)
+    if hasattr(store, "list_traces_legacy"):
+        rows = store.list_traces_legacy(query)
+    else:
+        rows = store.list_traces(query)
     has_more = len(rows) > limit
     traces = rows[:limit]
 
@@ -74,7 +77,10 @@ def get_trace(
     store: TraceStore = Depends(get_trace_store),
 ):
     ensure_debug_enabled()
-    trace = store.get(trace_id)
+    if hasattr(store, "get_legacy"):
+        trace = store.get_legacy(trace_id)
+    else:
+        trace = store.get(trace_id)
     if trace is None:
         raise HTTPException(status_code=404, detail="Trace not found")
 

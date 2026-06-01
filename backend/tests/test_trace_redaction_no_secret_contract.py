@@ -39,7 +39,7 @@ def test_guardrail_failure_does_not_expose_unsafe_sql_in_public_output(mock_prom
     mock_response.sql = "DROP TABLE users;"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -80,7 +80,7 @@ def test_llm_exception_secret_is_redacted_from_result_and_trace(mock_prompt):
         f"LLM failed with api_key={secret}"
     )
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -120,7 +120,7 @@ def test_api_key_argument_is_not_persisted_in_result_or_trace(mock_prompt):
         f"provider failed using credential {api_key}"
     )
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -157,7 +157,7 @@ def test_secret_like_natural_query_is_redacted_from_trace(mock_prompt):
     mock_response.sql = "SELECT id FROM users"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -199,7 +199,7 @@ def test_redaction_preserves_error_type_and_stage_metadata(mock_prompt):
         f"LLM failed with api_key={secret}"
     )
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -232,3 +232,4 @@ def test_redaction_preserves_error_type_and_stage_metadata(mock_prompt):
     assert attempt_err["type"] == "llm_api_error"
     assert attempt_err["stage"] == "llm_generation"
     assert attempt_err["message"]  # message exists but is sanitized
+

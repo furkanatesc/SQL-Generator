@@ -1,5 +1,9 @@
-from app.trace.models import NL2SQLTrace
+import pytest
+import sqlite3
+import json
+from app.trace.models import NL2SQLTrace, DuplicateTraceError
 from app.trace.sqlite_store import SQLiteTraceStore
+from app.trace.query import TraceQuery
 
 
 def test_sqlite_trace_store_save_and_get(tmp_path):
@@ -16,9 +20,9 @@ def test_sqlite_trace_store_save_and_get(tmp_path):
         metadata={"env": "test"},
     )
 
-    store.save(trace)
+    store.save_legacy(trace)
 
-    loaded = store.get(trace.trace_id)
+    loaded = store.get_legacy(trace.trace_id)
 
     assert loaded is not None
     assert loaded.trace_id == trace.trace_id
@@ -32,7 +36,7 @@ def test_sqlite_trace_store_save_and_get(tmp_path):
 
 def test_sqlite_trace_store_get_nonexistent_returns_none(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
-    assert store.get("missing") is None
+    assert store.get_legacy("missing") is None
 
 def test_sqlite_trace_store_list_recent(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
@@ -40,31 +44,27 @@ def test_sqlite_trace_store_list_recent(tmp_path):
     old = NL2SQLTrace(raw_query="old", created_at="2026-01-01T00:00:00+00:00")
     new = NL2SQLTrace(raw_query="new", created_at="2026-01-02T00:00:00+00:00")
 
-    store.save(old)
-    store.save(new)
+    store.save_legacy(old)
+    store.save_legacy(new)
 
-    recent = store.list_recent(limit=1)
+    recent = store.list_traces_legacy(TraceQuery(limit=1))
 
     assert len(recent) == 1
     assert recent[0].raw_query == "new"
 
-def test_sqlite_trace_store_save_replaces_existing_trace(tmp_path):
+def test_sqlite_trace_store_save_legacy_duplicate_raises_error(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
 
-    trace = NL2SQLTrace(
-        trace_id="trace-1",
-        raw_query="first",
-    )
-    store.save(trace)
+    trace1 = NL2SQLTrace(trace_id="trace-1", raw_query="first")
+    trace2 = NL2SQLTrace(trace_id="trace-1", raw_query="second")
+    store.save_legacy(trace1)
 
-    trace.raw_query = "updated"
-    trace.selected_tables = ["HST_DOKTOR"]
-    store.save(trace)
+    with pytest.raises(DuplicateTraceError):
+        store.save_legacy(trace2)
 
-    loaded = store.get("trace-1")
-
-    assert loaded.raw_query == "updated"
-    assert loaded.selected_tables == ["HST_DOKTOR"]
+    # Verify no silent overwrite occurred
+    loaded = store.get_legacy("trace-1")
+    assert loaded.raw_query == "first"
 
 def test_sqlite_trace_store_preserves_sql_valid_tristate(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
@@ -76,11 +76,11 @@ def test_sqlite_trace_store_preserves_sql_valid_tristate(tmp_path):
     ]
 
     for trace in traces:
-        store.save(trace)
+        store.save_legacy(trace)
 
-    assert store.get("none").sql_valid is None
-    assert store.get("true").sql_valid is True
-    assert store.get("false").sql_valid is False
+    assert store.get_legacy("none").sql_valid is None
+    assert store.get_legacy("true").sql_valid is True
+    assert store.get_legacy("false").sql_valid is False
 
 def test_sqlite_trace_store_round_trips_all_json_fields(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
@@ -103,8 +103,8 @@ def test_sqlite_trace_store_round_trips_all_json_fields(tmp_path):
         metadata={"env": "test"},
     )
 
-    store.save(trace)
-    loaded = store.get("trace-json")
+    store.save_legacy(trace)
+    loaded = store.get_legacy("trace-json")
 
     assert loaded.candidate_signals == trace.candidate_signals
     assert loaded.rag_matches == trace.rag_matches
@@ -122,20 +122,20 @@ def test_sqlite_trace_store_creates_parent_directory(tmp_path):
     db_path = tmp_path / "nested" / "trace" / "traces.db"
 
     store = SQLiteTraceStore(str(db_path))
-    store.save(NL2SQLTrace(trace_id="trace-1", raw_query="test"))
+    store.save_legacy(NL2SQLTrace(trace_id="trace-1", raw_query="test"))
 
     assert db_path.exists()
-    assert store.get("trace-1") is not None
+    assert store.get_legacy("trace-1") is not None
 
     store.close()
 
 def test_sqlite_trace_store_reconnects_after_close(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
 
-    store.save(NL2SQLTrace(trace_id="trace-1", raw_query="first"))
+    store.save_legacy(NL2SQLTrace(trace_id="trace-1", raw_query="first"))
     store.close()
 
-    loaded = store.get("trace-1")
+    loaded = store.get_legacy("trace-1")
 
     assert loaded is not None
     assert loaded.raw_query == "first"
@@ -143,8 +143,6 @@ def test_sqlite_trace_store_reconnects_after_close(tmp_path):
     store.close()
 
 def test_sqlite_trace_store_migrates_existing_trace_table(tmp_path):
-    import sqlite3
-
     db_path = tmp_path / "traces.db"
     with sqlite3.connect(db_path) as conn:
         conn.execute("""
@@ -177,75 +175,72 @@ def test_sqlite_trace_store_migrates_existing_trace_table(tmp_path):
         last_generated_sql="SELECT 1",
         attempts=[{"attempt": 1}],
     )
-    store.save(trace)
+    store.save_legacy(trace)
 
-    loaded = store.get("t1")
+    loaded = store.get_legacy("t1")
     assert loaded.last_generated_sql == "SELECT 1"
     assert loaded.attempts == [{"attempt": 1}]
 
-from app.trace.query import TraceQuery
-
 def test_sqlite_trace_store_filters_by_sql_valid(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
-    store.save(NL2SQLTrace(trace_id="t1", sql_valid=True))
-    store.save(NL2SQLTrace(trace_id="t2", sql_valid=False))
-    store.save(NL2SQLTrace(trace_id="t3", sql_valid=None))
+    store.save_legacy(NL2SQLTrace(trace_id="t1", sql_valid=True))
+    store.save_legacy(NL2SQLTrace(trace_id="t2", sql_valid=False))
+    store.save_legacy(NL2SQLTrace(trace_id="t3", sql_valid=None))
 
-    assert len(store.list_traces(TraceQuery(sql_valid=True))) == 1
-    assert store.list_traces(TraceQuery(sql_valid=True))[0].trace_id == "t1"
+    assert len(store.list_traces_legacy(TraceQuery(sql_valid=True))) == 1
+    assert store.list_traces_legacy(TraceQuery(sql_valid=True))[0].trace_id == "t1"
     
-    assert len(store.list_traces(TraceQuery(sql_valid=False))) == 1
-    assert store.list_traces(TraceQuery(sql_valid=False))[0].trace_id == "t2"
+    assert len(store.list_traces_legacy(TraceQuery(sql_valid=False))) == 1
+    assert store.list_traces_legacy(TraceQuery(sql_valid=False))[0].trace_id == "t2"
 
 def test_sqlite_trace_store_filters_by_error_type(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
-    store.save(NL2SQLTrace(trace_id="t1", error_type="type1"))
-    store.save(NL2SQLTrace(trace_id="t2", error_type="type2"))
+    store.save_legacy(NL2SQLTrace(trace_id="t1", error_type="type1"))
+    store.save_legacy(NL2SQLTrace(trace_id="t2", error_type="type2"))
 
-    res = store.list_traces(TraceQuery(error_type="type1"))
+    res = store.list_traces_legacy(TraceQuery(error_type="type1"))
     assert len(res) == 1
     assert res[0].trace_id == "t1"
 
 def test_sqlite_trace_store_filters_by_job_id(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
-    store.save(NL2SQLTrace(trace_id="t1", metadata={"job_id": "j1"}))
-    store.save(NL2SQLTrace(trace_id="t2", metadata={"job_id": "j2"}))
+    store.save_legacy(NL2SQLTrace(trace_id="t1", metadata={"job_id": "j1"}))
+    store.save_legacy(NL2SQLTrace(trace_id="t2", metadata={"job_id": "j2"}))
 
-    res = store.list_traces(TraceQuery(job_id="j1"))
+    res = store.list_traces_legacy(TraceQuery(job_id="j1"))
     assert len(res) == 1
     assert res[0].trace_id == "t1"
 
 def test_sqlite_trace_store_filters_by_dialect(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
-    store.save(NL2SQLTrace(trace_id="t1", metadata={"dialect": "postgres"}))
-    store.save(NL2SQLTrace(trace_id="t2", metadata={"dialect": "mysql"}))
+    store.save_legacy(NL2SQLTrace(trace_id="t1", metadata={"dialect": "postgres"}))
+    store.save_legacy(NL2SQLTrace(trace_id="t2", metadata={"dialect": "mysql"}))
 
-    res = store.list_traces(TraceQuery(dialect="postgres"))
+    res = store.list_traces_legacy(TraceQuery(dialect="postgres"))
     assert len(res) == 1
     assert res[0].trace_id == "t1"
 
 def test_sqlite_trace_store_applies_limit_and_offset(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
     for i in range(5):
-        store.save(NL2SQLTrace(trace_id=f"t{i}", created_at=f"2026-01-0{i+1}T00:00:00+00:00"))
+        store.save_legacy(NL2SQLTrace(trace_id=f"t{i}", created_at=f"2026-01-0{i+1}T00:00:00+00:00"))
 
-    res = store.list_traces(TraceQuery(limit=2, offset=1))
+    res = store.list_traces_legacy(TraceQuery(limit=2, offset=1))
     assert len(res) == 2
     assert res[0].trace_id == "t3"
     assert res[1].trace_id == "t2"
 
 def test_sqlite_trace_store_combines_filters_with_and_semantics(tmp_path):
     store = SQLiteTraceStore(str(tmp_path / "traces.db"))
-    store.save(NL2SQLTrace(trace_id="t1", sql_valid=False, error_type="e1"))
-    store.save(NL2SQLTrace(trace_id="t2", sql_valid=False, error_type="e2"))
-    store.save(NL2SQLTrace(trace_id="t3", sql_valid=True, error_type="e1"))
+    store.save_legacy(NL2SQLTrace(trace_id="t1", sql_valid=False, error_type="e1"))
+    store.save_legacy(NL2SQLTrace(trace_id="t2", sql_valid=False, error_type="e2"))
+    store.save_legacy(NL2SQLTrace(trace_id="t3", sql_valid=True, error_type="e1"))
 
-    res = store.list_traces(TraceQuery(sql_valid=False, error_type="e1"))
+    res = store.list_traces_legacy(TraceQuery(sql_valid=False, error_type="e1"))
     assert len(res) == 1
     assert res[0].trace_id == "t1"
 
 def test_sqlite_trace_store_adds_job_id_and_dialect_columns_to_existing_db(tmp_path):
-    import sqlite3
     db_path = tmp_path / "traces.db"
     
     with sqlite3.connect(db_path) as conn:
@@ -277,13 +272,13 @@ def test_sqlite_trace_store_adds_job_id_and_dialect_columns_to_existing_db(tmp_p
         trace_id="t1",
         metadata={"job_id": "job-1", "dialect": "psql"}
     )
-    store.save(trace)
+    store.save_legacy(trace)
     
-    loaded = store.get("t1")
+    loaded = store.get_legacy("t1")
     assert loaded.metadata.get("job_id") == "job-1"
     assert loaded.metadata.get("dialect") == "psql"
     
-    res = store.list_traces(TraceQuery(job_id="job-1"))
+    res = store.list_traces_legacy(TraceQuery(job_id="job-1"))
     assert len(res) == 1
     
     # Also verify the columns were actually added
@@ -293,9 +288,6 @@ def test_sqlite_trace_store_adds_job_id_and_dialect_columns_to_existing_db(tmp_p
         assert "dialect" in cols
 
 def test_sqlite_trace_store_backfills_job_id_and_dialect_from_existing_metadata(tmp_path):
-    import sqlite3
-    import json
-
     db_path = tmp_path / "traces.db"
 
     with sqlite3.connect(db_path) as conn:
@@ -336,10 +328,10 @@ def test_sqlite_trace_store_backfills_job_id_and_dialect_from_existing_metadata(
 
     store = SQLiteTraceStore(str(db_path))
 
-    by_job = store.list_traces(TraceQuery(job_id="old-job"))
+    by_job = store.list_traces_legacy(TraceQuery(job_id="old-job"))
     assert len(by_job) == 1
     assert by_job[0].trace_id == "old-trace"
 
-    by_dialect = store.list_traces(TraceQuery(dialect="postgres"))
+    by_dialect = store.list_traces_legacy(TraceQuery(dialect="postgres"))
     assert len(by_dialect) == 1
     assert by_dialect[0].trace_id == "old-trace"
