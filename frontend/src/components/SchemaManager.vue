@@ -63,14 +63,21 @@ let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
 const customRelations = ref<any[]>([]);
 const disabledRelations = ref<any[]>([]);
 
-// Tüm ilişkileri birleştiren computed property (Açık, Örtük, Özel ve Pasifler)
+// Tüm ilişkileri birleştiren computed property (Açık, Örtük, Özel ve Pasifler) - Optimize edilmiş O(N) lookup
 const allRelations = computed(() => {
   if (!schema.value) return [];
   const list: any[] = [];
   
   // 1. Aktif ilişkileri ekle (şemadaki edges)
   const activeEdges = schema.value.graph?.edges || [];
+  const activeKeys = new Set<string>();
+  
   activeEdges.forEach((edge: any) => {
+    const key1 = `${edge.source}:${edge.source_col}->${edge.target}:${edge.target_col}`;
+    const key2 = `${edge.target}:${edge.target_col}->${edge.source}:${edge.source_col}`;
+    activeKeys.add(key1);
+    activeKeys.add(key2);
+    
     list.push({
       source: edge.source,
       source_col: edge.source_col,
@@ -82,18 +89,22 @@ const allRelations = computed(() => {
   });
   
   // 2. Devre dışı bırakılmış ilişkileri ekle
+  const customKeys = new Set<string>();
+  customRelations.value.forEach((cr: any) => {
+    const key1 = `${cr.source}:${cr.source_col}->${cr.target}:${cr.target_col}`;
+    const key2 = `${cr.target}:${cr.target_col}->${cr.source}:${cr.source_col}`;
+    customKeys.add(key1);
+    customKeys.add(key2);
+  });
+
   disabledRelations.value.forEach((dr: any) => {
     if (!schema.value.tables[dr.source] || !schema.value.tables[dr.target]) return;
     
-    const exists = list.some(item => 
-      (item.source === dr.source && item.source_col === dr.source_col && item.target === dr.target && item.target_col === dr.target_col) ||
-      (item.source === dr.target && item.source_col === dr.target_col && item.target === dr.source && item.target_col === dr.source_col)
-    );
-    if (!exists) {
-      const isCustom = customRelations.value.some(cr =>
-        (cr.source === dr.source && cr.source_col === dr.source_col && cr.target === dr.target && cr.target_col === dr.target_col) ||
-        (cr.source === dr.target && cr.source_col === dr.target_col && cr.target === dr.source && cr.target_col === dr.source_col)
-      );
+    const key1 = `${dr.source}:${dr.source_col}->${dr.target}:${dr.target_col}`;
+    const key2 = `${dr.target}:${dr.target_col}->${dr.source}:${dr.source_col}`;
+    
+    if (!activeKeys.has(key1)) {
+      const isCustom = customKeys.has(key1);
       list.push({
         source: dr.source,
         source_col: dr.source_col,
@@ -102,10 +113,35 @@ const allRelations = computed(() => {
         type: isCustom ? 'custom' : 'implicit',
         disabled: true
       });
+      // Dublikasyonu önlemek için listeye eklenenleri işaretle
+      activeKeys.add(key1);
+      activeKeys.add(key2);
     }
   });
   
   return list;
+});
+
+// Performans optimizasyonu: Tablolara gelen ilişkileri (FK) önceden eşleyen computed map - O(1) arama sağlar
+const incomingRelationsMap = computed(() => {
+  const map: Record<string, any[]> = {};
+  if (!schema.value || !schema.value.tables) return map;
+  
+  for (const [sourceTable, meta] of Object.entries(schema.value.tables)) {
+    const fks = (meta as any).foreign_keys || [];
+    for (const fk of fks) {
+      const refTbl = fk.referenced_table;
+      if (!map[refTbl]) {
+        map[refTbl] = [];
+      }
+      map[refTbl].push({
+        source_table: sourceTable,
+        source_column: fk.column,
+        target_column: fk.referenced_column
+      });
+    }
+  }
+  return map;
 });
 
 const visibleTables = computed(() => {
@@ -311,22 +347,7 @@ const toggleTable = (tableName: string) => {
 };
 
 const getIncomingRelations = (targetTableName: string) => {
-  if (!schema.value || !schema.value.tables) return [];
-  const incoming = [];
-  for (const [sourceTable, meta] of Object.entries(schema.value.tables)) {
-    if ((meta as any).foreign_keys) {
-      for (const fk of (meta as any).foreign_keys) {
-        if (fk.referenced_table === targetTableName) {
-          incoming.push({
-            source_table: sourceTable,
-            source_column: fk.column,
-            target_column: fk.referenced_column
-          });
-        }
-      }
-    }
-  }
-  return incoming;
+  return incomingRelationsMap.value[targetTableName] || [];
 };
 
 // D3.js Şema Grafik Çizimi
@@ -1385,8 +1406,8 @@ onUnmounted(() => {
 
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <!-- Sol Kolon: Sanal Bağlantı Ekleme Formu -->
-        <div class="lg:col-span-4 space-y-4">
-          <div class="bg-zinc-950/60 border border-zinc-850 p-4 rounded-xl space-y-4">
+        <div class="lg:col-span-4 flex flex-col h-full">
+          <div class="bg-zinc-950/60 border border-zinc-850 p-4 rounded-xl space-y-4 flex-1 flex flex-col justify-start h-full max-h-full min-h-0">
             <h4 class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Yeni Sanal İlişki Ekle</h4>
             
             <div class="space-y-3">
