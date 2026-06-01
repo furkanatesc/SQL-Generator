@@ -24,6 +24,7 @@ let targetVirtualScroll = 0; // The target scroll value set by the wheel
 const blackHoleState = { strength: 0 };
 
 watch(() => props.activeTab, (newTab) => {
+  updateMouseListener(newTab);
   if (newTab === 'schema') {
     gsap.to(blackHoleState, {
       strength: 1.0,
@@ -327,10 +328,9 @@ onMounted(() => {
   window.addEventListener('wheel', onWheel, { passive: true });
 
   // 7. Mouse Tracking via GSAP
+  let isMouseListenerActive = false;
+  
   const onMouseMove = (e: MouseEvent) => {
-    // Şema sayfasındaki işlemci yükünü sıfırlamak için mouse-tilt hareketini bu sekmede pasifleştir
-    if (props.activeTab === 'schema') return;
-    
     const mouseX = (e.clientX / window.innerWidth) * 2 - 1;
     const mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
     
@@ -348,7 +348,20 @@ onMounted(() => {
       ease: "power2.out"
     });
   };
-  window.addEventListener('mousemove', onMouseMove);
+
+  const updateMouseListener = (tab: string) => {
+    if (tab === 'schema') {
+      if (isMouseListenerActive) {
+        window.removeEventListener('mousemove', onMouseMove);
+        isMouseListenerActive = false;
+      }
+    } else {
+      if (!isMouseListenerActive) {
+        window.addEventListener('mousemove', onMouseMove);
+        isMouseListenerActive = true;
+      }
+    }
+  };
 
   // 8. The Render Loop
   const clock = new THREE.Clock();
@@ -410,7 +423,9 @@ onMounted(() => {
   // 10. Cleanup
   onUnmounted(() => {
     window.removeEventListener('resize', onResize);
-    window.removeEventListener('mousemove', onMouseMove);
+    if (isMouseListenerActive) {
+      window.removeEventListener('mousemove', onMouseMove);
+    }
     window.removeEventListener('wheel', onWheel);
     cancelAnimationFrame(animationFrameId);
     starsGeometry.dispose();

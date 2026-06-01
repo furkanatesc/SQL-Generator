@@ -1129,7 +1129,7 @@ onUnmounted(() => {
   </div>
 
   <!-- Active DB Connection Info Card -->
-    <div class="relative z-20 bg-zinc-950/70 rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div class="relative z-20 bg-zinc-950 rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
         <div class="w-12 h-12 rounded-xl bg-zinc-950 border border-zinc-850 flex items-center justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1174,7 +1174,7 @@ onUnmounted(() => {
         isHidingElements ? 'transform translate-x-[120%] opacity-0' : 'transform translate-x-0 opacity-100',
         isGraphExpanded ? 'w-0 h-0 overflow-hidden opacity-0 m-0' : 'w-full lg:w-[41.666667%] space-y-4'
       ]">
-        <div class="bg-zinc-950/70 rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 min-h-[400px] flex flex-col justify-start">
+        <div class="bg-zinc-950 rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 min-h-[400px] flex flex-col justify-start">
           <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4 text-left">Şema Tabloları</h3>
 
           <div v-if="loading && !schema" class="flex-1 flex flex-col items-center justify-center space-y-2">
@@ -1356,7 +1356,7 @@ onUnmounted(() => {
         isGraphExpanded ? 'w-full' : ''
       ]">
         <div :class="[
-          'bg-zinc-950/70 rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col justify-between relative overflow-hidden w-full',
+          'bg-zinc-950 rounded-2xl border border-white/10 shadow-lg shadow-black/30 p-5 flex flex-col justify-between relative overflow-hidden w-full',
           isTransitioning ? 'transition-[height,opacity] duration-700 ease-in-out' : '',
           isGraphExpanded ? 'h-[calc(100vh-4rem)]' : 'min-h-[460px] h-[600px]'
         ]">
@@ -1383,7 +1383,7 @@ onUnmounted(() => {
           </div>
 
           <!-- D3.js Live Graph View -->
-          <div class="flex-1 bg-zinc-950/80 border border-zinc-850 rounded-xl relative overflow-hidden min-h-[360px] shadow-inner flex items-center justify-center live-graph-container">
+          <div class="flex-1 bg-zinc-950 border border-zinc-850 rounded-xl relative overflow-hidden min-h-[360px] shadow-inner flex items-center justify-center live-graph-container">
             <div class="absolute inset-0 bg-radial-gradient pointer-events-none"></div>
             
             <svg 
@@ -1437,7 +1437,7 @@ onUnmounted(() => {
     </div>
     <!-- Sanal İlişki ve Bağlantı Editörü (Virtual Relationship Manager) -->
     <div :class="[
-      'bg-zinc-950/70 border border-white/10 shadow-black/30 text-left overflow-hidden',
+      'bg-zinc-950 border border-white/10 shadow-black/30 text-left overflow-hidden',
       isTransitioning ? 'transition-[max-height,transform,opacity,padding,margin] duration-700 ease-in-out' : '',
       isHidingElements ? 'transform translate-x-[120%] opacity-0' : 'transform translate-x-0 opacity-100',
       isGraphExpanded ? 'max-h-0 p-0 border-0 mt-0 shadow-none space-y-0' : 'max-h-[1500px] p-6 border shadow-lg mt-6 space-y-6'
