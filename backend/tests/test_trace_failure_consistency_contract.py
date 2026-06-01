@@ -16,7 +16,7 @@ def trace_get(trace, field, default=None):
 
 # 1. Input failure trace consistency
 def test_input_failure_trace_consistency():
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(trace_store=trace_store)
 
     result = pipeline.run_pipeline(
@@ -45,7 +45,7 @@ def test_llm_exception_failure_trace_consistency(mock_prompt):
     mock_llm_provider = MagicMock()
     mock_llm_provider.generate_sql.side_effect = Exception("API Failed")
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -96,7 +96,7 @@ def test_guardrail_failure_trace_consistency(mock_prompt):
     mock_response.sql = "DROP TABLE users;"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -144,7 +144,7 @@ def test_semantic_validation_failure_trace_consistency(mock_prompt):
     mock_response.sql = "SELECT invalid_col FROM users"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -199,7 +199,7 @@ def test_syntax_parse_failure_trace_consistency(mock_prompt):
     mock_response.sql = "SELECT * FROM"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -234,3 +234,4 @@ def test_syntax_parse_failure_trace_consistency(mock_prompt):
     trace_err = val_errors[0]
     assert trace_err["type"] == attempt_err["type"]
     assert trace_err["stage"] == attempt_err["stage"]
+

@@ -20,7 +20,7 @@ def build_success_pipeline_result():
     mock_response.sql = "SELECT id FROM users"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -152,3 +152,4 @@ def test_success_generated_sql_is_formatted_consistently(mock_prompt):
     trace = get_saved_trace(trace_store)
     assert trace_get(trace, "generated_sql") == generated_sql
     assert trace_get(trace, "last_generated_sql") == generated_sql
+

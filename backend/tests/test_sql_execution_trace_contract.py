@@ -106,7 +106,7 @@ def test_unsafe_sql_not_exposed_in_public_response_but_stage_is_traceable(mock_g
     mock_response.sql = "DELETE FROM users WHERE id = 1;"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -156,7 +156,7 @@ def test_no_raw_exception_stack_trace_leakage_in_public_response(mock_prompt):
     mock_llm_provider = MagicMock()
     mock_llm_provider.generate_sql.side_effect = Exception("Critical internal server database socket crashed!")
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -175,3 +175,4 @@ def test_no_raw_exception_stack_trace_leakage_in_public_response(mock_prompt):
     assert "error" in result
     assert "crashed!" not in result["error"]
     assert "SQL üretimi başarısız oldu" in result["error"]
+

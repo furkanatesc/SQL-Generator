@@ -18,6 +18,7 @@ from app.sql_guardrail import SQLGuardrailValidator
 from app.sql_safety import SqlSafetyValidator
 from app.trace.builders import build_trace_from_pruned_schema
 from app.trace.store import TraceStore
+from app.trace.models import NL2SQLTrace
 from app.schema_graph import TraversalPolicy
 
 import time
@@ -154,15 +155,7 @@ class SQLGenerationPipeline:
         if not self.trace_store:
             return
         try:
-            # If the store is a mock (common in unit tests), call save directly to satisfy mock assertions
-            is_mock = False
-            try:
-                from unittest.mock import Mock
-                is_mock = isinstance(self.trace_store, Mock)
-            except ImportError:
-                pass
-
-            if not is_mock and hasattr(self.trace_store, "save_legacy") and hasattr(trace, "candidate_signals"):
+            if isinstance(trace, NL2SQLTrace) and hasattr(self.trace_store, "save_legacy"):
                 self.trace_store.save_legacy(trace)
             else:
                 self.trace_store.save(trace)

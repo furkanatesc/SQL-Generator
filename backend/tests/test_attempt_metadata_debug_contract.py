@@ -22,7 +22,7 @@ def test_success_attempt_metadata_is_complete_and_consistent(mock_prompt):
     mock_response.sql = "SELECT id FROM users"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -66,7 +66,7 @@ def test_llm_exception_attempt_metadata_is_complete_and_consistent(mock_prompt):
     mock_llm_provider = MagicMock()
     mock_llm_provider.generate_sql.side_effect = Exception("API Failed")
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -109,7 +109,7 @@ def test_guardrail_failure_attempt_metadata_preserves_rejected_sql(mock_prompt):
     mock_response.sql = "DROP TABLE users;"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -154,7 +154,7 @@ def test_semantic_failure_attempt_metadata_carries_generated_sql_and_semantic_er
     mock_response.sql = "SELECT invalid_col FROM users"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -205,7 +205,7 @@ def test_syntax_parse_failure_attempt_metadata_carries_generated_sql_and_parse_e
     mock_response.sql = "SELECT * FROM"
     mock_llm_provider.generate_sql.return_value = mock_response
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -256,7 +256,7 @@ def test_retry_corrector_attempt_numbering_and_action_consistency(mock_writer_pr
         mock_response_2,
     ]
 
-    trace_store = MagicMock()
+    trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider,
@@ -301,3 +301,4 @@ def test_retry_corrector_attempt_numbering_and_action_consistency(mock_writer_pr
     # Trace attempts must exactly match result attempts
     trace = get_saved_trace(trace_store)
     assert trace_get(trace, "attempts") == result["attempts"]
+
