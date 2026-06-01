@@ -1923,7 +1923,7 @@ onUnmounted(() => {
 /* Live Graph View Container custom styling */
 .live-graph-container {
   box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(99, 102, 241, 0.05);
-  transition: border-color 0.3s, box-shadow 0.3s;
+  transition: border-color 0.3s;
 }
 
 .live-graph-container:hover {
