@@ -328,6 +328,9 @@ onMounted(() => {
 
   // 7. Mouse Tracking via GSAP
   const onMouseMove = (e: MouseEvent) => {
+    // Şema sayfasındaki işlemci yükünü sıfırlamak için mouse-tilt hareketini bu sekmede pasifleştir
+    if (props.activeTab === 'schema') return;
+    
     const mouseX = (e.clientX / window.innerWidth) * 2 - 1;
     const mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
     
