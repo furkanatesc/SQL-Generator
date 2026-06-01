@@ -182,6 +182,30 @@ const newTargetColumn = ref('');
 const sourceColumns = ref<any[]>([]);
 const targetColumns = ref<any[]>([]);
 
+// Performans için arama tabanlı filtreleme parametreleri
+const sourceTableSearch = ref('');
+const targetTableSearch = ref('');
+
+const searchFilteredSourceTables = computed(() => {
+  if (!schema.value || !schema.value.tables) return [];
+  const allNames = Object.keys(schema.value.tables);
+  if (!sourceTableSearch.value) {
+    return allNames.slice(0, 100); // 2000 tabloda tarayıcı kasmasını önlemek için varsayılan 100 node limiti
+  }
+  const query = sourceTableSearch.value.toLowerCase();
+  return allNames.filter(name => name.toLowerCase().includes(query)).slice(0, 100);
+});
+
+const searchFilteredTargetTables = computed(() => {
+  if (!schema.value || !schema.value.tables) return [];
+  const allNames = Object.keys(schema.value.tables);
+  if (!targetTableSearch.value) {
+    return allNames.slice(0, 100); // 2000 tabloda tarayıcı kasmasını önlemek için varsayılan 100 node limiti
+  }
+  const query = targetTableSearch.value.toLowerCase();
+  return allNames.filter(name => name.toLowerCase().includes(query)).slice(0, 100);
+});
+
 watch(newSourceTable, (newVal) => {
   if (schema.value && schema.value.tables[newVal]) {
     sourceColumns.value = schema.value.tables[newVal].columns;
@@ -1418,14 +1442,22 @@ onUnmounted(() => {
             <div class="space-y-3">
               <!-- Kaynak Tablo -->
               <div class="space-y-1">
-                <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Kaynak Tablo</label>
+                <div class="flex items-center justify-between">
+                  <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Kaynak Tablo</label>
+                  <input 
+                    v-model="sourceTableSearch"
+                    type="text"
+                    placeholder="Tablo ara..."
+                    class="w-24 h-4 bg-zinc-950/80 border border-zinc-850 rounded text-[9px] px-1.5 text-zinc-300 focus:outline-none focus:border-indigo-500 font-mono"
+                  />
+                </div>
                 <select 
                   v-model="newSourceTable"
                   class="w-full h-9 px-3 bg-zinc-900 border border-zinc-800 focus:border-indigo-500/80 focus:ring-1 focus:ring-indigo-500/20 text-zinc-200 text-xs rounded-lg outline-none font-mono transition-colors"
                 >
                   <option value="" disabled selected>Tablo Seçin</option>
                   <option 
-                    v-for="(_, name) in schema?.tables" 
+                    v-for="name in searchFilteredSourceTables" 
                     :key="'src_tbl_' + name" 
                     :value="name"
                   >
@@ -1464,14 +1496,22 @@ onUnmounted(() => {
 
               <!-- Hedef Tablo -->
               <div class="space-y-1">
-                <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Hedef Tablo</label>
+                <div class="flex items-center justify-between">
+                  <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Hedef Tablo</label>
+                  <input 
+                    v-model="targetTableSearch"
+                    type="text"
+                    placeholder="Tablo ara..."
+                    class="w-24 h-4 bg-zinc-950/80 border border-zinc-850 rounded text-[9px] px-1.5 text-zinc-300 focus:outline-none focus:border-indigo-500 font-mono"
+                  />
+                </div>
                 <select 
                   v-model="newTargetTable"
                   class="w-full h-9 px-3 bg-zinc-900 border border-zinc-800 focus:border-indigo-500/80 focus:ring-1 focus:ring-indigo-500/20 text-zinc-200 text-xs rounded-lg outline-none font-mono transition-colors"
                 >
                   <option value="" disabled selected>Tablo Seçin</option>
                   <option 
-                    v-for="(_, name) in schema?.tables" 
+                    v-for="name in searchFilteredTargetTables" 
                     :key="'tgt_tbl_' + name" 
                     :value="name"
                   >
