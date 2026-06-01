@@ -156,7 +156,7 @@ onUnmounted(() => {
       <div 
         id="main-content-wrapper" 
         :style="{ transform: `translateY(${resistanceY}px)` }"
-        class="relative z-10 bg-transparent pb-52 min-h-screen border-b border-zinc-900/60 shadow-2xl overflow-hidden transition-transform duration-75 ease-out"
+        class="relative z-10 bg-transparent pb-52 min-h-screen border-b border-zinc-900/60 shadow-2xl overflow-hidden"
       >
         
         <div class="max-w-6xl mx-auto space-y-6 relative z-10 p-8">
