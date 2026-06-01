@@ -6,6 +6,7 @@ from app.auth import verify_api_key
 from app.trace.dependencies import get_trace_store
 from app.trace.store import TraceStore
 from app.trace.query import TraceQuery
+from app.trace.debug_api import DebugTraceAdapter
 
 router = APIRouter(
     prefix="/api/debug/traces",
@@ -23,12 +24,14 @@ def ensure_debug_enabled():
 def list_traces(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    sql_valid: Optional[bool] = Query(default=None),
-    error_type: Optional[str] = Query(default=None),
+    trace_type: Optional[str] = Query(default=None),
+    request_id: Optional[str] = Query(default=None),
     job_id: Optional[str] = Query(default=None),
     dialect: Optional[str] = Query(default=None),
     created_after: Optional[str] = Query(default=None),
     created_before: Optional[str] = Query(default=None),
+    sql_valid: Optional[bool] = Query(default=None),
+    error_type: Optional[str] = Query(default=None),
     store: TraceStore = Depends(get_trace_store),
 ):
     ensure_debug_enabled()
@@ -36,18 +39,19 @@ def list_traces(
     query = TraceQuery(
         limit=limit + 1,
         offset=offset,
-        sql_valid=sql_valid,
-        error_type=error_type,
+        trace_type=trace_type,
+        request_id=request_id,
         job_id=job_id,
         dialect=dialect,
         created_after=created_after,
         created_before=created_before,
+        sql_valid=sql_valid,
+        error_type=error_type,
     )
 
-    if hasattr(store, "list_traces_legacy"):
-        rows = store.list_traces_legacy(query)
-    else:
-        rows = store.list_traces(query)
+    adapter = DebugTraceAdapter(store)
+    rows = adapter.list_traces(query)
+    
     has_more = len(rows) > limit
     traces = rows[:limit]
 
@@ -60,14 +64,16 @@ def list_traces(
             "has_more": has_more,
         },
         "filters": {
-            "sql_valid": sql_valid,
-            "error_type": error_type,
+            "trace_type": trace_type,
+            "request_id": request_id,
             "job_id": job_id,
             "dialect": dialect,
             "created_after": created_after,
             "created_before": created_before,
+            "sql_valid": sql_valid,
+            "error_type": error_type,
         },
-        "traces": [trace.__dict__ for trace in traces],
+        "traces": traces,
     }
 
 
@@ -77,11 +83,9 @@ def get_trace(
     store: TraceStore = Depends(get_trace_store),
 ):
     ensure_debug_enabled()
-    if hasattr(store, "get_legacy"):
-        trace = store.get_legacy(trace_id)
-    else:
-        trace = store.get(trace_id)
-    if trace is None:
+    adapter = DebugTraceAdapter(store)
+    trace_dict = adapter.get_trace(trace_id)
+    if trace_dict is None:
         raise HTTPException(status_code=404, detail="Trace not found")
 
-    return trace.__dict__
+    return trace_dict
