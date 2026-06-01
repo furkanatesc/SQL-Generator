@@ -1406,8 +1406,8 @@ onUnmounted(() => {
 
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <!-- Sol Kolon: Sanal Bağlantı Ekleme Formu -->
-        <div class="lg:col-span-4 flex flex-col h-full">
-          <div class="bg-zinc-950/60 border border-zinc-850 p-4 rounded-xl space-y-4 flex-1 flex flex-col justify-start h-full max-h-full min-h-0">
+        <div class="lg:col-span-4 flex flex-col">
+          <div class="bg-zinc-950/60 border border-zinc-850 p-4 rounded-xl space-y-4 flex flex-col justify-start h-[520px] min-h-0 overflow-y-auto">
             <h4 class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Yeni Sanal İlişki Ekle</h4>
             
             <div class="space-y-3">
@@ -1510,8 +1510,8 @@ onUnmounted(() => {
         </div>
 
         <!-- Sağ Kolon: Mevcut Tüm İlişkilerin Yönetim Listesi -->
-        <div class="lg:col-span-8 flex flex-col h-full">
-          <div class="bg-zinc-950/60 border border-zinc-850 p-4 rounded-xl flex-1 flex flex-col justify-start h-full max-h-full min-h-0">
+        <div class="lg:col-span-8 flex flex-col">
+          <div class="bg-zinc-950/60 border border-zinc-850 p-4 rounded-xl flex flex-col justify-start h-[520px] min-h-0">
             <h4 class="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-4 shrink-0">Aktif ve Pasif Tüm İlişkiler</h4>
             
             <div v-if="allRelations.length === 0" class="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-2">
@@ -1521,7 +1521,7 @@ onUnmounted(() => {
               <p class="text-xs text-zinc-500">Herhangi bir tablo ilişkisi tespit edilemedi veya eklenmedi.</p>
             </div>
 
-            <div v-else class="flex flex-col flex-1 min-h-0">
+            <div v-else class="flex flex-col flex-1 min-h-0 overflow-hidden">
               <div class="overflow-y-auto pr-1 space-y-2.5 pb-4 flex-1">
                 <div 
                   v-for="rel in visibleRelations" 
