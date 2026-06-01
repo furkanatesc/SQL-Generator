@@ -693,6 +693,11 @@ const initGraph = () => {
 
   svg.call(zoomBehavior);
 
+  // Engelle: Mouse SVG üzerindeyken scroll yapıldığında sayfanın da beraberinde kaymasını ve titremesini önle
+  svg.on('wheel', (event) => {
+    event.stopPropagation();
+  });
+
   // Fizik Motoru Kurulumu - Accretion radial forces keep nodes centered perfectly
   simulation = d3.forceSimulation<NodeItem>(nodesData)
     .force('link', d3.forceLink<NodeItem, LinkItem>(linksData).id((d: any) => d.id).distance(120).strength(0.2))
