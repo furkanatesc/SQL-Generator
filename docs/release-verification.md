@@ -13,15 +13,11 @@ Verify that all backend unit, integration, and contract tests pass successfully.
 cd backend
 
 # Run pytest in quiet mode
-./venv/Scripts/pytest -q
+python -m pytest -q
 ```
 
 ### Expected Output
-The test run should complete successfully with all tests passing (except explicitly skipped optional tests):
-```text
-................................................................. [100%]
-657 passed, 1 skipped in 7.82s
-```
+All required tests pass. Optional skipped tests are acceptable only when explicitly documented.
 
 ---
 
@@ -101,7 +97,7 @@ The response must return a `200 OK` status and a valid JSON structure confirming
 Ensure that:
 - `api_key_configured` is `true`.
 - `startup_critical_warnings_count` is `0`.
-- Raw secret values are **not** exposed in the output.
+- Raw secrets not exposed in the output.
 
 ---
 
