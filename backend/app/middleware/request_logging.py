@@ -8,6 +8,21 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger("app.request_logging")
 
+def get_sanitized_path(request: Request) -> str:
+    path = request.url.path
+    query = request.url.query
+    if not query:
+        return path
+    parsed_query = parse_qsl(query, keep_blank_values=True)
+    sanitized_query = []
+    for k, v in parsed_query:
+        # Mask sensitive key values
+        if k.lower() in ("api_key", "apikey", "token", "secret", "password", "x-api-key"):
+            sanitized_query.append((k, "******"))
+        else:
+            sanitized_query.append((k, v))
+    return f"{path}?{urlencode(sanitized_query, safe='*')}"
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # 1. Retrieve or generate Request ID (case-insensitive for header)
@@ -19,19 +34,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         start_time = time.perf_counter()
         
         # 2. Extract and sanitize path/query parameters
-        path = request.url.path
-        query = request.url.query
-        sanitized_path = path
-        if query:
-            parsed_query = parse_qsl(query, keep_blank_values=True)
-            sanitized_query = []
-            for k, v in parsed_query:
-                # Mask sensitive key values
-                if k.lower() in ("api_key", "apikey", "token", "secret", "password", "x-api-key"):
-                    sanitized_query.append((k, "******"))
-                else:
-                    sanitized_query.append((k, v))
-            sanitized_path = f"{path}?{urlencode(sanitized_query, safe='*')}"
+        sanitized_path = get_sanitized_path(request)
         
         status_code = 500
         try:
