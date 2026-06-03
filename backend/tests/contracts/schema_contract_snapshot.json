@@ -1,0 +1,280 @@
+{
+  "Body_upload_excel_file_api_files_upload_post": {
+    "required": [
+      "file"
+    ],
+    "properties": [
+      "file",
+      "natural_query"
+    ]
+  },
+  "BusinessRuleIndexRequest": {
+    "required": [
+      "rule_id",
+      "rule_text",
+      "sql_mapping"
+    ],
+    "properties": [
+      "rule_id",
+      "rule_text",
+      "sql_mapping"
+    ]
+  },
+  "CancelJobResponse": {
+    "required": [
+      "job",
+      "message",
+      "status"
+    ],
+    "properties": [
+      "job",
+      "message",
+      "status"
+    ]
+  },
+  "ConfigResponse": {
+    "required": [
+      "key",
+      "value"
+    ],
+    "properties": [
+      "key",
+      "value"
+    ]
+  },
+  "ConfigUpdateRequest": {
+    "required": [
+      "value"
+    ],
+    "properties": [
+      "value"
+    ]
+  },
+  "ConfigUpdateResponse": {
+    "required": [
+      "key",
+      "status",
+      "value"
+    ],
+    "properties": [
+      "key",
+      "status",
+      "value"
+    ]
+  },
+  "CustomRelationsUpdate": {
+    "required": [
+      "relations"
+    ],
+    "properties": [
+      "relations"
+    ]
+  },
+  "DisabledRelationsUpdate": {
+    "required": [
+      "relations"
+    ],
+    "properties": [
+      "relations"
+    ]
+  },
+  "ErrorBody": {
+    "required": [
+      "code",
+      "message"
+    ],
+    "properties": [
+      "code",
+      "details",
+      "message"
+    ]
+  },
+  "ErrorResponse": {
+    "required": [
+      "error"
+    ],
+    "properties": [
+      "error"
+    ]
+  },
+  "FileUploadResponse": {
+    "required": [
+      "job",
+      "message",
+      "status"
+    ],
+    "properties": [
+      "job",
+      "message",
+      "status"
+    ]
+  },
+  "HTTPValidationError": {
+    "required": [],
+    "properties": [
+      "detail"
+    ]
+  },
+  "HealthResponse": {
+    "required": [
+      "config",
+      "database",
+      "status",
+      "version"
+    ],
+    "properties": [
+      "config",
+      "database",
+      "status",
+      "version"
+    ]
+  },
+  "JobCreateRequest": {
+    "required": [
+      "natural_query"
+    ],
+    "properties": [
+      "natural_query",
+      "previous_sql"
+    ]
+  },
+  "JobDetailResponse": {
+    "required": [
+      "id",
+      "status"
+    ],
+    "properties": [
+      "created_at",
+      "dialect",
+      "error_message",
+      "file_path",
+      "id",
+      "natural_query",
+      "previous_sql",
+      "result_sql",
+      "status",
+      "updated_at"
+    ]
+  },
+  "JobEnvelopeResponse": {
+    "required": [
+      "job",
+      "status"
+    ],
+    "properties": [
+      "job",
+      "status"
+    ]
+  },
+  "JobSortBy": {
+    "required": [],
+    "properties": []
+  },
+  "JobStatus": {
+    "required": [],
+    "properties": []
+  },
+  "JobsListResponse": {
+    "required": [
+      "count",
+      "jobs",
+      "limit",
+      "offset",
+      "sort_by",
+      "sort_order",
+      "status"
+    ],
+    "properties": [
+      "count",
+      "jobs",
+      "limit",
+      "offset",
+      "sort_by",
+      "sort_order",
+      "status"
+    ]
+  },
+  "RAGSearchRequest": {
+    "required": [
+      "collection",
+      "query"
+    ],
+    "properties": [
+      "collection",
+      "limit",
+      "query"
+    ]
+  },
+  "RelationItem": {
+    "required": [
+      "source",
+      "source_col",
+      "target",
+      "target_col"
+    ],
+    "properties": [
+      "source",
+      "source_col",
+      "target",
+      "target_col"
+    ]
+  },
+  "RuntimeConfigDiagnostics": {
+    "required": [
+      "api_key_configured",
+      "cors_origins_count",
+      "debug_endpoints_enabled",
+      "environment",
+      "startup_critical_warnings_count",
+      "startup_warnings_count",
+      "upload_dir_configured"
+    ],
+    "properties": [
+      "api_key_configured",
+      "cors_origins_count",
+      "debug_endpoints_enabled",
+      "environment",
+      "startup_critical_warnings_count",
+      "startup_warnings_count",
+      "upload_dir_configured"
+    ]
+  },
+  "SQLHistoryIndexRequest": {
+    "required": [
+      "history_id",
+      "natural_query",
+      "sql"
+    ],
+    "properties": [
+      "history_id",
+      "natural_query",
+      "sql"
+    ]
+  },
+  "SchemaFilterUpdate": {
+    "required": [
+      "hidden_columns",
+      "hidden_tables"
+    ],
+    "properties": [
+      "hidden_columns",
+      "hidden_tables"
+    ]
+  },
+  "SortOrder": {
+    "required": [],
+    "properties": []
+  },
+  "ValidationError": {
+    "required": [
+      "loc",
+      "msg",
+      "type"
+    ],
+    "properties": [
+      "loc",
+      "msg",
+      "type"
+    ]
+  }
+}
