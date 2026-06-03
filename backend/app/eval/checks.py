@@ -1,5 +1,6 @@
 from app.eval.models import EvalCheckResult, GoldenCase
 from app.trace.models import NL2SQLTrace
+from app.eval.sql_columns import extract_sql_columns
 
 def check_sql_valid(trace: NL2SQLTrace) -> EvalCheckResult:
     return EvalCheckResult(
@@ -91,6 +92,58 @@ def check_expected_sql_equivalence(trace: NL2SQLTrace, case: GoldenCase) -> Eval
         details={
             "expected_sql": case.expected_sql,
             "generated_sql": generated_sql,
+        },
+    )
+
+
+def check_expected_columns(trace: NL2SQLTrace, case: GoldenCase) -> EvalCheckResult:
+    if not case.expected_columns:
+        return EvalCheckResult(
+            name="expected_columns",
+            passed=True,
+            message="",
+            details={"expected_columns": [], "extracted_columns": []},
+        )
+
+    generated_sql = trace.generated_sql or ""
+    dialect = getattr(case, "dialect", None) or case.metadata.get("dialect", "postgres")
+    extracted = extract_sql_columns(generated_sql, dialect=dialect)
+    expected = {col.upper() for col in case.expected_columns}
+
+    missing = []
+    for exp_col in expected:
+        if exp_col in extracted:
+            continue
+
+        matched = False
+        if "." in exp_col:
+            bare_name = exp_col.split(".")[-1]
+            if bare_name in extracted:
+                matched = True
+        else:
+            for ext_col in extracted:
+                if ext_col.endswith(f".{exp_col}"):
+                    matched = True
+                    break
+
+        if not matched:
+            missing.append(exp_col)
+
+    passed = not missing
+    msg = ""
+    if missing:
+        msg = f"Missing expected columns: {sorted(missing)}"
+        if generated_sql and not extracted:
+            msg += " (Failed to parse SQL or no columns extracted)"
+
+    return EvalCheckResult(
+        name="expected_columns",
+        passed=passed,
+        message=msg,
+        details={
+            "expected": sorted(list(expected)),
+            "extracted": sorted(list(extracted)),
+            "missing": sorted(missing),
         },
     )
 
