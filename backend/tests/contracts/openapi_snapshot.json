@@ -1,1215 +1,12 @@
 {
-  "openapi": "3.1.0",
-  "info": {
-    "title": "SQLGen API",
-    "description": "SQLGen platformu için lokal FastAPI API katmanı",
-    "version": "0.1.0"
-  },
-  "paths": {
-    "/api/debug/traces": {
-      "get": {
-        "tags": [
-          "debug-traces"
-        ],
-        "summary": "List Traces",
-        "operationId": "list_traces_api_debug_traces_get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "trace_type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Trace Type"
-            }
-          },
-          {
-            "name": "request_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Request Id"
-            }
-          },
-          {
-            "name": "job_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Job Id"
-            }
-          },
-          {
-            "name": "dialect",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dialect"
-            }
-          },
-          {
-            "name": "created_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created After"
-            }
-          },
-          {
-            "name": "created_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created Before"
-            }
-          },
-          {
-            "name": "sql_valid",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Sql Valid"
-            }
-          },
-          {
-            "name": "error_type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Error Type"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/debug/traces/{trace_id}": {
-      "get": {
-        "tags": [
-          "debug-traces"
-        ],
-        "summary": "Get Trace",
-        "operationId": "get_trace_api_debug_traces__trace_id__get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "trace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Trace Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/health": {
-      "get": {
-        "summary": "Health",
-        "operationId": "health_health_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/configs/{key}": {
-      "get": {
-        "summary": "Get System Config",
-        "operationId": "get_system_config_api_configs__key__get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "key",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Set System Config",
-        "operationId": "set_system_config_api_configs__key__post",
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "key",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfigUpdateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigUpdateResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/files/upload": {
-      "post": {
-        "summary": "Upload Excel File",
-        "operationId": "upload_excel_file_api_files_upload_post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_upload_excel_file_api_files_upload_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FileUploadResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/jobs/without-file": {
-      "post": {
-        "summary": "Start Job Without File",
-        "operationId": "start_job_without_file_api_jobs_without_file_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JobCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobEnvelopeResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/jobs": {
-      "get": {
-        "summary": "Get Jobs List",
-        "operationId": "get_jobs_list_api_jobs_get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/JobStatus"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
-            }
-          },
-          {
-            "name": "sort_by",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/JobSortBy",
-              "default": "created_at"
-            }
-          },
-          {
-            "name": "sort_order",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SortOrder",
-              "default": "desc"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobsListResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/jobs/{job_id}": {
-      "get": {
-        "summary": "Get Job Detail",
-        "operationId": "get_job_detail_api_jobs__job_id__get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Job Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobDetailResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/jobs/{job_id}/stream": {
-      "get": {
-        "summary": "Stream Job Logs",
-        "operationId": "stream_job_logs_api_jobs__job_id__stream_get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Job Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/jobs/{job_id}/cancel": {
-      "post": {
-        "summary": "Cancel Job Execution",
-        "operationId": "cancel_job_execution_api_jobs__job_id__cancel_post",
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Job Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancelJobResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/schema/raw": {
-      "get": {
-        "summary": "Get Raw Schema",
-        "description": "Veritabanından (veya cache'den) hiçbir filtre uygulanmamış HAM şemayı döndürür.\nBu uç nokta, arayüzde (Settings) tabloları gizleme/gösterme amaçlı kullanılır.",
-        "operationId": "get_raw_schema_api_schema_raw_get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "refresh",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Zorla yenileme (DB'den ham şemayı tekrar çeker)",
-              "default": false,
-              "title": "Refresh"
-            },
-            "description": "Zorla yenileme (DB'den ham şemayı tekrar çeker)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/schema": {
-      "get": {
-        "summary": "Get Database Schema",
-        "operationId": "get_database_schema_api_schema_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/schema/refresh": {
-      "post": {
-        "summary": "Refresh Database Schema",
-        "operationId": "refresh_database_schema_api_schema_refresh_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/schema/custom-relations": {
-      "get": {
-        "summary": "Get Custom Relations",
-        "operationId": "get_custom_relations_api_schema_custom_relations_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      },
-      "post": {
-        "summary": "Save Custom Relations",
-        "operationId": "save_custom_relations_api_schema_custom_relations_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CustomRelationsUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/schema/disabled-relations": {
-      "get": {
-        "summary": "Get Disabled Relations",
-        "operationId": "get_disabled_relations_api_schema_disabled_relations_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      },
-      "post": {
-        "summary": "Save Disabled Relations",
-        "operationId": "save_disabled_relations_api_schema_disabled_relations_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DisabledRelationsUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/schema/filters": {
-      "get": {
-        "summary": "Get Schema Filters",
-        "operationId": "get_schema_filters_api_schema_filters_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      },
-      "post": {
-        "summary": "Save Schema Filters",
-        "operationId": "save_schema_filters_api_schema_filters_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SchemaFilterUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/rag/stats": {
-      "get": {
-        "summary": "Get Rag Stats",
-        "operationId": "get_rag_stats_api_rag_stats_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/rag/search": {
-      "post": {
-        "summary": "Search Rag",
-        "operationId": "search_rag_api_rag_search_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RAGSearchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/rag/index/business-rule": {
-      "post": {
-        "summary": "Index Business Rule",
-        "operationId": "index_business_rule_api_rag_index_business_rule_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BusinessRuleIndexRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    },
-    "/api/rag/index/sql-history": {
-      "post": {
-        "summary": "Index Sql History",
-        "operationId": "index_sql_history_api_rag_index_sql_history_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SQLHistoryIndexRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "APIKeyQuery": []
-          }
-        ]
-      }
-    }
-  },
   "components": {
     "schemas": {
       "Body_upload_excel_file_api_files_upload_post": {
         "properties": {
           "file": {
-            "type": "string",
             "format": "binary",
-            "title": "File"
+            "title": "File",
+            "type": "string"
           },
           "natural_query": {
             "anyOf": [
@@ -1223,112 +20,112 @@
             "title": "Natural Query"
           }
         },
-        "type": "object",
         "required": [
           "file"
         ],
-        "title": "Body_upload_excel_file_api_files_upload_post"
+        "title": "Body_upload_excel_file_api_files_upload_post",
+        "type": "object"
       },
       "BusinessRuleIndexRequest": {
         "properties": {
           "rule_id": {
-            "type": "string",
-            "title": "Rule Id"
+            "title": "Rule Id",
+            "type": "string"
           },
           "rule_text": {
-            "type": "string",
-            "title": "Rule Text"
+            "title": "Rule Text",
+            "type": "string"
           },
           "sql_mapping": {
-            "type": "string",
-            "title": "Sql Mapping"
+            "title": "Sql Mapping",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "rule_id",
           "rule_text",
           "sql_mapping"
         ],
-        "title": "BusinessRuleIndexRequest"
+        "title": "BusinessRuleIndexRequest",
+        "type": "object"
       },
       "CancelJobResponse": {
         "properties": {
-          "status": {
-            "type": "string",
-            "const": "success",
-            "title": "Status"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
           "job": {
             "$ref": "#/components/schemas/JobDetailResponse"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "status",
           "message",
           "job"
         ],
-        "title": "CancelJobResponse"
+        "title": "CancelJobResponse",
+        "type": "object"
       },
       "ConfigResponse": {
         "properties": {
           "key": {
-            "type": "string",
-            "title": "Key"
+            "title": "Key",
+            "type": "string"
           },
           "value": {
-            "type": "string",
-            "title": "Value"
+            "title": "Value",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "key",
           "value"
         ],
-        "title": "ConfigResponse"
+        "title": "ConfigResponse",
+        "type": "object"
       },
       "ConfigUpdateRequest": {
         "properties": {
           "value": {
-            "type": "string",
-            "title": "Value"
+            "title": "Value",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "value"
         ],
-        "title": "ConfigUpdateRequest"
+        "title": "ConfigUpdateRequest",
+        "type": "object"
       },
       "ConfigUpdateResponse": {
         "properties": {
-          "status": {
-            "type": "string",
-            "const": "success",
-            "title": "Status"
-          },
           "key": {
-            "type": "string",
-            "title": "Key"
+            "title": "Key",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
           },
           "value": {
-            "type": "string",
-            "title": "Value"
+            "title": "Value",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "status",
           "key",
           "value"
         ],
-        "title": "ConfigUpdateResponse"
+        "title": "ConfigUpdateResponse",
+        "type": "object"
       },
       "CustomRelationsUpdate": {
         "properties": {
@@ -1336,15 +133,15 @@
             "items": {
               "$ref": "#/components/schemas/RelationItem"
             },
-            "type": "array",
-            "title": "Relations"
+            "title": "Relations",
+            "type": "array"
           }
         },
-        "type": "object",
         "required": [
           "relations"
         ],
-        "title": "CustomRelationsUpdate"
+        "title": "CustomRelationsUpdate",
+        "type": "object"
       },
       "DisabledRelationsUpdate": {
         "properties": {
@@ -1352,25 +149,21 @@
             "items": {
               "$ref": "#/components/schemas/RelationItem"
             },
-            "type": "array",
-            "title": "Relations"
+            "title": "Relations",
+            "type": "array"
           }
         },
-        "type": "object",
         "required": [
           "relations"
         ],
-        "title": "DisabledRelationsUpdate"
+        "title": "DisabledRelationsUpdate",
+        "type": "object"
       },
       "ErrorBody": {
         "properties": {
           "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
+            "title": "Code",
+            "type": "string"
           },
           "details": {
             "anyOf": [
@@ -1380,14 +173,18 @@
               }
             ],
             "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "code",
           "message"
         ],
-        "title": "ErrorBody"
+        "title": "ErrorBody",
+        "type": "object"
       },
       "ErrorResponse": {
         "properties": {
@@ -1395,34 +192,34 @@
             "$ref": "#/components/schemas/ErrorBody"
           }
         },
-        "type": "object",
         "required": [
           "error"
         ],
-        "title": "ErrorResponse"
+        "title": "ErrorResponse",
+        "type": "object"
       },
       "FileUploadResponse": {
         "properties": {
-          "status": {
-            "type": "string",
-            "const": "success",
-            "title": "Status"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
           "job": {
             "$ref": "#/components/schemas/JobDetailResponse"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "status",
           "message",
           "job"
         ],
-        "title": "FileUploadResponse"
+        "title": "FileUploadResponse",
+        "type": "object"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1430,46 +227,46 @@
             "items": {
               "$ref": "#/components/schemas/ValidationError"
             },
-            "type": "array",
-            "title": "Detail"
+            "title": "Detail",
+            "type": "array"
           }
         },
-        "type": "object",
-        "title": "HTTPValidationError"
+        "title": "HTTPValidationError",
+        "type": "object"
       },
       "HealthResponse": {
         "properties": {
-          "status": {
-            "type": "string",
-            "const": "ok",
-            "title": "Status"
-          },
-          "version": {
-            "type": "string",
-            "title": "Version"
-          },
-          "database": {
-            "type": "string",
-            "title": "Database"
-          },
           "config": {
             "$ref": "#/components/schemas/RuntimeConfigDiagnostics"
+          },
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "status",
           "version",
           "database",
           "config"
         ],
-        "title": "HealthResponse"
+        "title": "HealthResponse",
+        "type": "object"
       },
       "JobCreateRequest": {
         "properties": {
           "natural_query": {
-            "type": "string",
-            "title": "Natural Query"
+            "title": "Natural Query",
+            "type": "string"
           },
           "previous_sql": {
             "anyOf": [
@@ -1483,21 +280,46 @@
             "title": "Previous Sql"
           }
         },
-        "type": "object",
         "required": [
           "natural_query"
         ],
-        "title": "JobCreateRequest"
+        "title": "JobCreateRequest",
+        "type": "object"
       },
       "JobDetailResponse": {
         "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
           },
-          "status": {
-            "type": "string",
-            "title": "Status"
+          "dialect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dialect"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
           },
           "file_path": {
             "anyOf": [
@@ -1509,6 +331,10 @@
               }
             ],
             "title": "File Path"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
           },
           "natural_query": {
             "anyOf": [
@@ -1543,38 +369,9 @@
             ],
             "title": "Result Sql"
           },
-          "error_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          },
-          "dialect": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dialect"
-          },
-          "created_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created At"
+          "status": {
+            "title": "Status",
+            "type": "string"
           },
           "updated_at": {
             "anyOf": [
@@ -1588,41 +385,40 @@
             "title": "Updated At"
           }
         },
-        "type": "object",
         "required": [
           "id",
           "status"
         ],
-        "title": "JobDetailResponse"
+        "title": "JobDetailResponse",
+        "type": "object"
       },
       "JobEnvelopeResponse": {
         "properties": {
-          "status": {
-            "type": "string",
-            "const": "success",
-            "title": "Status"
-          },
           "job": {
             "$ref": "#/components/schemas/JobDetailResponse"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "status",
           "job"
         ],
-        "title": "JobEnvelopeResponse"
+        "title": "JobEnvelopeResponse",
+        "type": "object"
       },
       "JobSortBy": {
-        "type": "string",
         "enum": [
           "created_at",
           "updated_at"
         ],
-        "title": "JobSortBy"
+        "title": "JobSortBy",
+        "type": "string"
       },
       "JobStatus": {
-        "type": "string",
         "enum": [
           "pending",
           "processing",
@@ -1630,28 +426,35 @@
           "failed",
           "cancelled"
         ],
-        "title": "JobStatus"
+        "title": "JobStatus",
+        "type": "string"
       },
       "JobsListResponse": {
         "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
           "jobs": {
             "items": {
               "$ref": "#/components/schemas/JobDetailResponse"
             },
-            "type": "array",
-            "title": "Jobs"
+            "title": "Jobs",
+            "type": "array"
           },
           "limit": {
-            "type": "integer",
-            "title": "Limit"
+            "title": "Limit",
+            "type": "integer"
           },
           "offset": {
-            "type": "integer",
-            "title": "Offset"
+            "title": "Offset",
+            "type": "integer"
           },
-          "count": {
-            "type": "integer",
-            "title": "Count"
+          "sort_by": {
+            "$ref": "#/components/schemas/JobSortBy"
+          },
+          "sort_order": {
+            "$ref": "#/components/schemas/SortOrder"
           },
           "status": {
             "anyOf": [
@@ -1662,15 +465,8 @@
                 "type": "null"
               }
             ]
-          },
-          "sort_by": {
-            "$ref": "#/components/schemas/JobSortBy"
-          },
-          "sort_order": {
-            "$ref": "#/components/schemas/SortOrder"
           }
         },
-        "type": "object",
         "required": [
           "jobs",
           "limit",
@@ -1680,17 +476,14 @@
           "sort_by",
           "sort_order"
         ],
-        "title": "JobsListResponse"
+        "title": "JobsListResponse",
+        "type": "object"
       },
       "RAGSearchRequest": {
         "properties": {
-          "query": {
-            "type": "string",
-            "title": "Query"
-          },
           "collection": {
-            "type": "string",
-            "title": "Collection"
+            "title": "Collection",
+            "type": "string"
           },
           "limit": {
             "anyOf": [
@@ -1701,77 +494,80 @@
                 "type": "null"
               }
             ],
-            "title": "Limit",
-            "default": 3
+            "default": 3,
+            "title": "Limit"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "query",
           "collection"
         ],
-        "title": "RAGSearchRequest"
+        "title": "RAGSearchRequest",
+        "type": "object"
       },
       "RelationItem": {
         "properties": {
           "source": {
-            "type": "string",
-            "title": "Source"
+            "title": "Source",
+            "type": "string"
           },
           "source_col": {
-            "type": "string",
-            "title": "Source Col"
+            "title": "Source Col",
+            "type": "string"
           },
           "target": {
-            "type": "string",
-            "title": "Target"
+            "title": "Target",
+            "type": "string"
           },
           "target_col": {
-            "type": "string",
-            "title": "Target Col"
+            "title": "Target Col",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "source",
           "source_col",
           "target",
           "target_col"
         ],
-        "title": "RelationItem"
+        "title": "RelationItem",
+        "type": "object"
       },
       "RuntimeConfigDiagnostics": {
         "properties": {
-          "environment": {
-            "type": "string",
-            "title": "Environment"
-          },
-          "debug_endpoints_enabled": {
-            "type": "boolean",
-            "title": "Debug Endpoints Enabled"
+          "api_key_configured": {
+            "title": "Api Key Configured",
+            "type": "boolean"
           },
           "cors_origins_count": {
-            "type": "integer",
-            "title": "Cors Origins Count"
+            "title": "Cors Origins Count",
+            "type": "integer"
           },
-          "upload_dir_configured": {
-            "type": "boolean",
-            "title": "Upload Dir Configured"
+          "debug_endpoints_enabled": {
+            "title": "Debug Endpoints Enabled",
+            "type": "boolean"
           },
-          "api_key_configured": {
-            "type": "boolean",
-            "title": "Api Key Configured"
-          },
-          "startup_warnings_count": {
-            "type": "integer",
-            "title": "Startup Warnings Count"
+          "environment": {
+            "title": "Environment",
+            "type": "string"
           },
           "startup_critical_warnings_count": {
-            "type": "integer",
-            "title": "Startup Critical Warnings Count"
+            "title": "Startup Critical Warnings Count",
+            "type": "integer"
+          },
+          "startup_warnings_count": {
+            "title": "Startup Warnings Count",
+            "type": "integer"
+          },
+          "upload_dir_configured": {
+            "title": "Upload Dir Configured",
+            "type": "boolean"
           }
         },
-        "type": "object",
         "required": [
           "environment",
           "debug_endpoints_enabled",
@@ -1781,40 +577,34 @@
           "startup_warnings_count",
           "startup_critical_warnings_count"
         ],
-        "title": "RuntimeConfigDiagnostics"
+        "title": "RuntimeConfigDiagnostics",
+        "type": "object"
       },
       "SQLHistoryIndexRequest": {
         "properties": {
           "history_id": {
-            "type": "string",
-            "title": "History Id"
+            "title": "History Id",
+            "type": "string"
           },
           "natural_query": {
-            "type": "string",
-            "title": "Natural Query"
+            "title": "Natural Query",
+            "type": "string"
           },
           "sql": {
-            "type": "string",
-            "title": "Sql"
+            "title": "Sql",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "history_id",
           "natural_query",
           "sql"
         ],
-        "title": "SQLHistoryIndexRequest"
+        "title": "SQLHistoryIndexRequest",
+        "type": "object"
       },
       "SchemaFilterUpdate": {
         "properties": {
-          "hidden_tables": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Hidden Tables"
-          },
           "hidden_columns": {
             "additionalProperties": {
               "items": {
@@ -1822,24 +612,31 @@
               },
               "type": "array"
             },
-            "type": "object",
-            "title": "Hidden Columns"
+            "title": "Hidden Columns",
+            "type": "object"
+          },
+          "hidden_tables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hidden Tables",
+            "type": "array"
           }
         },
-        "type": "object",
         "required": [
           "hidden_tables",
           "hidden_columns"
         ],
-        "title": "SchemaFilterUpdate"
+        "title": "SchemaFilterUpdate",
+        "type": "object"
       },
       "SortOrder": {
-        "type": "string",
         "enum": [
           "asc",
           "desc"
         ],
-        "title": "SortOrder"
+        "title": "SortOrder",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -1854,37 +651,1240 @@
                 }
               ]
             },
-            "type": "array",
-            "title": "Location"
+            "title": "Location",
+            "type": "array"
           },
           "msg": {
-            "type": "string",
-            "title": "Message"
+            "title": "Message",
+            "type": "string"
           },
           "type": {
-            "type": "string",
-            "title": "Error Type"
+            "title": "Error Type",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
           "loc",
           "msg",
           "type"
         ],
-        "title": "ValidationError"
+        "title": "ValidationError",
+        "type": "object"
       }
     },
     "securitySchemes": {
       "APIKeyHeader": {
-        "type": "apiKey",
         "in": "header",
-        "name": "X-API-Key"
+        "name": "X-API-Key",
+        "type": "apiKey"
       },
       "APIKeyQuery": {
-        "type": "apiKey",
         "in": "query",
-        "name": "api_key"
+        "name": "api_key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "SQLGen platformu için lokal FastAPI API katmanı",
+    "title": "SQLGen API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/configs/{key}": {
+      "get": {
+        "operationId": "get_system_config_api_configs__key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get System Config"
+      },
+      "post": {
+        "operationId": "set_system_config_api_configs__key__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigUpdateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Set System Config"
+      }
+    },
+    "/api/debug/traces": {
+      "get": {
+        "operationId": "list_traces_api_debug_traces_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "trace_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Trace Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "request_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Request Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "job_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Job Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dialect",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dialect"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sql_valid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sql Valid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "List Traces",
+        "tags": [
+          "debug-traces"
+        ]
+      }
+    },
+    "/api/debug/traces/{trace_id}": {
+      "get": {
+        "operationId": "get_trace_api_debug_traces__trace_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trace_id",
+            "required": true,
+            "schema": {
+              "title": "Trace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Trace",
+        "tags": [
+          "debug-traces"
+        ]
+      }
+    },
+    "/api/files/upload": {
+      "post": {
+        "operationId": "upload_excel_file_api_files_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_excel_file_api_files_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Upload Excel File"
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "operationId": "get_jobs_list_api_jobs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_by",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/JobSortBy",
+              "default": "created_at"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_order",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder",
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Jobs List"
+      }
+    },
+    "/api/jobs/without-file": {
+      "post": {
+        "operationId": "start_job_without_file_api_jobs_without_file_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Start Job Without File"
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_job_detail_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Job Detail"
+      }
+    },
+    "/api/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_job_execution_api_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Cancel Job Execution"
+      }
+    },
+    "/api/jobs/{job_id}/stream": {
+      "get": {
+        "operationId": "stream_job_logs_api_jobs__job_id__stream_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Stream Job Logs"
+      }
+    },
+    "/api/rag/index/business-rule": {
+      "post": {
+        "operationId": "index_business_rule_api_rag_index_business_rule_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessRuleIndexRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Index Business Rule"
+      }
+    },
+    "/api/rag/index/sql-history": {
+      "post": {
+        "operationId": "index_sql_history_api_rag_index_sql_history_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SQLHistoryIndexRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Index Sql History"
+      }
+    },
+    "/api/rag/search": {
+      "post": {
+        "operationId": "search_rag_api_rag_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RAGSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Search Rag"
+      }
+    },
+    "/api/rag/stats": {
+      "get": {
+        "operationId": "get_rag_stats_api_rag_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Rag Stats"
+      }
+    },
+    "/api/schema": {
+      "get": {
+        "operationId": "get_database_schema_api_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Database Schema"
+      }
+    },
+    "/api/schema/custom-relations": {
+      "get": {
+        "operationId": "get_custom_relations_api_schema_custom_relations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Custom Relations"
+      },
+      "post": {
+        "operationId": "save_custom_relations_api_schema_custom_relations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomRelationsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Save Custom Relations"
+      }
+    },
+    "/api/schema/disabled-relations": {
+      "get": {
+        "operationId": "get_disabled_relations_api_schema_disabled_relations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Disabled Relations"
+      },
+      "post": {
+        "operationId": "save_disabled_relations_api_schema_disabled_relations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisabledRelationsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Save Disabled Relations"
+      }
+    },
+    "/api/schema/filters": {
+      "get": {
+        "operationId": "get_schema_filters_api_schema_filters_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Schema Filters"
+      },
+      "post": {
+        "operationId": "save_schema_filters_api_schema_filters_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchemaFilterUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Save Schema Filters"
+      }
+    },
+    "/api/schema/raw": {
+      "get": {
+        "description": "Veritabanından (veya cache'den) hiçbir filtre uygulanmamış HAM şemayı döndürür.\nBu uç nokta, arayüzde (Settings) tabloları gizleme/gösterme amaçlı kullanılır.",
+        "operationId": "get_raw_schema_api_schema_raw_get",
+        "parameters": [
+          {
+            "description": "Zorla yenileme (DB'den ham şemayı tekrar çeker)",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Zorla yenileme (DB'den ham şemayı tekrar çeker)",
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Raw Schema"
+      }
+    },
+    "/api/schema/refresh": {
+      "post": {
+        "operationId": "refresh_database_schema_api_schema_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Refresh Database Schema"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
       }
     }
   }

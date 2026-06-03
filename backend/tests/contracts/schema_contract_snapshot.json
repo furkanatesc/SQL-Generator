@@ -1,128 +1,128 @@
 {
   "Body_upload_excel_file_api_files_upload_post": {
-    "required": [
-      "file"
-    ],
     "properties": [
       "file",
       "natural_query"
+    ],
+    "required": [
+      "file"
     ]
   },
   "BusinessRuleIndexRequest": {
-    "required": [
+    "properties": [
       "rule_id",
       "rule_text",
       "sql_mapping"
     ],
-    "properties": [
+    "required": [
       "rule_id",
       "rule_text",
       "sql_mapping"
     ]
   },
   "CancelJobResponse": {
-    "required": [
+    "properties": [
       "job",
       "message",
       "status"
     ],
-    "properties": [
+    "required": [
       "job",
       "message",
       "status"
     ]
   },
   "ConfigResponse": {
-    "required": [
+    "properties": [
       "key",
       "value"
     ],
-    "properties": [
+    "required": [
       "key",
       "value"
     ]
   },
   "ConfigUpdateRequest": {
-    "required": [
+    "properties": [
       "value"
     ],
-    "properties": [
+    "required": [
       "value"
     ]
   },
   "ConfigUpdateResponse": {
-    "required": [
+    "properties": [
       "key",
       "status",
       "value"
     ],
-    "properties": [
+    "required": [
       "key",
       "status",
       "value"
     ]
   },
   "CustomRelationsUpdate": {
-    "required": [
+    "properties": [
       "relations"
     ],
-    "properties": [
+    "required": [
       "relations"
     ]
   },
   "DisabledRelationsUpdate": {
-    "required": [
+    "properties": [
       "relations"
     ],
-    "properties": [
+    "required": [
       "relations"
     ]
   },
   "ErrorBody": {
-    "required": [
-      "code",
-      "message"
-    ],
     "properties": [
       "code",
       "details",
       "message"
+    ],
+    "required": [
+      "code",
+      "message"
     ]
   },
   "ErrorResponse": {
-    "required": [
+    "properties": [
       "error"
     ],
-    "properties": [
+    "required": [
       "error"
     ]
   },
   "FileUploadResponse": {
-    "required": [
+    "properties": [
       "job",
       "message",
       "status"
     ],
-    "properties": [
+    "required": [
       "job",
       "message",
       "status"
     ]
   },
   "HTTPValidationError": {
-    "required": [],
     "properties": [
       "detail"
-    ]
+    ],
+    "required": []
   },
   "HealthResponse": {
-    "required": [
+    "properties": [
       "config",
       "database",
       "status",
       "version"
     ],
-    "properties": [
+    "required": [
       "config",
       "database",
       "status",
@@ -130,19 +130,15 @@
     ]
   },
   "JobCreateRequest": {
-    "required": [
-      "natural_query"
-    ],
     "properties": [
       "natural_query",
       "previous_sql"
+    ],
+    "required": [
+      "natural_query"
     ]
   },
   "JobDetailResponse": {
-    "required": [
-      "id",
-      "status"
-    ],
     "properties": [
       "created_at",
       "dialect",
@@ -154,28 +150,32 @@
       "result_sql",
       "status",
       "updated_at"
+    ],
+    "required": [
+      "id",
+      "status"
     ]
   },
   "JobEnvelopeResponse": {
-    "required": [
+    "properties": [
       "job",
       "status"
     ],
-    "properties": [
+    "required": [
       "job",
       "status"
     ]
   },
   "JobSortBy": {
-    "required": [],
-    "properties": []
+    "properties": [],
+    "required": []
   },
   "JobStatus": {
-    "required": [],
-    "properties": []
+    "properties": [],
+    "required": []
   },
   "JobsListResponse": {
-    "required": [
+    "properties": [
       "count",
       "jobs",
       "limit",
@@ -184,7 +184,7 @@
       "sort_order",
       "status"
     ],
-    "properties": [
+    "required": [
       "count",
       "jobs",
       "limit",
@@ -195,24 +195,24 @@
     ]
   },
   "RAGSearchRequest": {
-    "required": [
-      "collection",
-      "query"
-    ],
     "properties": [
       "collection",
       "limit",
       "query"
+    ],
+    "required": [
+      "collection",
+      "query"
     ]
   },
   "RelationItem": {
-    "required": [
+    "properties": [
       "source",
       "source_col",
       "target",
       "target_col"
     ],
-    "properties": [
+    "required": [
       "source",
       "source_col",
       "target",
@@ -220,7 +220,7 @@
     ]
   },
   "RuntimeConfigDiagnostics": {
-    "required": [
+    "properties": [
       "api_key_configured",
       "cors_origins_count",
       "debug_endpoints_enabled",
@@ -229,7 +229,7 @@
       "startup_warnings_count",
       "upload_dir_configured"
     ],
-    "properties": [
+    "required": [
       "api_key_configured",
       "cors_origins_count",
       "debug_endpoints_enabled",
@@ -240,38 +240,38 @@
     ]
   },
   "SQLHistoryIndexRequest": {
-    "required": [
+    "properties": [
       "history_id",
       "natural_query",
       "sql"
     ],
-    "properties": [
+    "required": [
       "history_id",
       "natural_query",
       "sql"
     ]
   },
   "SchemaFilterUpdate": {
-    "required": [
+    "properties": [
       "hidden_columns",
       "hidden_tables"
     ],
-    "properties": [
+    "required": [
       "hidden_columns",
       "hidden_tables"
     ]
   },
   "SortOrder": {
-    "required": [],
-    "properties": []
+    "properties": [],
+    "required": []
   },
   "ValidationError": {
-    "required": [
+    "properties": [
       "loc",
       "msg",
       "type"
     ],
-    "properties": [
+    "required": [
       "loc",
       "msg",
       "type"
