@@ -10,6 +10,7 @@ def test_public_endpoint_allowlist():
     # Intentionally public endpoints allowlist
     allowlist = {
         ("GET", "/health"),
+        ("GET", "/ready"),
         ("GET", "/openapi.json"),
         ("HEAD", "/openapi.json"),
         ("GET", "/docs"),
