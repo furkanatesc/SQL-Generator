@@ -10,7 +10,7 @@ def test_health_response_structure_and_safe_diagnostics():
     # Ensure settings is clean
     get_settings.cache_clear()
     
-    response = build_health_response()
+    response = build_health_response().model_dump()
     
     assert response["status"] == "ok"
     assert "version" in response
@@ -35,7 +35,7 @@ def test_health_uses_app_version(monkeypatch):
     monkeypatch.setenv("NL2SQL_APP_VERSION", "12.3.4")
     get_settings.cache_clear()
     
-    response = build_health_response()
+    response = build_health_response().model_dump()
     assert response["version"] == "12.3.4"
 
 def test_health_api_key_configured_scenarios(monkeypatch):
@@ -44,7 +44,7 @@ def test_health_api_key_configured_scenarios(monkeypatch):
     get_settings.cache_clear()
     
     with patch("app.health.get_config", return_value="my-secret-db-key"):
-        response = build_health_response()
+        response = build_health_response().model_dump()
         assert response["config"]["api_key_configured"] is True
         # Verify secret value not leaked
         response_str = str(response)
@@ -55,7 +55,7 @@ def test_health_api_key_configured_scenarios(monkeypatch):
     get_settings.cache_clear()
     
     with patch("app.health.get_config", return_value=None):
-        response = build_health_response()
+        response = build_health_response().model_dump()
         assert response["config"]["api_key_configured"] is True
         # Verify secret value not leaked
         response_str = str(response)
@@ -66,7 +66,7 @@ def test_health_api_key_configured_scenarios(monkeypatch):
     get_settings.cache_clear()
     
     with patch("app.health.get_config", return_value=None):
-        response = build_health_response()
+        response = build_health_response().model_dump()
         assert response["config"]["api_key_configured"] is False
 
 def test_health_upload_dir_configured_scenarios(monkeypatch):
@@ -74,7 +74,7 @@ def test_health_upload_dir_configured_scenarios(monkeypatch):
     monkeypatch.delenv("NL2SQL_UPLOAD_DIR", raising=False)
     get_settings.cache_clear()
     
-    response = build_health_response()
+    response = build_health_response().model_dump()
     assert response["config"]["upload_dir_configured"] is False
 
     # Scenario B: Override provided
@@ -82,7 +82,7 @@ def test_health_upload_dir_configured_scenarios(monkeypatch):
     monkeypatch.setenv("NL2SQL_UPLOAD_DIR", custom_path)
     get_settings.cache_clear()
     
-    response = build_health_response()
+    response = build_health_response().model_dump()
     assert response["config"]["upload_dir_configured"] is True
     # Verify exact path not leaked
     response_str = str(response)
@@ -93,7 +93,7 @@ def test_health_cors_origins_count(monkeypatch):
     monkeypatch.setenv("NL2SQL_CORS_ALLOW_ORIGINS", '["https://site-a.com", "https://site-b.com", "https://site-c.com"]')
     get_settings.cache_clear()
     
-    response = build_health_response()
+    response = build_health_response().model_dump()
     assert response["config"]["cors_origins_count"] == 3
     
     # Verify no raw origins leaked
@@ -104,7 +104,7 @@ def test_health_environment_from_settings(monkeypatch):
     monkeypatch.setenv("NL2SQL_ENVIRONMENT", "production-eu")
     get_settings.cache_clear()
     
-    response = build_health_response()
+    response = build_health_response().model_dump()
     assert response["config"]["environment"] == "production-eu"
 
 def test_health_endpoint_integration():

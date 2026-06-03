@@ -1,9 +1,9 @@
 import os
-from typing import Any
 from app.settings import get_settings
 from app.database import get_config
+from app.api.schemas import HealthResponse, RuntimeConfigDiagnostics
 
-def build_health_response() -> dict[str, Any]:
+def build_health_response() -> HealthResponse:
     settings = get_settings()
     
     # Check if API key is configured (either in the DB configs or in the environment)
@@ -17,17 +17,17 @@ def build_health_response() -> dict[str, Any]:
     # Count the CORS origins configured
     cors_origins_count = len(settings.cors_allow_origins)
     
-    config_diagnostics = {
-        "environment": settings.environment,
-        "debug_endpoints_enabled": settings.debug_endpoints_enabled,
-        "cors_origins_count": cors_origins_count,
-        "upload_dir_configured": upload_dir_configured,
-        "api_key_configured": api_key_configured,
-    }
+    config_diagnostics = RuntimeConfigDiagnostics(
+        environment=settings.environment,
+        debug_endpoints_enabled=settings.debug_endpoints_enabled,
+        cors_origins_count=cors_origins_count,
+        upload_dir_configured=upload_dir_configured,
+        api_key_configured=api_key_configured,
+    )
     
-    return {
-        "status": "ok",
-        "version": settings.app_version,
-        "database": "SQLite ready",
-        "config": config_diagnostics,
-    }
+    return HealthResponse(
+        status="ok",
+        version=settings.app_version,
+        database="SQLite ready",
+        config=config_diagnostics,
+    )
