@@ -62,3 +62,19 @@ jobs:
       - name: Build backend Docker image
         run: |
           docker build -t sqlgen-backend:test .
+
+      - name: Run backend Docker smoke test
+        run: |
+          docker run -d --name sqlgen-backend-smoke -p 8000:8000 \
+            -e NL2SQL_DEBUG_ENDPOINTS_ENABLED=true \
+            -e NL2SQL_ENVIRONMENT=ci \
+            sqlgen-backend:test
+
+          trap 'docker logs sqlgen-backend-smoke || true; docker rm -f sqlgen-backend-smoke || true' EXIT
+
+          for i in {1..30}; do
+            curl -fsS http://localhost:8000/health && exit 0
+            sleep 1
+          done
+
+          exit 1
