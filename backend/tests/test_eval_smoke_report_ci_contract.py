@@ -42,7 +42,7 @@ def test_eval_smoke_runner_report_matches_eval_report_schema(tmp_path):
     assert isinstance(report["failed_cases"], list)
     
     for r in report["results"]:
-        assert set(r.keys()) == {"id", "expected_type", "passed", "reason", "actual"}
+        assert set(r.keys()) == {"id", "expected_type", "passed", "reason", "actual", "checks", "failed_checks"}
         assert isinstance(r["id"], str)
         assert isinstance(r["expected_type"], str)
         assert isinstance(r["passed"], bool)
@@ -51,7 +51,7 @@ def test_eval_smoke_runner_report_matches_eval_report_schema(tmp_path):
         assert set(r["actual"].keys()) == {"success", "generated_sql", "error_type", "stage"}
         
     for f in report["failed_cases"]:
-        assert set(f.keys()) == {"id", "expected_type", "reason"}
+        assert set(f.keys()) == {"id", "expected_type", "reason", "failed_checks"}
 
 
 # 3. Verify that the smoke evaluation report is non-empty
