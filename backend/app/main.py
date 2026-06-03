@@ -1,4 +1,5 @@
 import os
+import logging
 import uuid
 import datetime
 import shutil
@@ -83,11 +84,25 @@ app.add_middleware(
 
 # Startup
 rag_manager = None
+logger = logging.getLogger("app.main")
 
 @app.on_event("startup")
 def startup_event():
     global rag_manager
     init_db()
+    
+    # Run startup validation checks
+    try:
+        from app.startup_validation import validate_runtime_config
+        val_result = validate_runtime_config()
+        for w in val_result.warnings:
+            logger.warning(
+                "startup_config_warning code=%s severity=%s message=%s",
+                w.code, w.severity, w.message
+            )
+    except Exception as e:
+        logger.error("Failed to run startup validation: %s", str(e))
+        
     try:
         from app.rag_manager import RAGManager
         rag_manager = RAGManager()

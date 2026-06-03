@@ -9,6 +9,8 @@ class RuntimeConfigDiagnostics(BaseModel):
     cors_origins_count: int
     upload_dir_configured: bool
     api_key_configured: bool
+    startup_warnings_count: int
+    startup_critical_warnings_count: int
 
 
 class HealthResponse(BaseModel):
