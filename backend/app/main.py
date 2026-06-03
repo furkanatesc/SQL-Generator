@@ -16,6 +16,7 @@ from app.api.debug_traces import router as debug_traces_router
 from fastapi.exceptions import RequestValidationError
 from app.settings import get_settings
 from app.api.errors import http_exception_handler, validation_exception_handler
+from app.middleware.request_logging import RequestLoggingMiddleware
 from app.health import build_health_response
 from app.api.schemas import (
     HealthResponse,
@@ -81,6 +82,9 @@ app.add_middleware(
     allow_methods=settings.cors_allow_methods,
     allow_headers=settings.cors_allow_headers,
 )
+
+# Request Logging (outer-most to trace all incoming requests)
+app.add_middleware(RequestLoggingMiddleware)
 
 # Startup
 rag_manager = None
