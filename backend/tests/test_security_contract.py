@@ -5,11 +5,11 @@ from app.main import app
 
 def test_public_endpoint_allowlist():
     client = TestClient(app)
+    from app.auth import verify_api_key
     
     # Intentionally public endpoints allowlist
     allowlist = {
         ("GET", "/health"),
-        ("HEAD", "/health"),
         ("GET", "/openapi.json"),
         ("HEAD", "/openapi.json"),
         ("GET", "/docs"),
@@ -20,6 +20,42 @@ def test_public_endpoint_allowlist():
         ("HEAD", "/docs/oauth2-redirect"),
     }
     
+    # Helper to check if a route requires verify_api_key dependency
+    def requires_auth(route) -> bool:
+        # Check route-level dependencies safely
+        dependencies = getattr(route, "dependencies", [])
+        for dep in dependencies:
+            if dep.dependency == verify_api_key:
+                return True
+        # Check function-level dependencies recursively safely
+        dependant = getattr(route, "dependant", None)
+        if dependant:
+            def check_dependant(depant):
+                if depant.call == verify_api_key:
+                    return True
+                for sub_dep in depant.dependencies:
+                    if check_dependant(sub_dep):
+                        return True
+                return False
+            if check_dependant(dependant):
+                return True
+        return False
+
+    # Extract all public routes discovered at runtime
+    runtime_public_routes = set()
+    for route in app.routes:
+        if not requires_auth(route):
+            methods = getattr(route, "methods", None) or set()
+            for method in methods:
+                runtime_public_routes.add((method.upper(), route.path))
+
+    # Assert exact match of the allowlist with runtime public routes
+    assert runtime_public_routes == allowlist, (
+        f"Public Endpoint Allowlist Mismatch!\n"
+        f"Unexpected public routes in runtime: {runtime_public_routes - allowlist}\n"
+        f"Missing expected public routes in runtime: {allowlist - runtime_public_routes}"
+    )
+
     # Verify allowlisted endpoints are reachable without API key
     for method, path in allowlist:
         response = client.request(method, path)
