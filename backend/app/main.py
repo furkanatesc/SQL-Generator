@@ -13,6 +13,7 @@ from app.database import (
 from app.auth import verify_api_key
 from app.api.debug_traces import router as debug_traces_router
 from fastapi.exceptions import RequestValidationError
+from app.settings import get_settings
 from app.api.errors import http_exception_handler, validation_exception_handler
 from app.api.schemas import (
     HealthResponse,
@@ -49,15 +50,20 @@ job_logs_cache = {}
 # format: {job_id: [queue.Queue]}
 job_queues = {}
 
+settings = get_settings()
+
 # Uploads klasörünü oluştur
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+if settings.upload_dir:
+    UPLOAD_DIR = os.path.abspath(settings.upload_dir)
+else:
+    UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # FastAPI uygulaması
 app = FastAPI(
-    title="SQLGen API",
-    description="SQLGen platformu için lokal FastAPI API katmanı",
-    version="0.1.0"
+    title=settings.app_name,
+    description=settings.app_description,
+    version=settings.app_version,
 )
 
 app.add_exception_handler(HTTPException, http_exception_handler)
@@ -68,10 +74,10 @@ app.include_router(debug_traces_router)
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Desktop app/Electron için en esnek yapı
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_allow_origins,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
 )
 
 # Startup

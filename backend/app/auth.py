@@ -19,6 +19,9 @@ def verify_api_key(
         
     stored_key = get_config("api_key")
     if not stored_key:
+        import os
+        stored_key = os.getenv("NL2SQL_API_KEY")
+    if not stored_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="API Key not configured in system settings."
