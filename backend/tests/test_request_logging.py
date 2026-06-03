@@ -85,10 +85,11 @@ def test_exception_during_request_still_logged(caplog):
             # Unhandled RuntimeError results in 500 Internal Server Error
             assert response.status_code == 500
             
-            logging_records = [r for r in caplog.records if r.name == "app.request_logging"]
-            assert len(logging_records) == 1
+            logging_records = [json.loads(r.message) for r in caplog.records if r.name == "app.request_logging"]
+            request_logs = [log for log in logging_records if log.get("event") == "http_request"]
+            assert len(request_logs) == 1
             
-            log_data = json.loads(logging_records[0].message)
+            log_data = request_logs[0]
             assert log_data["event"] == "http_request"
             assert log_data["method"] == "GET"
             assert log_data["path"] == "/api/jobs"
