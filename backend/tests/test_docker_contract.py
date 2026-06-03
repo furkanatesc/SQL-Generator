@@ -19,6 +19,10 @@ def test_dockerfile_exists_and_conforms_to_contract():
     
     # Check CMD signature
     assert 'CMD ["uvicorn", "app.main:app"' in content, "Dockerfile should start uvicorn app.main:app"
+    assert "--host" in content and "0.0.0.0" in content, "Dockerfile CMD should set host to 0.0.0.0"
+    assert "--port" in content and "8000" in content, "Dockerfile CMD should set port to 8000"
+    assert "mkdir -p /app/uploads" in content, "Dockerfile should create /app/uploads directory"
+    assert "COPY evals /app/evals" in content, "Dockerfile should copy the evals directory"
 
 def test_dockerignore_exists_and_excludes_local_artifacts():
     dockerignore_path = os.path.join(
