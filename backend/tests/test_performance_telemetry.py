@@ -85,6 +85,8 @@ def test_slow_request_performance(monkeypatch, caplog):
         slow_log = slow_logs[0]
         assert slow_log["duration_ms"] == 900.0
         assert slow_log["path"] == "/health"
+        assert slow_log["method"] == "GET"
+        assert slow_log["status_code"] == 200
         
         # Verify Correlation (matching request_id)
         assert slow_log["request_id"] == request_id

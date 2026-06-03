@@ -70,6 +70,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "event": "slow_request",
                     "request_id": request_id,
                     "path": sanitized_path,
+                    "method": request.method,
+                    "status_code": status_code,
                     "duration_ms": duration_ms
                 }
                 logger.info(json.dumps(slow_event_data))
