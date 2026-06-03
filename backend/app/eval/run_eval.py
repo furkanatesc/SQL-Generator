@@ -60,11 +60,15 @@ def suite_result_to_report_dict(suite_result: EvalSuiteResult) -> dict[str, Any]
     for r in suite_result.results:
         reason = None
         if not r.passed:
-            failed_checks = [c.message for c in r.checks if not c.passed]
-            if failed_checks:
-                reason = failed_checks[0]
-            elif r.error_message:
-                reason = r.error_message
+            failed_checks_objs = [c for c in r.checks if not c.passed]
+            if failed_checks_objs:
+                first_failed = failed_checks_objs[0]
+                if first_failed.message and first_failed.message.strip():
+                    reason = first_failed.message.strip()
+                else:
+                    reason = f"Check failed: {first_failed.name}"
+            elif r.error_message and r.error_message.strip():
+                reason = r.error_message.strip()
             else:
                 reason = "Unknown failure"
                 
@@ -77,20 +81,54 @@ def suite_result_to_report_dict(suite_result: EvalSuiteResult) -> dict[str, Any]
             "stage": None,
         }
         
+        checks_data = []
+        failed_checks_data = []
+        for c in r.checks:
+            check_dict = {
+                "name": c.name,
+                "passed": c.passed,
+                "message": c.message or "",
+                "details": c.details or {}
+            }
+            checks_data.append(check_dict)
+            if not c.passed:
+                failed_checks_data.append({
+                    "name": c.name,
+                    "message": c.message or "",
+                    "details": c.details or {}
+                })
+
         result_entry = {
             "id": r.case_id,
             "expected_type": expected_type,
             "passed": r.passed,
             "reason": reason,
             "actual": actual,
+            "checks": checks_data,
+            "failed_checks": failed_checks_data,
         }
         results_list.append(result_entry)
         
         if not r.passed:
+            failed_cases_checks = []
+            for c in r.checks:
+                if not c.passed:
+                    fc_details = {}
+                    if c.details:
+                        if "missing" in c.details:
+                            fc_details["missing"] = c.details["missing"]
+                        else:
+                            fc_details = c.details
+                    failed_cases_checks.append({
+                        "name": c.name,
+                        "message": c.message or "",
+                        "details": fc_details
+                    })
             failed_cases_list.append({
                 "id": r.case_id,
                 "expected_type": expected_type,
                 "reason": reason,
+                "failed_checks": failed_cases_checks,
             })
             
     return {
