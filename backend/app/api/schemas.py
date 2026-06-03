@@ -20,6 +20,14 @@ class HealthResponse(BaseModel):
     config: RuntimeConfigDiagnostics
 
 
+class ReadinessResponse(BaseModel):
+    status: Literal["ok", "unhealthy"]
+    database_reachable: bool
+    api_key_configured: bool
+    upload_dir_writable: bool
+    critical_warnings_count: int
+
+
 class ConfigUpdateRequest(BaseModel):
     value: str
 
