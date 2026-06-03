@@ -1,0 +1,7 @@
+{
+  "missing_api_key": 403,
+  "invalid_api_key": 403,
+  "missing_resource": 404,
+  "validation_error": 422,
+  "health": 200
+}
