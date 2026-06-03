@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -14,9 +13,10 @@ router = APIRouter(
     dependencies=[Depends(verify_api_key)],
 )
 
+from app.settings import get_settings
+
 def ensure_debug_enabled():
-    enabled = os.getenv("NL2SQL_DEBUG_ENDPOINTS_ENABLED", "true").lower()
-    if enabled not in {"1", "true", "yes"}:
+    if not get_settings().debug_endpoints_enabled:
         raise HTTPException(status_code=404, detail="Not found")
 
 
