@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     upload_dir: str | None = None
 
-    debug_endpoints_enabled: bool = False
+    debug_endpoints_enabled: bool = True
 
     model_config = SettingsConfigDict(
         env_prefix="NL2SQL_",

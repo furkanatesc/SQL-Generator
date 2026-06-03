@@ -16,7 +16,7 @@ def test_default_settings_values_load(monkeypatch):
     assert settings.cors_allow_origins == ["*"]
     assert settings.cors_allow_credentials is True
     assert settings.upload_dir is None
-    assert settings.debug_endpoints_enabled is False
+    assert settings.debug_endpoints_enabled is True
 
 def test_app_name_override(monkeypatch):
     monkeypatch.setenv("NL2SQL_APP_NAME", "Custom App Name")

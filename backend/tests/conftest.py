@@ -15,7 +15,6 @@ def setup_test_db(tmp_path_factory):
     
     # Uygulamanın bu DB yolunu kullanmasını sağla
     os.environ["SQLGEN_DB_PATH"] = str(test_db_path)
-    os.environ.setdefault("NL2SQL_DEBUG_ENDPOINTS_ENABLED", "true")
     
     # Boş veritabanına tabloları kur
     init_db()

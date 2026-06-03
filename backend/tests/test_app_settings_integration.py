@@ -143,3 +143,10 @@ def test_debug_endpoint_flag_behavior(monkeypatch):
         response = client.get("/api/debug/traces", headers=headers)
         # Should bypass ensure_debug_enabled check (even if empty, returns list 200)
         assert response.status_code == 200
+
+        # 3. Test when debug is unset (should default to enabled/True)
+        monkeypatch.delenv("NL2SQL_DEBUG_ENDPOINTS_ENABLED", raising=False)
+        get_settings.cache_clear()
+        
+        response = client.get("/api/debug/traces", headers=headers)
+        assert response.status_code == 200

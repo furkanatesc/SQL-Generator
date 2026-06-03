@@ -1,3 +1,4 @@
+import os
 from fastapi import Security, HTTPException, status
 from fastapi.security.api_key import APIKeyHeader, APIKeyQuery
 from app.database import get_config
@@ -19,7 +20,6 @@ def verify_api_key(
         
     stored_key = get_config("api_key")
     if not stored_key:
-        import os
         stored_key = os.getenv("NL2SQL_API_KEY")
     if not stored_key:
         raise HTTPException(
