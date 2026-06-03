@@ -3,38 +3,50 @@ import json
 from app.main import app
 
 def test_public_api_surface():
-    # Discover routes at runtime
-    discovered_routes = {route.path for route in app.routes}
+    # Discover routes at runtime including HTTP methods
+    discovered_routes = set()
+    for route in app.routes:
+        methods = getattr(route, "methods", None) or set()
+        for method in methods:
+            discovered_routes.add((method.upper(), route.path))
     
     # Expected routes snapshot (source of truth inventory)
     expected_routes = {
-        "/openapi.json",
-        "/docs",
-        "/docs/oauth2-redirect",
-        "/redoc",
-        "/api/debug/traces",
-        "/api/debug/traces/{trace_id}",
-        "/health",
-        "/api/configs/{key}",
-        "/api/files/upload",
-        "/api/jobs/without-file",
-        "/api/jobs",
-        "/api/jobs/{job_id}",
-        "/api/jobs/{job_id}/stream",
-        "/api/jobs/{job_id}/cancel",
-        "/api/schema/raw",
-        "/api/schema",
-        "/api/schema/refresh",
-        "/api/schema/custom-relations",
-        "/api/schema/disabled-relations",
-        "/api/schema/filters",
-        "/api/rag/stats",
-        "/api/rag/search",
-        "/api/rag/index/business-rule",
-        "/api/rag/index/sql-history"
+        ("GET", "/openapi.json"),
+        ("HEAD", "/openapi.json"),
+        ("GET", "/docs"),
+        ("HEAD", "/docs"),
+        ("GET", "/docs/oauth2-redirect"),
+        ("HEAD", "/docs/oauth2-redirect"),
+        ("GET", "/redoc"),
+        ("HEAD", "/redoc"),
+        ("GET", "/api/debug/traces"),
+        ("GET", "/api/debug/traces/{trace_id}"),
+        ("GET", "/health"),
+        ("GET", "/api/configs/{key}"),
+        ("POST", "/api/configs/{key}"),
+        ("POST", "/api/files/upload"),
+        ("POST", "/api/jobs/without-file"),
+        ("GET", "/api/jobs"),
+        ("GET", "/api/jobs/{job_id}"),
+        ("GET", "/api/jobs/{job_id}/stream"),
+        ("POST", "/api/jobs/{job_id}/cancel"),
+        ("GET", "/api/schema/raw"),
+        ("GET", "/api/schema"),
+        ("POST", "/api/schema/refresh"),
+        ("GET", "/api/schema/custom-relations"),
+        ("POST", "/api/schema/custom-relations"),
+        ("GET", "/api/schema/disabled-relations"),
+        ("POST", "/api/schema/disabled-relations"),
+        ("GET", "/api/schema/filters"),
+        ("POST", "/api/schema/filters"),
+        ("GET", "/api/rag/stats"),
+        ("POST", "/api/rag/search"),
+        ("POST", "/api/rag/index/business-rule"),
+        ("POST", "/api/rag/index/sql-history")
     }
     
-    # Verify exact match (no endpoints added or removed)
+    # Verify exact match (no endpoints/methods added or removed)
     assert discovered_routes == expected_routes, (
         f"API Surface Mismatch!\n"
         f"Unexpected routes in runtime: {discovered_routes - expected_routes}\n"
