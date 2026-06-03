@@ -11,3 +11,5 @@ oracledb==2.5.1
 networkx==3.2.1
 thefuzz==0.22.1
 pytest==8.3.4
+pydantic-settings==2.14.1
+
