@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+.env
+*.db
+uploads/
+tests/
+.venv/
+venv/
+docs/
+qdrant_data/
+schema_cache.json
+target_test.db
+target_test_pipeline.db
