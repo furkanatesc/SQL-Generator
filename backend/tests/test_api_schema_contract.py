@@ -18,11 +18,10 @@ def test_health_response_exact_contract():
     res = client.get("/health")
     assert res.status_code == 200
     body = res.json()
-    assert body == {
-        "status": "ok",
-        "version": "0.1.0",
-        "database": "SQLite ready",
-    }
+    assert body["status"] == "ok"
+    assert body["version"] == "0.1.0"
+    assert body["database"] == "SQLite ready"
+    assert "config" in body
 
 
 # 2. Response envelope structure contract for job creation without file
@@ -210,7 +209,7 @@ def test_openapi_has_response_models_for_public_endpoints():
 
     # 1. HealthResponse
     assert "HealthResponse" in components
-    assert set(components["HealthResponse"]["required"]) == {"status", "version", "database"}
+    assert set(components["HealthResponse"]["required"]) == {"status", "version", "database", "config"}
 
     # 2. ConfigResponse
     assert "ConfigResponse" in components

@@ -3,11 +3,19 @@ from typing import Optional, Dict, Any, List, Literal
 from enum import Enum
 
 
-# PR 11.1 - Core API schemas
+class RuntimeConfigDiagnostics(BaseModel):
+    environment: str
+    debug_endpoints_enabled: bool
+    cors_origins_count: int
+    upload_dir_configured: bool
+    api_key_configured: bool
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     version: str
     database: str
+    config: RuntimeConfigDiagnostics
 
 
 class ConfigUpdateRequest(BaseModel):

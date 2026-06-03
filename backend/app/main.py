@@ -15,6 +15,7 @@ from app.api.debug_traces import router as debug_traces_router
 from fastapi.exceptions import RequestValidationError
 from app.settings import get_settings
 from app.api.errors import http_exception_handler, validation_exception_handler
+from app.health import build_health_response
 from app.api.schemas import (
     HealthResponse,
     ConfigUpdateRequest,
@@ -97,7 +98,7 @@ def startup_event():
 # API test endpoint'i
 @app.get("/health", response_model=HealthResponse)
 def health():
-    return {"status": "ok", "version": "0.1.0", "database": "SQLite ready"}
+    return build_health_response()
 
 # 1. Config API
 @app.get("/api/configs/{key}", dependencies=[Depends(verify_api_key)], response_model=ConfigResponse, responses={404: {"model": ErrorResponse}})
