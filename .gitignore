@@ -26,3 +26,6 @@ backend/schema_cache.json
 backend/qdrant_data/
 backend/sqlgen.db
 backend/uploads/
+backend/target_test.db
+backend/data/
+*.db.backup
