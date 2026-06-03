@@ -509,6 +509,43 @@
         "title": "RAGSearchRequest",
         "type": "object"
       },
+      "ReadinessResponse": {
+        "properties": {
+          "api_key_configured": {
+            "title": "Api Key Configured",
+            "type": "boolean"
+          },
+          "critical_warnings_count": {
+            "title": "Critical Warnings Count",
+            "type": "integer"
+          },
+          "database_reachable": {
+            "title": "Database Reachable",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "unhealthy"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "upload_dir_writable": {
+            "title": "Upload Dir Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "status",
+          "database_reachable",
+          "api_key_configured",
+          "upload_dir_writable",
+          "critical_warnings_count"
+        ],
+        "title": "ReadinessResponse",
+        "type": "object"
+      },
       "RelationItem": {
         "properties": {
           "source": {
@@ -1885,6 +1922,34 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "readiness_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Readiness"
       }
     }
   }

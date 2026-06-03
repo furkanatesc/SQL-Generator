@@ -4,7 +4,7 @@ import uuid
 import datetime
 import shutil
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, status, Query
+from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, status, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -17,9 +17,10 @@ from fastapi.exceptions import RequestValidationError
 from app.settings import get_settings
 from app.api.errors import http_exception_handler, validation_exception_handler, unhandled_exception_handler
 from app.middleware.request_logging import RequestLoggingMiddleware
-from app.health import build_health_response
+from app.health import build_health_response, check_readiness
 from app.api.schemas import (
     HealthResponse,
+    ReadinessResponse,
     ConfigUpdateRequest,
     ConfigResponse,
     ConfigUpdateResponse,
@@ -119,6 +120,30 @@ def startup_event():
 @app.get("/health", response_model=HealthResponse)
 def health():
     return build_health_response()
+
+@app.get("/ready", response_model=ReadinessResponse, responses={503: {"model": ReadinessResponse}})
+def readiness(response: Response):
+    diagnostics = check_readiness()
+    
+    is_ready = (
+        diagnostics["database_reachable"]
+        and diagnostics["api_key_configured"]
+        and diagnostics["upload_dir_writable"]
+        and (diagnostics["critical_warnings_count"] == 0)
+    )
+    
+    content = {
+        "status": "ok" if is_ready else "unhealthy",
+        "database_reachable": diagnostics["database_reachable"],
+        "api_key_configured": diagnostics["api_key_configured"],
+        "upload_dir_writable": diagnostics["upload_dir_writable"],
+        "critical_warnings_count": diagnostics["critical_warnings_count"]
+    }
+    
+    if not is_ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        
+    return content
 
 # 1. Config API
 @app.get("/api/configs/{key}", dependencies=[Depends(verify_api_key)], response_model=ConfigResponse, responses={404: {"model": ErrorResponse}})

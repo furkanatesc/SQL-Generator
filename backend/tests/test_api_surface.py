@@ -43,7 +43,8 @@ def test_public_api_surface():
         ("GET", "/api/rag/stats"),
         ("POST", "/api/rag/search"),
         ("POST", "/api/rag/index/business-rule"),
-        ("POST", "/api/rag/index/sql-history")
+        ("POST", "/api/rag/index/sql-history"),
+        ("GET", "/ready")
     }
     
     # Verify exact match (no endpoints/methods added or removed)

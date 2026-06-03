@@ -205,6 +205,22 @@
       "query"
     ]
   },
+  "ReadinessResponse": {
+    "properties": [
+      "api_key_configured",
+      "critical_warnings_count",
+      "database_reachable",
+      "status",
+      "upload_dir_writable"
+    ],
+    "required": [
+      "api_key_configured",
+      "critical_warnings_count",
+      "database_reachable",
+      "status",
+      "upload_dir_writable"
+    ]
+  },
   "RelationItem": {
     "properties": [
       "source",
