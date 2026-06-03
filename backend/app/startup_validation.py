@@ -13,6 +13,15 @@ class StartupValidationResult(BaseModel):
     ok: bool
     warnings: list[StartupValidationWarning]
 
+def is_production_like_environment(environment: str) -> bool:
+    normalized = environment.strip().lower()
+    return (
+        normalized == "production"
+        or normalized == "prod"
+        or normalized.startswith("production-")
+        or normalized.startswith("prod-")
+    )
+
 def validate_runtime_config() -> StartupValidationResult:
     settings = get_settings()
     warnings = []
@@ -28,7 +37,7 @@ def validate_runtime_config() -> StartupValidationResult:
         ))
         
     # 2. CORS wildcard in production check
-    is_prod = settings.environment.lower() == "production"
+    is_prod = is_production_like_environment(settings.environment)
     if is_prod and "*" in settings.cors_allow_origins:
         warnings.append(StartupValidationWarning(
             code="CORS_WILDCARD_IN_PRODUCTION",

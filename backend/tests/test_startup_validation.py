@@ -1,5 +1,3 @@
-import os
-import pytest
 from unittest.mock import patch
 from app.settings import get_settings
 from app.startup_validation import validate_runtime_config
@@ -166,3 +164,45 @@ def test_warning_counts_are_deterministic(monkeypatch):
         assert res1.ok == res2.ok
         assert len(res1.warnings) == len(res2.warnings)
         assert [w.code for w in res1.warnings] == [w.code for w in res2.warnings]
+
+def test_production_like_environment_detection_scenarios(monkeypatch):
+    # 1. production-eu + wildcard CORS => CORS_WILDCARD_IN_PRODUCTION
+    monkeypatch.setenv("NL2SQL_ENVIRONMENT", "production-eu")
+    monkeypatch.setenv("NL2SQL_CORS_ALLOW_ORIGINS", '["*"]')
+    get_settings.cache_clear()
+    with patch("app.startup_validation.get_config", return_value="some-key"):
+        result = validate_runtime_config()
+        warnings_codes = [w.code for w in result.warnings]
+        assert "CORS_WILDCARD_IN_PRODUCTION" in warnings_codes
+
+    # 2. prod-eu + debug enabled => DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION
+    monkeypatch.setenv("NL2SQL_ENVIRONMENT", "prod-eu")
+    monkeypatch.setenv("NL2SQL_CORS_ALLOW_ORIGINS", '["https://site.com"]')
+    monkeypatch.setenv("NL2SQL_DEBUG_ENDPOINTS_ENABLED", "true")
+    get_settings.cache_clear()
+    with patch("app.startup_validation.get_config", return_value="some-key"):
+        result = validate_runtime_config()
+        warnings_codes = [w.code for w in result.warnings]
+        assert "DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION" in warnings_codes
+
+    # 3. local + wildcard CORS => no production warning
+    monkeypatch.setenv("NL2SQL_ENVIRONMENT", "local")
+    monkeypatch.setenv("NL2SQL_CORS_ALLOW_ORIGINS", '["*"]')
+    monkeypatch.setenv("NL2SQL_DEBUG_ENDPOINTS_ENABLED", "true")
+    get_settings.cache_clear()
+    with patch("app.startup_validation.get_config", return_value="some-key"):
+        result = validate_runtime_config()
+        warnings_codes = [w.code for w in result.warnings]
+        assert "CORS_WILDCARD_IN_PRODUCTION" not in warnings_codes
+        assert "DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION" not in warnings_codes
+
+    # 4. development + debug enabled => no production warning
+    monkeypatch.setenv("NL2SQL_ENVIRONMENT", "development")
+    monkeypatch.setenv("NL2SQL_DEBUG_ENDPOINTS_ENABLED", "true")
+    monkeypatch.setenv("NL2SQL_CORS_ALLOW_ORIGINS", '["*"]')
+    get_settings.cache_clear()
+    with patch("app.startup_validation.get_config", return_value="some-key"):
+        result = validate_runtime_config()
+        warnings_codes = [w.code for w in result.warnings]
+        assert "CORS_WILDCARD_IN_PRODUCTION" not in warnings_codes
+        assert "DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION" not in warnings_codes
