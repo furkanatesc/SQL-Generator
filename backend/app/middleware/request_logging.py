@@ -5,8 +5,12 @@ import logging
 from urllib.parse import urlencode, parse_qsl
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from app.observability.performance import PerformanceClassifier
 
 logger = logging.getLogger("app.request_logging")
+
+def get_current_time() -> float:
+    return time.perf_counter()
 
 def get_sanitized_path(request: Request) -> str:
     path = request.url.path
@@ -31,7 +35,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Store in request state for other parts of the application
         request.state.request_id = request_id
         
-        start_time = time.perf_counter()
+        start_time = get_current_time()
         
         # 2. Extract and sanitize path/query parameters
         sanitized_path = get_sanitized_path(request)
@@ -48,13 +52,24 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             status_code = 500
             raise e
         finally:
-            duration_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
+            duration_ms = round((get_current_time() - start_time) * 1000.0, 2)
+            tier = PerformanceClassifier.classify(duration_ms)
             log_data = {
                 "event": "http_request",
                 "request_id": request_id,
                 "method": request.method,
                 "path": sanitized_path,
                 "status_code": status_code,
-                "duration_ms": duration_ms
+                "duration_ms": duration_ms,
+                "performance_tier": tier
             }
             logger.info(json.dumps(log_data))
+            
+            if tier == "slow":
+                slow_event_data = {
+                    "event": "slow_request",
+                    "request_id": request_id,
+                    "path": sanitized_path,
+                    "duration_ms": duration_ms
+                }
+                logger.info(json.dumps(slow_event_data))
