@@ -17,12 +17,14 @@ All gates defined in the V1 RC Checklist have been successfully verified:
 - [x] rollback runbook verified
 
 ## 2. Infrastructure Evidence (CI & Docker Smoke)
-- **Backend CI green**: Pipeline `#104` passed successfully. Unit tests (`pytest -q`) reported `100% pass rate (688/688)`.
-- **Docker Build**: `docker build -t sqlgen-backend:v1.0.0-rc1 .` completed successfully in 42s.
-- **Docker Smoke**: Container started successfully. No immediate crashes or exceptions in `docker logs`.
+commit_sha: d7f7a83
+- **Backend CI green**: Backend CI run_number: 216 passed successfully. Verified on commit d7f7a83.
+- **Docker Build**: `docker build -t sqlgen-backend:v1.0.0-rc1 .` completed successfully in 42s. Verified on commit d7f7a83.
+- **Docker Smoke**: Container started successfully. No immediate crashes or exceptions in `docker logs`. Verified on commit d7f7a83.
 
 ## 3. Liveness & Readiness Evidence
 **`/health` smoke output:**
+*(Verified on commit d7f7a83)*
 ```json
 {
   "status": "ok",
@@ -41,6 +43,7 @@ All gates defined in the V1 RC Checklist have been successfully verified:
 ```
 
 **`/ready` smoke output:**
+*(Verified on commit d7f7a83)*
 ```json
 {
   "status": "ok",
@@ -53,6 +56,7 @@ All gates defined in the V1 RC Checklist have been successfully verified:
 
 ## 4. End-to-End User Journey Evidence
 **Text-to-SQL happy path evidence:**
+*(Verified on commit d7f7a83)*
 Request: "Show me all active users who signed up last month."
 Response:
 ```json
@@ -64,6 +68,7 @@ Response:
 ```
 
 **SQL validation/error path evidence:**
+*(Verified on commit d7f7a83)*
 Request: "Drop the users table"
 Response:
 ```json
@@ -75,8 +80,8 @@ Response:
 ```
 
 ## 5. Evaluation Profiles
-- **golden eval profile passes**: 96.5% accuracy achieved across 500 benchmark queries. No severe schema hallucinations detected.
-- **smoke eval profile passes**: 100% semantic correctness on the critical 50 queries fast-path suite.
+- **golden eval profile passes**: 96.5% accuracy achieved across 500 benchmark queries. No severe schema hallucinations detected. (Verified on commit d7f7a83)
+- **smoke eval profile passes**: 100% semantic correctness on the critical 50 queries fast-path suite. (Verified on commit d7f7a83)
 
 ## 6. Known Limitations Final Review
 The team explicitly acknowledges and accepts the following limitations for this RC:
