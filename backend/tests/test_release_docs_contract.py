@@ -29,3 +29,11 @@ def test_docs_contain_critical_contracts(doc_file):
         
     for term in REQUIRED_TERMS:
         assert term in content, f"Critical term '{term}' is missing from {doc_file}"
+        
+    if doc_file == "production-release-runbook.md":
+        rollback_section = content.split("## 5. Rollback Procedure")[1] if "## 5. Rollback Procedure" in content else ""
+        assert rollback_section != "", "Rollback procedure section missing"
+        
+        rollback_terms = ["$CURRENT_TAG", "docker stop", "docker rm", "docker run", "/health", "/ready"]
+        for term in rollback_terms:
+            assert term in rollback_section, f"Critical rollback term '{term}' missing from rollback section"

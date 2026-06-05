@@ -19,4 +19,5 @@ This checklist must be executed as the final verification step of the release pr
 
 4. **Rollback Condition**
    - If either `/health` or `/ready` returns a `503 Service Unavailable` or any other error, immediately trigger a rollback. Do not attempt to fix configuration issues on a live container. 
+   - After executing the rollback procedure, you MUST explicitly verify `/health` and `/ready` again on the old container to ensure the system has fully recovered.
    - A `docker build` and `docker run` sequence must be fully re-executed for any subsequent fix after a rollback.

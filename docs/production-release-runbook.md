@@ -43,5 +43,13 @@ If the smoke test yields any failure, execute the following rollback steps immed
    docker stop sqlgen-backend-new
    docker rm sqlgen-backend-new
    ```
-2. Restart the container using the `$CURRENT_TAG` saved in Step 3.
+2. Restart the container using the `$CURRENT_TAG` saved in Step 3:
+   ```bash
+   docker run -d --name sqlgen-backend \
+     -e NL2SQL_ENVIRONMENT=production \
+     -e NL2SQL_API_KEY=your_secure_api_key \
+     -e NL2SQL_CORS_ALLOW_ORIGINS='["https://your-ui.com"]' \
+     -p 8000:8000 \
+     $CURRENT_TAG
+   ```
 3. Verify `/health` and `/ready` again to ensure the rollback was successful.
