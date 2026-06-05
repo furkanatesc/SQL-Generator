@@ -12,7 +12,7 @@ We are thrilled to announce the official release of SQL-Generator Product V1! Th
 - **Fail-Fast Configuration**: Immediate container exit on missing critical configurations.
 
 ## Observability & Operations
-- **Liveness/Readiness Endpoints**: Robust `/health` and `/ready` endpoints for Kubernetes/Docker orchestration.
+- **Liveness/Readiness Endpoints**: Robust `/health` and `/ready` endpoints for operational smoke checks and future orchestration integrations.
 - **Docker-native Deployment**: Immutable image architecture with detailed rollout and rollback runbooks.
 
 ## Known Limitations
