@@ -43,7 +43,7 @@ def test_health_api_key_configured_scenarios(monkeypatch):
     monkeypatch.delenv("NL2SQL_API_KEY", raising=False)
     get_settings.cache_clear()
     
-    with patch("app.health.get_config", return_value="my-secret-db-key"):
+    with patch("app.startup_validation.get_config", return_value="my-secret-db-key"):
         response = build_health_response().model_dump()
         assert response["config"]["api_key_configured"] is True
         # Verify secret value not leaked
@@ -54,7 +54,7 @@ def test_health_api_key_configured_scenarios(monkeypatch):
     monkeypatch.setenv("NL2SQL_API_KEY", "my-secret-env-key")
     get_settings.cache_clear()
     
-    with patch("app.health.get_config", return_value=None):
+    with patch("app.startup_validation.get_config", return_value=None):
         response = build_health_response().model_dump()
         assert response["config"]["api_key_configured"] is True
         # Verify secret value not leaked
@@ -65,7 +65,7 @@ def test_health_api_key_configured_scenarios(monkeypatch):
     monkeypatch.delenv("NL2SQL_API_KEY", raising=False)
     get_settings.cache_clear()
     
-    with patch("app.health.get_config", return_value=None):
+    with patch("app.startup_validation.get_config", return_value=None):
         response = build_health_response().model_dump()
         assert response["config"]["api_key_configured"] is False
 
