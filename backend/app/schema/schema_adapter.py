@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any
 from .schema_contract import (
     DatabaseSchema,
     TableSchema,
@@ -8,20 +8,27 @@ from .schema_contract import (
     RelationshipType
 )
 
-def from_legacy_schema(raw_schema: Dict[str, Any], dialect: str | None = None) -> DatabaseSchema:
+def from_legacy_schema(raw_schema: dict[str, Any], dialect: str | None = None) -> DatabaseSchema:
     if dialect is None:
         dialect = "unknown"
         
+    if "tables" not in raw_schema or not isinstance(raw_schema["tables"], dict):
+        raise ValueError("Legacy schema must contain a 'tables' object (dict)")
+
     tables = []
     relationships = []
     
     # Parse tables
-    raw_tables = raw_schema.get("tables", {})
+    raw_tables = raw_schema["tables"]
     for table_name, table_data in raw_tables.items():
         columns = []
         pk_cols = []
         
-        for col_data in table_data.get("columns", []):
+        raw_columns = table_data.get("columns", [])
+        if not isinstance(raw_columns, list):
+            raise ValueError(f"Table '{table_name}' columns must be a list")
+            
+        for col_data in raw_columns:
             col = ColumnSchema(
                 name=col_data.get("name", ""),
                 data_type=col_data.get("type"),
@@ -40,28 +47,68 @@ def from_legacy_schema(raw_schema: Dict[str, Any], dialect: str | None = None) -
             raw=table_data
         ))
         
-    # Parse graph edges
-    raw_graph = raw_schema.get("graph", {})
-    nodes = raw_graph.get("nodes", [])
-    raw_edges = raw_graph.get("edges", [])
+    # Primary relationship source: graph.edges
+    raw_graph = raw_schema.get("graph")
     
-    for edge in raw_edges:
-        rel_type_str = edge.get("type", "explicit")
-        try:
-            rel_type = RelationshipType(rel_type_str)
-        except ValueError:
-            rel_type = RelationshipType.CUSTOM
+    # Check if graph exists but is improperly formatted
+    if raw_graph is not None and not isinstance(raw_graph, dict):
+        raise ValueError("Legacy schema 'graph' must be a dictionary if present")
+
+    has_graph_edges = False
+    nodes = []
+    if raw_graph and isinstance(raw_graph, dict):
+        nodes = raw_graph.get("nodes", [])
+        raw_edges = raw_graph.get("edges")
+        if raw_edges is not None:
+            if not isinstance(raw_edges, list):
+                raise ValueError("Legacy schema 'graph.edges' must be a list if present")
             
-        rel = RelationshipSchema(
-            source_table=edge.get("source", ""),
-            source_column=edge.get("source_col", ""),
-            target_table=edge.get("target", ""),
-            target_column=edge.get("target_col", ""),
-            relationship_type=rel_type,
-            raw=edge
-        )
-        relationships.append(rel)
-        
+            has_graph_edges = True
+            for edge in raw_edges:
+                rel_type_str = edge.get("type", "explicit")
+                try:
+                    rel_type = RelationshipType(rel_type_str)
+                except ValueError as exc:
+                    raise ValueError(f"Unknown relationship type in graph: {rel_type_str}") from exc
+                    
+                rel = RelationshipSchema(
+                    source_table=edge.get("source", ""),
+                    source_column=edge.get("source_col", ""),
+                    target_table=edge.get("target", ""),
+                    target_column=edge.get("target_col", ""),
+                    relationship_type=rel_type,
+                    raw=edge
+                )
+                relationships.append(rel)
+    
+    # Fallback to foreign_keys if graph.edges is absent
+    if not has_graph_edges:
+        for table_name, table_data in raw_tables.items():
+            raw_fks = table_data.get("foreign_keys", [])
+            if not isinstance(raw_fks, list):
+                raise ValueError(f"Table '{table_name}' foreign_keys must be a list")
+                
+            for fk in raw_fks:
+                rel_type_str = fk.get("type", "explicit")
+                try:
+                    rel_type = RelationshipType(rel_type_str)
+                except ValueError as exc:
+                    raise ValueError(f"Unknown relationship type in foreign_keys: {rel_type_str}") from exc
+                    
+                rel = RelationshipSchema(
+                    source_table=table_name,
+                    source_column=fk.get("column", ""),
+                    target_table=fk.get("referenced_table", ""),
+                    target_column=fk.get("referenced_column", ""),
+                    relationship_type=rel_type,
+                    raw=fk
+                )
+                relationships.append(rel)
+
+    # For graph, if we fell back to fks and nodes are empty, auto-generate nodes
+    if not has_graph_edges and not nodes:
+        nodes = list(raw_tables.keys())
+
     graph = SchemaGraph(nodes=nodes, edges=relationships)
     
     return DatabaseSchema(
@@ -72,7 +119,7 @@ def from_legacy_schema(raw_schema: Dict[str, Any], dialect: str | None = None) -
         raw=raw_schema
     )
 
-def to_legacy_dict(schema: DatabaseSchema) -> Dict[str, Any]:
+def to_legacy_dict(schema: DatabaseSchema) -> dict[str, Any]:
     legacy = {
         "tables": {},
         "graph": {
@@ -91,7 +138,6 @@ def to_legacy_dict(schema: DatabaseSchema) -> Dict[str, Any]:
                 "target_col": edge.target_column,
                 "type": edge.relationship_type.value
             }
-            # restore other keys from raw if they exist
             for k, v in edge.raw.items():
                 if k not in edge_dict:
                     edge_dict[k] = v
@@ -104,7 +150,6 @@ def to_legacy_dict(schema: DatabaseSchema) -> Dict[str, Any]:
             "constraints": []
         }
         
-        # restore table raw fields
         for k, v in table.raw.items():
             if k not in ["columns", "foreign_keys", "constraints"]:
                 t_dict[k] = v
@@ -119,37 +164,20 @@ def to_legacy_dict(schema: DatabaseSchema) -> Dict[str, Any]:
             for k, v in col.raw.items():
                 if k not in c_dict:
                     c_dict[k] = v
-            # remove None values for nullable if they weren't there originally to avoid bloating
             if c_dict.get("nullable") is None and "nullable" not in col.raw:
                 c_dict.pop("nullable")
             t_dict["columns"].append(c_dict)
             
-        # Restore foreign_keys array from original raw format,
-        # but also ensure all edges stemming from this table are included
-        # to handle cases where relationships were added functionally.
-        existing_fks = set()
+        # Only restore original table-level raw foreign keys. 
+        # DO NOT automatically merge from graph.edges to prevent implicit/custom polluting DB constraint semantics
         if "foreign_keys" in table.raw:
-            for raw_fk in table.raw["foreign_keys"]:
-                t_dict["foreign_keys"].append(raw_fk)
-                existing_fks.add((raw_fk.get("column"), raw_fk.get("referenced_table")))
-                
-        for edge in legacy["graph"]["edges"]:
-            if edge["source"] == table.name:
-                if (edge["source_col"], edge["target"]) not in existing_fks:
-                    fk_dict = {
-                        "column": edge["source_col"],
-                        "referenced_table": edge["target"],
-                        "referenced_column": edge["target_col"],
-                        "type": edge["type"]
-                    }
-                    t_dict["foreign_keys"].append(fk_dict)
+            t_dict["foreign_keys"] = table.raw["foreign_keys"]
                 
         if "constraints" in table.raw:
             t_dict["constraints"] = table.raw["constraints"]
             
         legacy["tables"][table.name] = t_dict
         
-    # Also restore any top-level raw fields like sequences or embeddings
     for k, v in schema.raw.items():
         if k not in legacy:
             legacy[k] = v

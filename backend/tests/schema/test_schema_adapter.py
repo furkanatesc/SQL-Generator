@@ -64,9 +64,15 @@ def test_legacy_roundtrip_does_not_drop_core_schema_information_sqlite():
     assert legacy["tables"]["users"]["columns"][0]["name"] == "id"
     
     edges = legacy.get("graph", {}).get("edges", [])
-    assert len(edges) > 0
-    assert edges[0]["source"] == "orders"
-    assert edges[0]["target"] == "users"
+    assert edges == [
+        {
+            "source": "orders",
+            "target": "users",
+            "source_col": "user_id",
+            "target_col": "id",
+            "type": "explicit"
+        }
+    ]
     
     # Original dict format matching
     assert legacy["tables"]["users"]["columns"][0]["primary_key"] is True
@@ -81,8 +87,14 @@ def test_legacy_roundtrip_does_not_drop_core_schema_information_postgres():
     assert legacy["tables"]["users"]["columns"][0]["type"] == "integer"
     
     orders_fks = legacy["tables"]["orders"].get("foreign_keys", [])
-    assert len(orders_fks) > 0
-    assert orders_fks[0]["referenced_table"] == "users"
+    assert orders_fks == [
+        {
+            "column": "user_id",
+            "referenced_table": "users",
+            "referenced_column": "id",
+            "type": "explicit"
+        }
+    ]
 
 def test_legacy_roundtrip_does_not_drop_core_schema_information_oracle():
     raw_schema_fixture = load_fixture("oracle_basic_schema.json")
@@ -94,5 +106,65 @@ def test_legacy_roundtrip_does_not_drop_core_schema_information_oracle():
     assert legacy["tables"]["USERS"]["columns"][0]["type"] == "NUMBER(10,0)"
     
     edges = legacy.get("graph", {}).get("edges", [])
-    assert len(edges) > 0
-    assert edges[0]["source"] == "ORDERS"
+    assert edges == [
+        {
+            "source": "ORDERS",
+            "target": "USERS",
+            "source_col": "USER_ID",
+            "target_col": "ID",
+            "type": "explicit"
+        }
+    ]
+
+def test_from_legacy_schema_rejects_missing_tables():
+    with pytest.raises(ValueError, match="Legacy schema must contain a 'tables' object"):
+        from_legacy_schema({"graph": {}})
+
+def test_from_legacy_schema_rejects_unknown_relationship_type():
+    raw = {
+        "tables": {
+            "t1": {"columns": [{"name": "id"}]},
+            "t2": {"columns": [{"name": "id"}]}
+        },
+        "graph": {
+            "nodes": ["t1", "t2"],
+            "edges": [
+                {
+                    "source": "t1",
+                    "target": "t2",
+                    "source_col": "id",
+                    "target_col": "id",
+                    "type": "unknown_magical_type"
+                }
+            ]
+        }
+    }
+    with pytest.raises(ValueError, match="Unknown relationship type in graph: unknown_magical_type"):
+        from_legacy_schema(raw)
+
+def test_from_legacy_schema_falls_back_to_foreign_keys_if_no_graph_edges():
+    raw = {
+        "tables": {
+            "users": {
+                "columns": [{"name": "id"}],
+            },
+            "orders": {
+                "columns": [{"name": "id"}, {"name": "user_id"}],
+                "foreign_keys": [
+                    {
+                        "column": "user_id",
+                        "referenced_table": "users",
+                        "referenced_column": "id",
+                        "type": "explicit"
+                    }
+                ]
+            }
+        }
+    }
+    
+    typed = from_legacy_schema(raw)
+    assert typed.graph is not None
+    assert set(typed.graph.nodes) == {"users", "orders"}
+    assert len(typed.graph.edges) == 1
+    assert typed.graph.edges[0].source_table == "orders"
+    assert typed.graph.edges[0].target_table == "users"
