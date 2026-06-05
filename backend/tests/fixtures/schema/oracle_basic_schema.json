@@ -1,0 +1,39 @@
+{
+    "tables": {
+        "USERS": {
+            "columns": [
+                {"name": "ID", "type": "NUMBER(10,0)", "primary_key": true, "nullable": false},
+                {"name": "EMAIL", "type": "VARCHAR2(255)", "primary_key": false, "nullable": true}
+            ],
+            "foreign_keys": [],
+            "constraints": []
+        },
+        "ORDERS": {
+            "columns": [
+                {"name": "ID", "type": "NUMBER(10,0)", "primary_key": true, "nullable": false},
+                {"name": "USER_ID", "type": "NUMBER(10,0)", "primary_key": false, "nullable": true}
+            ],
+            "foreign_keys": [
+                {
+                    "column": "USER_ID",
+                    "referenced_table": "USERS",
+                    "referenced_column": "ID",
+                    "type": "explicit"
+                }
+            ],
+            "constraints": []
+        }
+    },
+    "graph": {
+        "nodes": ["USERS", "ORDERS"],
+        "edges": [
+            {
+                "source": "ORDERS",
+                "target": "USERS",
+                "source_col": "USER_ID",
+                "target_col": "ID",
+                "type": "explicit"
+            }
+        ]
+    }
+}
