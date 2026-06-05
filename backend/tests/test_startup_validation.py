@@ -115,7 +115,7 @@ def test_startup_validation_rejects_debug_endpoints_in_production(monkeypatch):
         warnings_codes = [w.code for w in result.warnings]
         assert "DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION" not in warnings_codes
 
-def test_upload_dir_unset_warning(monkeypatch):
+def test_upload_dir_unset_warning(monkeypatch, tmp_path):
     # Scenario A: Upload dir unset
     monkeypatch.delenv("NL2SQL_UPLOAD_DIR", raising=False)
     get_settings.cache_clear()
@@ -128,7 +128,8 @@ def test_upload_dir_unset_warning(monkeypatch):
         assert upload_w.severity == "info"
 
     # Scenario B: Upload dir set
-    monkeypatch.setenv("NL2SQL_UPLOAD_DIR", "/custom/path")
+    custom_path = str(tmp_path / "custom_path")
+    monkeypatch.setenv("NL2SQL_UPLOAD_DIR", custom_path)
     get_settings.cache_clear()
     
     with patch("app.startup_validation.get_config", return_value="some-key"):
