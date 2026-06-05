@@ -71,11 +71,12 @@ def test_readiness_upload_dir_not_writable(monkeypatch):
     assert data["status"] == "unhealthy"
     assert data["upload_dir_writable"] is False
 
-def test_readiness_critical_warnings(monkeypatch):
+def test_readiness_unhealthy_when_startup_validation_has_critical_warning(monkeypatch):
     # Mock validate_runtime_config to return a critical warning
     class MockWarning:
         def __init__(self):
             self.severity = "critical"
+            self.code = "SOME_CRITICAL_WARNING"
             
     class MockResult:
         def __init__(self):

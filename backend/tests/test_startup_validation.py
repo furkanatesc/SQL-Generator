@@ -3,7 +3,7 @@ from app.settings import get_settings
 from app.startup_validation import validate_runtime_config
 from app.health import build_health_response
 
-def test_startup_validation_no_raw_secrets_exposed(monkeypatch):
+def test_startup_validation_does_not_leak_secret_values(monkeypatch):
     # Setup multiple warnings
     monkeypatch.setenv("NL2SQL_ENVIRONMENT", "production")
     monkeypatch.setenv("NL2SQL_CORS_ALLOW_ORIGINS", '["*"]')
@@ -25,7 +25,7 @@ def test_startup_validation_no_raw_secrets_exposed(monkeypatch):
             assert "uploads" not in w_str
             assert ".env" not in w_str
 
-def test_api_key_missing_creates_warning(monkeypatch):
+def test_startup_validation_detects_missing_api_key(monkeypatch):
     # Scenario A: Missing API key
     monkeypatch.delenv("NL2SQL_API_KEY", raising=False)
     get_settings.cache_clear()
@@ -59,7 +59,7 @@ def test_api_key_missing_creates_warning(monkeypatch):
         warnings_codes = [w.code for w in result.warnings]
         assert "API_KEY_NOT_CONFIGURED" not in warnings_codes
 
-def test_cors_wildcard_in_production(monkeypatch):
+def test_startup_validation_rejects_wildcard_cors_in_production(monkeypatch):
     # Scenario A: Production + Wildcard CORS
     monkeypatch.setenv("NL2SQL_ENVIRONMENT", "production")
     monkeypatch.setenv("NL2SQL_CORS_ALLOW_ORIGINS", '["*"]')
@@ -70,7 +70,7 @@ def test_cors_wildcard_in_production(monkeypatch):
         warnings_codes = [w.code for w in result.warnings]
         assert "CORS_WILDCARD_IN_PRODUCTION" in warnings_codes
         cors_w = next(w for w in result.warnings if w.code == "CORS_WILDCARD_IN_PRODUCTION")
-        assert cors_w.severity == "warning"
+        assert cors_w.severity == "critical"
 
     # Scenario B: Production + Specific CORS
     monkeypatch.setenv("NL2SQL_ENVIRONMENT", "production")
@@ -92,7 +92,7 @@ def test_cors_wildcard_in_production(monkeypatch):
         warnings_codes = [w.code for w in result.warnings]
         assert "CORS_WILDCARD_IN_PRODUCTION" not in warnings_codes
 
-def test_debug_endpoints_enabled_in_production(monkeypatch):
+def test_startup_validation_rejects_debug_endpoints_in_production(monkeypatch):
     # Scenario A: Production + Debug Enabled
     monkeypatch.setenv("NL2SQL_ENVIRONMENT", "production")
     monkeypatch.setenv("NL2SQL_DEBUG_ENDPOINTS_ENABLED", "true")
@@ -103,7 +103,7 @@ def test_debug_endpoints_enabled_in_production(monkeypatch):
         warnings_codes = [w.code for w in result.warnings]
         assert "DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION" in warnings_codes
         debug_w = next(w for w in result.warnings if w.code == "DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION")
-        assert debug_w.severity == "warning"
+        assert debug_w.severity == "critical"
 
     # Scenario B: Production + Debug Disabled
     monkeypatch.setenv("NL2SQL_ENVIRONMENT", "production")
@@ -148,8 +148,8 @@ def test_health_config_includes_warning_counts(monkeypatch):
     with patch("app.startup_validation.get_config", return_value=None):
         response = build_health_response().model_dump()
         assert response["config"]["startup_warnings_count"] == 4
-        # API key is missing -> severity="critical"
-        assert response["config"]["startup_critical_warnings_count"] == 1
+        # API key missing -> critical, wildcard CORS -> critical, debug enabled -> critical
+        assert response["config"]["startup_critical_warnings_count"] == 3
 
 def test_warning_counts_are_deterministic(monkeypatch):
     monkeypatch.setenv("NL2SQL_ENVIRONMENT", "production")
