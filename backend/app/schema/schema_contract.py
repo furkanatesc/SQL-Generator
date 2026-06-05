@@ -130,6 +130,16 @@ class DatabaseSchema(BaseModel):
                     f"Missing in tables: {missing_in_tables}."
                 )
 
+            # Enforce semantic equality between relationships and graph.edges
+            if self.relationships:
+                rel_set = set((r.source_table, r.source_column, r.target_table, r.target_column, r.relationship_type) for r in self.relationships)
+                graph_edge_set = set((r.source_table, r.source_column, r.target_table, r.target_column, r.relationship_type) for r in self.graph.edges)
+                
+                if rel_set != graph_edge_set:
+                    raise ValueError(
+                        "DatabaseSchema relationships and SchemaGraph edges must represent the exact same semantic edge set."
+                    )
+
         all_edges = []
         if self.graph:
             all_edges.extend(self.graph.edges)

@@ -139,7 +139,7 @@ def test_from_legacy_schema_rejects_unknown_relationship_type():
             ]
         }
     }
-    with pytest.raises(ValueError, match="Unknown relationship type in graph: unknown_magical_type"):
+    with pytest.raises(ValueError, match="Unknown relationship type in graph edge\[0\]: unknown_magical_type"):
         from_legacy_schema(raw)
 
 def test_from_legacy_schema_falls_back_to_foreign_keys_if_no_graph_edges():
@@ -168,3 +168,47 @@ def test_from_legacy_schema_falls_back_to_foreign_keys_if_no_graph_edges():
     assert len(typed.graph.edges) == 1
     assert typed.graph.edges[0].source_table == "orders"
     assert typed.graph.edges[0].target_table == "users"
+
+def test_from_legacy_schema_rejects_malformed_table_and_column():
+    # Table is not dict
+    with pytest.raises(ValueError, match="Table 'users' metadata must be a dictionary"):
+        from_legacy_schema({"tables": {"users": None}})
+        
+    # Column is not dict
+    with pytest.raises(ValueError, match="Table 'users' column\\[0\\] must be a dictionary"):
+        from_legacy_schema({"tables": {"users": {"columns": [None]}}})
+
+def test_from_legacy_schema_rejects_malformed_graph_types():
+    # nodes not list
+    with pytest.raises(ValueError, match="Legacy schema 'graph.nodes' must be a list if present"):
+        from_legacy_schema({
+            "tables": {"users": {"columns": [{"name": "id"}]}}, 
+            "graph": {"nodes": "users", "edges": []}
+        })
+        
+    # edge not dict
+    with pytest.raises(ValueError, match="Graph edge\\[0\\] must be a dictionary"):
+        from_legacy_schema({
+            "tables": {"users": {"columns": [{"name": "id"}]}}, 
+            "graph": {"nodes": ["users"], "edges": [None]}
+        })
+
+def test_from_legacy_schema_fallback_on_empty_edges_list():
+    raw = {
+        "tables": {
+            "orders": {
+                "columns": [{"name": "id"}, {"name": "user_id"}],
+                "foreign_keys": [
+                    {"column": "user_id", "referenced_table": "users", "referenced_column": "id"}
+                ]
+            },
+            "users": {"columns": [{"name": "id"}]}
+        },
+        "graph": {"nodes": ["orders", "users"], "edges": []}
+    }
+    
+    typed = from_legacy_schema(raw)
+    assert typed.graph is not None
+    assert len(typed.relationships) == 1
+    assert typed.relationships[0].source_table == "orders"
+    assert typed.relationships[0].target_table == "users"
