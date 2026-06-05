@@ -14,8 +14,7 @@ def build_health_response() -> HealthResponse:
         warnings_count = len(validation_res.warnings)
         critical_warnings_count = sum(1 for w in validation_res.warnings if w.severity == "critical")
         api_key_configured = not any(w.code == "API_KEY_NOT_CONFIGURED" for w in validation_res.warnings)
-        # For health response, we consider it configured if it doesn't have critical directory errors
-        upload_dir_configured = not any(w.code in ["UPLOAD_DIR_NOT_WRITABLE", "UPLOAD_DIR_NOT_FOUND"] for w in validation_res.warnings)
+        upload_dir_configured = settings.upload_dir is not None
     except Exception:
         warnings_count = 0
         critical_warnings_count = 1

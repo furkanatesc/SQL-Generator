@@ -137,6 +137,10 @@ def test_upload_dir_unset_warning(monkeypatch):
         assert "UPLOAD_DIR_DEFAULT" not in warnings_codes
 
 def test_health_config_includes_warning_counts(monkeypatch):
+    import os
+    uploads_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+    os.makedirs(uploads_path, exist_ok=True)
+    
     # Setup production with CORS wildcard, debug enabled, default upload_dir, and missing API key
     monkeypatch.setenv("NL2SQL_ENVIRONMENT", "production")
     monkeypatch.setenv("NL2SQL_CORS_ALLOW_ORIGINS", '["*"]')
