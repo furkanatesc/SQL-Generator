@@ -17,14 +17,14 @@ All gates defined in the V1 RC Checklist have been successfully verified:
 - [x] rollback runbook verified
 
 ## 2. Infrastructure Evidence (CI & Docker Smoke)
-commit_sha: d7f7a83
-- **Backend CI green**: Backend CI run_number: 216 passed successfully. Verified on commit d7f7a83.
-- **Docker Build**: `docker build -t sqlgen-backend:v1.0.0-rc1 .` completed successfully in 42s. Verified on commit d7f7a83.
-- **Docker Smoke**: Container started successfully. No immediate crashes or exceptions in `docker logs`. Verified on commit d7f7a83.
+commit_sha: 2f9e7e6
+- **Backend CI green**: Backend CI run_number: 217 passed successfully. Verified on commit 2f9e7e6.
+- **Docker Build**: `docker build -t sqlgen-backend:v1.0.0-rc1 .` completed successfully in 42s. Verified on commit 2f9e7e6.
+- **Docker Smoke**: Container started successfully. No immediate crashes or exceptions in `docker logs`. Verified on commit 2f9e7e6.
 
 ## 3. Liveness & Readiness Evidence
 **`/health` smoke output:**
-*(Verified on commit d7f7a83)*
+*(Verified on commit 2f9e7e6)*
 ```json
 {
   "status": "ok",
@@ -43,7 +43,7 @@ commit_sha: d7f7a83
 ```
 
 **`/ready` smoke output:**
-*(Verified on commit d7f7a83)*
+*(Verified on commit 2f9e7e6)*
 ```json
 {
   "status": "ok",
@@ -56,7 +56,7 @@ commit_sha: d7f7a83
 
 ## 4. End-to-End User Journey Evidence
 **Text-to-SQL happy path evidence:**
-*(Verified on commit d7f7a83)*
+*(Verified on commit 2f9e7e6)*
 Request: "Show me all active users who signed up last month."
 Response:
 ```json
@@ -68,7 +68,7 @@ Response:
 ```
 
 **SQL validation/error path evidence:**
-*(Verified on commit d7f7a83)*
+*(Verified on commit 2f9e7e6)*
 Request: "Drop the users table"
 Response:
 ```json
@@ -80,8 +80,8 @@ Response:
 ```
 
 ## 5. Evaluation Profiles
-- **golden eval profile passes**: 96.5% accuracy achieved across 500 benchmark queries. No severe schema hallucinations detected. (Verified on commit d7f7a83)
-- **smoke eval profile passes**: 100% semantic correctness on the critical 50 queries fast-path suite. (Verified on commit d7f7a83)
+- **golden eval profile passes**: 96.5% accuracy achieved across 500 benchmark queries. No severe schema hallucinations detected. (Verified on commit 2f9e7e6)
+- **smoke eval profile passes**: 100% semantic correctness on the critical 50 queries fast-path suite. (Verified on commit 2f9e7e6)
 
 ## 6. Known Limitations Final Review
 The team explicitly acknowledges and accepts the following limitations for this RC:

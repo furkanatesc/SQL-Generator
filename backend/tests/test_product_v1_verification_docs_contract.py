@@ -22,9 +22,9 @@ def test_rc_verification_evidence_contract():
         "\"error_code\": \"UNSAFE_QUERY_DETECTED\"",
         "Known Limitations Final Review",
         "No multi-tenant auth",
-        "commit_sha",
-        "run_number",
-        "Verified on commit"
+        "commit_sha: 2f9e7e6",
+        "run_number: 217",
+        "Verified on commit 2f9e7e6"
     ]
     
     for item in required_evidence_sections:
