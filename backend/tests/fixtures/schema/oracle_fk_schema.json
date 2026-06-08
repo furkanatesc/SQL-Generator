@@ -1,0 +1,28 @@
+{
+  "tables": {
+    "USERS": {
+      "columns": [
+        {"name": "ID", "type": "NUMBER", "primary_key": true},
+        {"name": "EMAIL", "type": "VARCHAR2"}
+      ]
+    },
+    "ORDERS": {
+      "columns": [
+        {"name": "ID", "type": "NUMBER", "primary_key": true},
+        {"name": "USER_ID", "type": "NUMBER"}
+      ]
+    }
+  },
+  "graph": {
+    "nodes": ["USERS", "ORDERS"],
+    "edges": [
+      {
+        "source": "ORDERS",
+        "target": "USERS",
+        "source_col": "USER_ID",
+        "target_col": "ID",
+        "type": "explicit"
+      }
+    ]
+  }
+}
