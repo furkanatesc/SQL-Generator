@@ -1,0 +1,24 @@
+{
+  "tables": {
+    "users": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "email", "type": "TEXT"}
+      ]
+    },
+    "orders": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "user_id", "type": "INTEGER"}
+      ],
+      "foreign_keys": [
+        {
+          "column": "user_id",
+          "referenced_table": "users",
+          "referenced_column": "id",
+          "type": "explicit"
+        }
+      ]
+    }
+  }
+}
