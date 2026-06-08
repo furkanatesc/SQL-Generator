@@ -1,0 +1,10 @@
+{
+  "tables": {
+    "orders": {
+      "columns": [{"name": "id", "type": "INTEGER"}, {"name": "status", "type": "VARCHAR"}, {"name": "name", "type": "VARCHAR"}]
+    },
+    "users": {
+      "columns": [{"name": "id", "type": "INTEGER"}, {"name": "status", "type": "VARCHAR"}, {"name": "name", "type": "VARCHAR"}]
+    }
+  }
+}

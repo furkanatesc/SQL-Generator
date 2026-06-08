@@ -1,0 +1,10 @@
+{
+  "tables": {
+    "departments": {
+      "columns": [{"name": "id", "type": "INTEGER"}, {"name": "department_manager_id", "type": "INTEGER"}]
+    },
+    "employees": {
+      "columns": [{"name": "id", "type": "INTEGER"}, {"name": "departmnt_manager_id", "type": "INTEGER"}]
+    }
+  }
+}

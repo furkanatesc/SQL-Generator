@@ -1,0 +1,10 @@
+{
+  "tables": {
+    "users": {
+      "columns": [{"name": "id", "type": "INTEGER"}]
+    },
+    "orders": {
+      "columns": [{"name": "user_id", "type": "INTEGER"}]
+    }
+  }
+}
