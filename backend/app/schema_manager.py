@@ -465,124 +465,6 @@ class SchemaManager:
             
         return schema
 
-    def _detect_implicit_relationships(self, schema: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        Şema içerisindeki tablolar arasında, FK kısıtlaması olmasa bile,
-        kolon isimleri ve örüntülerine dayanarak örtük (implicit) ilişkileri otomatik tespit eder.
-        """
-        implicit_edges = []
-        tables = schema.get("tables", {})
-        table_names = list(tables.keys())
-        
-        # Çok genel kolon isimlerini eşleştirmemek için kara liste
-        blacklist = {
-            "id", "name", "type", "status", "description", 
-            "created_at", "updated_at", "created_by", "updated_by", 
-            "active", "is_active", "date", "value", "code", "seq", 
-            "remark", "notes", "title", "eposta", "email"
-        }
-        
-        # Tablo isminin tekil halini bulup eşleştirme yapabilmek için basit tekilleştirici helper
-        def get_singular(t_name: str) -> str:
-            t = t_name.lower()
-            if t.endswith("ies"):
-                return t[:-3] + "y"
-            if t.endswith("es") and not t.endswith("ss") and not t.endswith("ch") and not t.endswith("sh"):
-                return t[:-2]
-            if t.endswith("s") and not t.endswith("ss"):
-                return t[:-1]
-            return t
-
-        # TERS İNDEKS (INVERTED INDEX) OLUŞTURMA
-        column_index = {}
-        singular_to_table = {}
-        table_pk_cols = {}
-        
-        for t_name in table_names:
-            t_lower = t_name.lower()
-            t_singular = get_singular(t_name)
-            
-            # Singular to table mapping
-            singular_to_table[t_singular] = t_name
-            if t_lower not in singular_to_table:
-                singular_to_table[t_lower] = t_name
-            
-            table_pk_cols[t_name] = []
-            
-            for col in tables[t_name].get("columns", []):
-                col_orig = col["name"]
-                col_lower = col_orig.lower()
-                
-                # Column Index
-                if col_lower not in column_index:
-                    column_index[col_lower] = []
-                column_index[col_lower].append((t_name, col_orig))
-                
-                # PK/ID tespiti
-                if col_lower == "id" or col.get("primary_key"):
-                    table_pk_cols[t_name].append((col_orig, col.get("primary_key", False)))
-
-        # KURAL 1: Birebir aynı kolon isimleri (Kara listede olmayanlar)
-        for col_lower, occurrences in column_index.items():
-            if col_lower in blacklist:
-                continue
-            # Eğer bir kolon 20'den fazla tabloda geçiyorsa, bu muhtemelen genel bir FK'dir (örn: user_id)
-            # ve tüm tabloları birbirine bağlayıp (clique) milyonlarca kenar oluşturmamalıyız!
-            # Sadece 2-10 arası tabloda geçen özel isimli kolonlar için implicit ilişki kur.
-            if 1 < len(occurrences) <= 10:
-                for i in range(len(occurrences)):
-                    for j in range(i + 1, len(occurrences)):
-                        tA, colA = occurrences[i]
-                        tB, colB = occurrences[j]
-                        implicit_edges.append({
-                            "source": tA,
-                            "source_col": colA,
-                            "target": tB,
-                            "target_col": colB,
-                            "type": "implicit"
-                        })
-
-        # KURAL 2: Tablo ismi ve ID kalıpları (O(N) Hash Map ile)
-        for tA in table_names:
-            for col in tables[tA].get("columns", []):
-                col_orig = col["name"]
-                col_lower = col_orig.lower()
-                
-                prefix = None
-                if col_lower.endswith("_id"):
-                    prefix = col_lower[:-3]
-                elif col_lower.endswith("id") and len(col_lower) > 2:
-                    prefix = col_lower[:-2]
-                    
-                if prefix:
-                    if prefix in singular_to_table:
-                        tB = singular_to_table[prefix]
-                        if tA != tB:
-                            for target_col_orig, is_pk in table_pk_cols.get(tB, []):
-                                implicit_edges.append({
-                                    "source": tA,
-                                    "source_col": col_orig,
-                                    "target": tB,
-                                    "target_col": target_col_orig,
-                                    "type": "implicit"
-                                })
-                    else:
-                        # FAZ 3: Bulanık Eşleşme (Fuzzy Matching)
-                        # Eğer birebir eşleşme yoksa (örneğin kolon "muster_id" ama tablo adı "musteriler" ise)
-                        matches = process.extract(prefix, table_names, limit=1)
-                        if matches:
-                            best_match_name, score = matches[0]
-                            if score >= 85 and tA != best_match_name:
-                                for target_col_orig, is_pk in table_pk_cols.get(best_match_name, []):
-                                    implicit_edges.append({
-                                        "source": tA,
-                                        "source_col": col_orig,
-                                        "target": best_match_name,
-                                        "target_col": target_col_orig,
-                                        "type": "implicit_fuzzy"
-                                    })
-                                
-        return implicit_edges
 
     def load_schema(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
@@ -693,8 +575,22 @@ class SchemaManager:
                         "type": "custom"
                     })
                     
-        # 3. Örtük (implicit) ilişkileri otomatik tespit et ve ekle
-        implicit_relations = self._detect_implicit_relationships(schema)
+        from app.schema.implicit_relationships import detect_implicit_relationships
+        
+        typed_relationships = detect_implicit_relationships(schema)
+        implicit_relations = [
+            {
+                "source": rel.source_table,
+                "source_col": rel.source_column,
+                "target": rel.target_table,
+                "target_col": rel.target_column,
+                "type": rel.relationship_type.value,
+                "confidence": rel.confidence,
+                "reason": rel.reason,
+                **rel.raw,
+            }
+            for rel in typed_relationships
+        ]
         
         # O(1) lookup için mevcut kenarları (edges) SET içine alalım (O(N^2) sonsuz döngüyü önler)
         existing_edges_set = {
