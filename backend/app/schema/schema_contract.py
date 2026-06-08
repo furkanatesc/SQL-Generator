@@ -54,6 +54,14 @@ class TableSchema(BaseModel):
 
 
 class RelationshipSchema(BaseModel):
+    """
+    Contract for a relationship between two tables.
+    
+    DIRECTION CONTRACT FOR FOREIGN KEYS:
+    - source_table / source_column: MUST be the table and column that contains the foreign key (child table).
+    - target_table / target_column: MUST be the referenced table and column (parent table).
+    This direction is strictly enforced and must never be reversed.
+    """
     model_config = ConfigDict(extra="forbid")
 
     source_table: str

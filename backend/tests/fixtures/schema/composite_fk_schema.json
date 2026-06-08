@@ -1,0 +1,42 @@
+{
+  "tables": {
+    "orders": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "customer_id", "type": "INTEGER"}
+      ]
+    },
+    "order_items": {
+      "columns": [
+        {"name": "order_id", "type": "INTEGER"},
+        {"name": "customer_id", "type": "INTEGER"},
+        {"name": "product_id", "type": "INTEGER"}
+      ]
+    }
+  },
+  "graph": {
+    "nodes": ["orders", "order_items"],
+    "edges": [
+      {
+        "source": "order_items",
+        "target": "orders",
+        "source_col": "order_id",
+        "target_col": "id",
+        "type": "explicit",
+        "constraint_name": "fk_order_item_order",
+        "composite_group": "fk_order_item_order",
+        "ordinal": 1
+      },
+      {
+        "source": "order_items",
+        "target": "orders",
+        "source_col": "customer_id",
+        "target_col": "customer_id",
+        "type": "explicit",
+        "constraint_name": "fk_order_item_order",
+        "composite_group": "fk_order_item_order",
+        "ordinal": 2
+      }
+    ]
+  }
+}
