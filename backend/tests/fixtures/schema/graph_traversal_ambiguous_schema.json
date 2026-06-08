@@ -1,0 +1,48 @@
+{
+  "tables": {
+    "orders": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "user_id", "type": "INTEGER"}
+      ]
+    },
+    "audit_logs": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "user_id", "type": "INTEGER"},
+        {"name": "order_id", "type": "INTEGER"}
+      ]
+    },
+    "users": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true}
+      ]
+    }
+  },
+  "graph": {
+    "nodes": ["orders", "users", "audit_logs"],
+    "edges": [
+      {
+        "source": "orders",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "audit_logs",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "implicit"
+      },
+      {
+        "source": "orders",
+        "source_col": "id",
+        "target": "audit_logs",
+        "target_col": "order_id",
+        "type": "implicit_fuzzy"
+      }
+    ]
+  }
+}
