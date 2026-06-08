@@ -1,0 +1,17 @@
+{
+  "tables": {
+    "a": {"columns": [{"name": "id", "type": "INTEGER"}]},
+    "b": {"columns": [{"name": "id", "type": "INTEGER"}, {"name": "a_id", "type": "INTEGER"}, {"name": "d_id", "type": "INTEGER"}]},
+    "c": {"columns": [{"name": "id", "type": "INTEGER"}, {"name": "a_id", "type": "INTEGER"}, {"name": "d_id", "type": "INTEGER"}]},
+    "d": {"columns": [{"name": "id", "type": "INTEGER"}]}
+  },
+  "graph": {
+    "nodes": ["a", "b", "c", "d"],
+    "edges": [
+      {"source": "b", "source_col": "a_id", "target": "a", "target_col": "id", "type": "explicit"},
+      {"source": "b", "source_col": "d_id", "target": "d", "target_col": "id", "type": "explicit"},
+      {"source": "c", "source_col": "a_id", "target": "a", "target_col": "id", "type": "explicit"},
+      {"source": "c", "source_col": "d_id", "target": "d", "target_col": "id", "type": "explicit"}
+    ]
+  }
+}

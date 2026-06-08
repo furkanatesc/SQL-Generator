@@ -1,0 +1,23 @@
+{
+  "tables": {
+    "departments": {
+      "columns": [{"name": "id", "type": "INTEGER", "primary_key": true}]
+    },
+    "employees": {
+      "columns": [{"name": "departmnt_id", "type": "INTEGER"}]
+    }
+  },
+  "graph": {
+    "nodes": ["departments", "employees"],
+    "edges": [
+      {
+        "source": "employees",
+        "source_col": "departmnt_id",
+        "target": "departments",
+        "target_col": "id",
+        "type": "implicit_fuzzy",
+        "confidence": 0.65
+      }
+    ]
+  }
+}

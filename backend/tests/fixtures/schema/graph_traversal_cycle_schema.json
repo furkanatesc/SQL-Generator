@@ -1,0 +1,39 @@
+{
+  "tables": {
+    "users": {
+      "columns": [{"name": "id", "type": "INTEGER"}]
+    },
+    "orders": {
+      "columns": [{"name": "id", "type": "INTEGER"}, {"name": "user_id", "type": "INTEGER"}]
+    },
+    "payments": {
+      "columns": [{"name": "id", "type": "INTEGER"}, {"name": "order_id", "type": "INTEGER"}, {"name": "user_id", "type": "INTEGER"}]
+    }
+  },
+  "graph": {
+    "nodes": ["users", "orders", "payments"],
+    "edges": [
+      {
+        "source": "orders",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "payments",
+        "source_col": "order_id",
+        "target": "orders",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "payments",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "explicit"
+      }
+    ]
+  }
+}
