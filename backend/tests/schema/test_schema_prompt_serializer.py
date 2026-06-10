@@ -1,4 +1,3 @@
-import pytest
 import json
 import os
 from app.schema.schema_adapter import from_legacy_schema
