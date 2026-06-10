@@ -59,7 +59,7 @@ def test_pipeline_guardrail_failure_error_envelope_shape():
     fake_provider = TrackingFakeProvider(responses=["DROP TABLE users;"])
     pipeline = get_mocked_pipeline(llm_provider=fake_provider)
     
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         result = pipeline.run_pipeline(natural_query="drop users", max_attempts=1)
     
     assert_error_envelope(result)
@@ -105,7 +105,7 @@ def test_pipeline_llm_exception_error_envelope_shape():
     fake_provider = TrackingFakeProvider(exception=Exception("LLM Down"))
     pipeline = get_mocked_pipeline(llm_provider=fake_provider)
     
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         result = pipeline.run_pipeline(natural_query="select", max_attempts=1)
     
     assert_error_envelope(result)
