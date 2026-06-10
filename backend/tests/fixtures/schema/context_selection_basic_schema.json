@@ -1,0 +1,21 @@
+{
+  "tables": {
+    "users": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "name", "type": "TEXT"}
+      ]
+    },
+    "orders": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "user_id", "type": "INTEGER"},
+        {"name": "total_amount", "type": "NUMERIC"}
+      ]
+    }
+  },
+  "graph": {
+    "nodes": ["users", "orders"],
+    "edges": []
+  }
+}

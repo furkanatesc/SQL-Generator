@@ -1,0 +1,13 @@
+{
+  "tables": {
+    "users": {"columns": [{"name": "id", "type": "INTEGER", "primary_key": true}]},
+    "orders": {"columns": [{"name": "id", "type": "INTEGER", "primary_key": true}]},
+    "payments": {"columns": [{"name": "id", "type": "INTEGER", "primary_key": true}]},
+    "invoices": {"columns": [{"name": "id", "type": "INTEGER", "primary_key": true}]},
+    "audit_logs": {"columns": [{"name": "id", "type": "INTEGER", "primary_key": true}]}
+  },
+  "graph": {
+    "nodes": ["users", "orders", "payments", "invoices", "audit_logs"],
+    "edges": []
+  }
+}
