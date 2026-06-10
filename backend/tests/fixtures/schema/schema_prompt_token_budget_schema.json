@@ -1,0 +1,26 @@
+{
+  "tables": {
+    "users": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "email", "type": "TEXT"},
+        {"name": "created_at", "type": "TIMESTAMP"}
+      ]
+    },
+    "orders": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "user_id", "type": "INTEGER"}
+      ]
+    },
+    "audit_logs": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true}
+      ]
+    }
+  },
+  "graph": {
+    "nodes": ["users", "orders", "audit_logs"],
+    "edges": []
+  }
+}

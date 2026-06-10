@@ -1,0 +1,27 @@
+{
+  "tables": {
+    "users": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true}
+      ]
+    },
+    "orders": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "user_id", "type": "INTEGER"}
+      ]
+    }
+  },
+  "graph": {
+    "nodes": ["users", "orders"],
+    "edges": [
+      {
+        "source": "orders",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "explicit"
+      }
+    ]
+  }
+}
