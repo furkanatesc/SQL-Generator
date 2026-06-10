@@ -115,7 +115,8 @@ def select_schema_context(
         fallback_used = True
         fallback_strategy = "deterministic_top_5"
         sorted_all_tables = sorted([t.name for t in schema.tables])
-        for t_name in sorted_all_tables[:5]:
+        fallback_limit = min(max_tables, 5)
+        for t_name in sorted_all_tables[:fallback_limit]:
             selected_tables.append(SelectedTable(table_name=t_name, score=0.1, reasons=["fallback"]))
     
     focus_tables = [st.table_name for st in selected_tables]
