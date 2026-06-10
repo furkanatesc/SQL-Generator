@@ -12,6 +12,8 @@ class SchemaContextSelection(BaseModel):
     focus_tables: list[str]
     selected_tables: list[SelectedTable]
     join_paths: list[JoinPathCandidate]
+    fallback_used: bool = False
+    fallback_strategy: str | None = None
 
 def _tokenize(text: str) -> set[str]:
     """Simple tokenizer that splits by non-alphanumeric characters and lowercases."""
@@ -106,6 +108,16 @@ def select_schema_context(
     selected_tables.sort(key=lambda st: (-st.score, st.table_name))
     selected_tables = selected_tables[:max_tables]
     
+    fallback_used = False
+    fallback_strategy = None
+    
+    if not selected_tables:
+        fallback_used = True
+        fallback_strategy = "deterministic_top_5"
+        sorted_all_tables = sorted([t.name for t in schema.tables])
+        for t_name in sorted_all_tables[:5]:
+            selected_tables.append(SelectedTable(table_name=t_name, score=0.1, reasons=["fallback"]))
+    
     focus_tables = [st.table_name for st in selected_tables]
     
     # Discover Join Paths among top tables
@@ -139,5 +151,7 @@ def select_schema_context(
     return SchemaContextSelection(
         focus_tables=focus_tables,
         selected_tables=selected_tables,
-        join_paths=unique_paths
+        join_paths=unique_paths,
+        fallback_used=fallback_used,
+        fallback_strategy=fallback_strategy
     )
