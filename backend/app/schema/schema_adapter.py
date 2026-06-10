@@ -98,6 +98,8 @@ def from_legacy_schema(raw_schema: dict[str, Any], dialect: str | None = None) -
                     target_table=edge.get("target", ""),
                     target_column=edge.get("target_col", ""),
                     relationship_type=rel_type,
+                    confidence=edge.get("confidence"),
+                    reason=edge.get("reason"),
                     raw=edge
                 )
                 relationships.append(rel)
