@@ -139,7 +139,7 @@ def test_from_legacy_schema_rejects_unknown_relationship_type():
             ]
         }
     }
-    with pytest.raises(ValueError, match="Unknown relationship type in graph edge\[0\]: unknown_magical_type"):
+    with pytest.raises(ValueError, match=r"Unknown relationship type in graph edge\[0\]: unknown_magical_type"):
         from_legacy_schema(raw)
 
 def test_from_legacy_schema_falls_back_to_foreign_keys_if_no_graph_edges():
@@ -187,7 +187,7 @@ def test_from_legacy_schema_rejects_malformed_graph_types():
         })
         
     # edge not dict
-    with pytest.raises(ValueError, match="Graph edge\\[0\\] must be a dictionary"):
+    with pytest.raises(ValueError, match=r"Graph edge\[0\] must be a dictionary"):
         from_legacy_schema({
             "tables": {"users": {"columns": [{"name": "id"}]}}, 
             "graph": {"nodes": ["users"], "edges": [None]}
@@ -212,3 +212,31 @@ def test_from_legacy_schema_fallback_on_empty_edges_list():
     assert len(typed.relationships) == 1
     assert typed.relationships[0].source_table == "orders"
     assert typed.relationships[0].target_table == "users"
+
+def test_from_legacy_schema_preserves_graph_edge_confidence_and_reason():
+    raw_schema = {
+        "tables": {
+            "users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]},
+            "orders": {"columns": [{"name": "user_id", "type": "int"}]}
+        },
+        "graph": {
+            "nodes": ["users", "orders"],
+            "edges": [
+                {
+                    "source": "orders",
+                    "source_col": "user_id",
+                    "target": "users",
+                    "target_col": "id",
+                    "type": "implicit",
+                    "confidence": 0.95,
+                    "reason": "exact_match"
+                }
+            ]
+        }
+    }
+    schema = from_legacy_schema(raw_schema)
+    assert len(schema.relationships) == 1
+    rel = schema.relationships[0]
+    assert rel.relationship_type.value == "implicit"
+    assert rel.confidence == 0.95
+    assert rel.reason == "exact_match"

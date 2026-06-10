@@ -1,15 +1,9 @@
 from pydantic import BaseModel
 from .schema_contract import DatabaseSchema, RelationshipType
+from .relationship_priority import RELATIONSHIP_TYPE_PRIORITY
 
 # Hub-table penalty is intentionally out of scope for Sprint 20.3.
 # Future work: penalize high-degree tables during path scoring.
-
-RELATIONSHIP_TYPE_PRIORITY = {
-    RelationshipType.EXPLICIT: 100,
-    RelationshipType.CUSTOM: 90,
-    RelationshipType.IMPLICIT: 60,
-    RelationshipType.IMPLICIT_FUZZY: 40,
-}
 
 class JoinPathEdge(BaseModel):
     """
