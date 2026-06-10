@@ -1,0 +1,30 @@
+{
+  "tables": {
+    "employees": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "name", "type": "TEXT"},
+        {"name": "department_name", "type": "TEXT"}
+      ]
+    },
+    "departments": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "name", "type": "TEXT"}
+      ]
+    }
+  },
+  "graph": {
+    "nodes": ["employees", "departments"],
+    "edges": [
+      {
+        "source": "employees",
+        "source_col": "department_name",
+        "target": "departments",
+        "target_col": "name",
+        "type": "implicit_fuzzy",
+        "confidence": 0.4
+      }
+    ]
+  }
+}
