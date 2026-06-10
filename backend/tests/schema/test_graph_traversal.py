@@ -27,12 +27,11 @@ def test_explicit_path_beats_implicit_path():
     assert best.tables == ["orders", "users"]
 
 def test_direct_explicit_path_beats_longer_implicit_path():
-    # Similar to ambiguous schema but explicit directly vs long implicit chain
-    schema = load_fixture("graph_traversal_ambiguous_schema.json")
+    schema = load_fixture("graph_traversal_direct_explicit_vs_long_implicit_schema.json")
     paths = find_join_paths(schema, "orders", "users", allow_fuzzy=True)
     
     assert paths[0].tables == ["orders", "users"]
-    assert paths[0].min_relationship_priority == 100
+    assert [edge.relationship_type for edge in paths[0].edges] == [RelationshipType.EXPLICIT]
 
 def test_fuzzy_edges_are_excluded_by_default():
     schema = load_fixture("graph_traversal_fuzzy_schema.json")

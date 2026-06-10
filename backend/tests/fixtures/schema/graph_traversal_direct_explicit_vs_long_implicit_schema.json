@@ -1,0 +1,65 @@
+{
+  "tables": {
+    "orders": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "user_id", "type": "INTEGER"}
+      ]
+    },
+    "audit_logs": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "user_id", "type": "INTEGER"},
+        {"name": "order_id", "type": "INTEGER"}
+      ]
+    },
+    "x": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true},
+        {"name": "log_id", "type": "INTEGER"},
+        {"name": "user_id", "type": "INTEGER"}
+      ]
+    },
+    "users": {
+      "columns": [
+        {"name": "id", "type": "INTEGER", "primary_key": true}
+      ]
+    }
+  },
+  "graph": {
+    "nodes": ["orders", "audit_logs", "x", "users"],
+    "edges": [
+      {
+        "source": "orders",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "orders",
+        "source_col": "id",
+        "target": "audit_logs",
+        "target_col": "order_id",
+        "type": "implicit",
+        "confidence": 0.9
+      },
+      {
+        "source": "audit_logs",
+        "source_col": "id",
+        "target": "x",
+        "target_col": "log_id",
+        "type": "implicit",
+        "confidence": 0.9
+      },
+      {
+        "source": "x",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "implicit",
+        "confidence": 0.9
+      }
+    ]
+  }
+}
