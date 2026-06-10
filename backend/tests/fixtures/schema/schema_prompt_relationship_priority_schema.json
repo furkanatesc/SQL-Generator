@@ -1,0 +1,48 @@
+{
+  "tables": {
+    "users": {"columns": [{"name": "id", "type": "INTEGER", "primary_key": true}]},
+    "orders": {"columns": [{"name": "user_id", "type": "INTEGER"}]},
+    "invoices": {"columns": [{"name": "customer_id", "type": "INTEGER"}]},
+    "customers": {"columns": [{"name": "id", "type": "INTEGER", "primary_key": true}]},
+    "payments": {"columns": [{"name": "user_id", "type": "INTEGER"}]},
+    "employees": {"columns": [{"name": "departmnt_id", "type": "INTEGER"}]},
+    "departments": {"columns": [{"name": "id", "type": "INTEGER", "primary_key": true}]}
+  },
+  "graph": {
+    "nodes": ["users", "orders", "invoices", "customers", "payments", "employees", "departments"],
+    "edges": [
+      {
+        "source": "employees",
+        "source_col": "departmnt_id",
+        "target": "departments",
+        "target_col": "id",
+        "type": "implicit_fuzzy",
+        "confidence": 0.65,
+        "reason": "fuzzy_prefix_to_table_match"
+      },
+      {
+        "source": "orders",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "payments",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "implicit",
+        "confidence": 0.90,
+        "reason": "singular_table_id_pattern"
+      },
+      {
+        "source": "invoices",
+        "source_col": "customer_id",
+        "target": "customers",
+        "target_col": "id",
+        "type": "custom"
+      }
+    ]
+  }
+}
