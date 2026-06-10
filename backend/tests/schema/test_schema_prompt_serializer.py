@@ -12,6 +12,36 @@ def load_fixture(filename: str):
         data = json.load(f)
     return from_legacy_schema(data, dialect="unknown")
 
+def extract_section(context: str, start_marker: str, end_marker: str = None) -> str:
+    lines = context.split("\n")
+    try:
+        start_idx = lines.index(start_marker)
+    except ValueError:
+        return ""
+        
+    end_idx = len(lines)
+    if end_marker:
+        try:
+            end_idx = lines.index(end_marker, start_idx + 1)
+        except ValueError:
+            pass
+            
+    return "\n".join(lines[start_idx:end_idx])
+
+def extract_table_section(context: str, table_name: str) -> str:
+    lines = context.split("\n")
+    try:
+        start_idx = lines.index(table_name)
+    except ValueError:
+        return ""
+        
+    section_lines = []
+    for line in lines[start_idx + 1:]:
+        if line.strip() == "":
+            break
+        section_lines.append(line)
+    return "\n".join(section_lines)
+
 def test_schema_prompt_serialization_is_deterministic():
     schema = load_fixture("schema_prompt_basic_schema.json")
     first = serialize_schema_for_prompt(schema)
@@ -22,9 +52,12 @@ def test_schema_prompt_serializes_tables_and_columns():
     schema = load_fixture("schema_prompt_basic_schema.json")
     context = serialize_schema_for_prompt(schema)
     
-    assert "users" in context
-    assert "- id INTEGER primary_key" in context
-    assert "- email TEXT" in context
+    tables_section = extract_section(context, "Tables:", "Relationships:")
+    assert "users" in tables_section
+    
+    users_section = extract_table_section(context, "users")
+    assert "- id INTEGER primary_key" in users_section
+    assert "- email TEXT" in users_section
 
 def test_schema_prompt_orders_relationships_by_trust_priority():
     schema = load_fixture("schema_prompt_relationship_priority_schema.json")
@@ -48,30 +81,14 @@ def test_schema_prompt_respects_max_tables():
     schema = load_fixture("schema_prompt_token_budget_schema.json")
     context = serialize_schema_for_prompt(schema, max_tables=2)
     
-    # Tables are lexical by default: audit_logs, orders, users
-    # With max_tables=2, audit_logs and orders should be included, users should not be included.
-    assert "audit_logs" in context
-    assert "orders" in context
-    assert "users" not in context
+    tables_section = extract_section(context, "Tables:", "Relationships:")
+    assert "audit_logs" in tables_section
+    assert "orders" in tables_section
+    assert "users" not in tables_section
 
 def test_schema_prompt_respects_max_columns_per_table():
     schema = load_fixture("schema_prompt_token_budget_schema.json")
     context = serialize_schema_for_prompt(schema, max_columns_per_table=2)
-    
-    # Helper to extract the users section
-    def extract_table_section(ctx, table_name):
-        lines = ctx.split("\n")
-        try:
-            start_idx = lines.index(table_name)
-        except ValueError:
-            return ""
-        
-        section_lines = []
-        for line in lines[start_idx + 1:]:
-            if line.strip() == "":
-                break
-            section_lines.append(line)
-        return "\n".join(section_lines)
         
     users_section = extract_table_section(context, "users")
     assert "- id" in users_section
@@ -84,6 +101,44 @@ def test_schema_prompt_serializes_join_paths():
     
     context = serialize_schema_for_prompt(schema, join_paths=paths)
     
-    assert "Join Paths:" in context
-    assert "orders -> users" in context
+    join_paths_section = extract_section(context, "Join Paths:")
+    assert "orders -> users" in join_paths_section
+    assert "[explicit] orders.user_id -> users.id" in join_paths_section
+
+def test_schema_prompt_preserves_relationship_columns_when_column_limit_is_low():
+    schema = load_fixture("schema_prompt_relationship_column_limit_schema.json")
+    context = serialize_schema_for_prompt(schema, max_columns_per_table=1)
+
+    orders_section = extract_table_section(context, "orders")
+
+    # Limit is 1, but PK and required column should both be included
+    assert "- id INTEGER primary_key" in orders_section
+    assert "- user_id INTEGER" in orders_section
+    
+    # And relationships should still show the explicit relationship
     assert "[explicit] orders.user_id -> users.id" in context
+
+def test_schema_prompt_preserves_join_path_columns_when_column_limit_is_low():
+    schema = load_fixture("schema_prompt_relationship_column_limit_schema.json")
+    # Even if relationships are omitted globally, join_path columns should be forced
+    paths = find_join_paths(schema, "orders", "users")
+    context = serialize_schema_for_prompt(schema, join_paths=paths, max_columns_per_table=1, include_relationships=False)
+
+    orders_section = extract_table_section(context, "orders")
+    assert "- id INTEGER primary_key" in orders_section
+    assert "- user_id INTEGER" in orders_section
+
+def test_schema_prompt_can_exclude_confidence_and_reason():
+    schema = load_fixture("schema_prompt_relationship_priority_schema.json")
+    context = serialize_schema_for_prompt(schema, include_confidence=False)
+    
+    rels_section = extract_section(context, "Relationships:")
+    assert "[implicit] payments.user_id -> users.id" in rels_section
+    assert "confidence=" not in rels_section
+    assert "reason=" not in rels_section
+
+def test_schema_prompt_can_exclude_relationships_section():
+    schema = load_fixture("schema_prompt_relationship_priority_schema.json")
+    context = serialize_schema_for_prompt(schema, include_relationships=False)
+    
+    assert "Relationships:" not in context

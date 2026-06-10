@@ -1,14 +1,6 @@
 from app.schema.schema_contract import DatabaseSchema, RelationshipType, TableSchema, ColumnSchema
 from app.schema.graph_traversal import JoinPathCandidate
-
-# Using the priority mapping from graph traversal or defining it locally
-# Since we need it, let's redefine it or import it. It's safer to import or define locally.
-RELATIONSHIP_TYPE_PRIORITY = {
-    RelationshipType.EXPLICIT: 100,
-    RelationshipType.CUSTOM: 90,
-    RelationshipType.IMPLICIT: 60,
-    RelationshipType.IMPLICIT_FUZZY: 40,
-}
+from app.schema.relationship_priority import RELATIONSHIP_TYPE_PRIORITY
 
 def serialize_schema_for_prompt(
     schema: DatabaseSchema,
@@ -23,16 +15,34 @@ def serialize_schema_for_prompt(
     """
     Serializes the database schema into a deterministic, token-budgeted markdown format
     for LLM prompt context.
+    
+    Caller Note: `join_paths` are serialized in the exact order they are provided. 
+    It is the caller's responsibility to pass a deterministic list.
     """
     focus_tables = focus_tables or []
     join_paths = join_paths or []
     
-    # Extract unique tables from join paths in order of appearance
+    # Extract required columns and unique tables from relationships and join paths
+    required_columns_by_table: dict[str, set[str]] = {}
+    
+    def mark_required(table_name: str, col_name: str):
+        if table_name not in required_columns_by_table:
+            required_columns_by_table[table_name] = set()
+        required_columns_by_table[table_name].add(col_name)
+        
+    for rel in schema.relationships:
+        if rel.relationship_type != RelationshipType.DISABLED:
+            mark_required(rel.source_table, rel.source_column)
+            mark_required(rel.target_table, rel.target_column)
+            
     join_path_table_names = []
     for path in join_paths:
         for t in path.tables:
             if t not in join_path_table_names:
                 join_path_table_names.append(t)
+        for edge in path.edges:
+            mark_required(edge.relationship_source_table, edge.relationship_source_column)
+            mark_required(edge.relationship_target_table, edge.relationship_target_column)
                 
     # Function to get table sort key
     def table_sort_key(table: TableSchema) -> tuple:
@@ -54,16 +64,25 @@ def serialize_schema_for_prompt(
     for table in selected_tables:
         lines.append(table.name)
         
-        # Sort and slice columns
-        # Primary keys first, then original order (which is their index in table.columns)
+        # Sort columns: PK first, then required relation cols, then original order
         def column_sort_key(item: tuple[int, ColumnSchema]) -> tuple:
             idx, col = item
             is_pk = 0 if col.primary_key else 1
-            return (is_pk, idx)
+            
+            req_cols = required_columns_by_table.get(table.name, set())
+            is_req = 0 if col.name in req_cols else 1
+            
+            return (is_pk, is_req, idx)
             
         enumerated_cols = list(enumerate(table.columns))
         sorted_cols = sorted(enumerated_cols, key=column_sort_key)
-        selected_cols = [col for _, col in sorted_cols[:max_columns_per_table]]
+        
+        # Select columns: enforce max_columns_per_table, but ALWAYS include required columns
+        req_cols = required_columns_by_table.get(table.name, set())
+        selected_cols = []
+        for i, (_, col) in enumerate(sorted_cols):
+            if i < max_columns_per_table or col.name in req_cols:
+                selected_cols.append(col)
         
         for col in selected_cols:
             col_type = col.data_type if col.data_type else "UNKNOWN"
