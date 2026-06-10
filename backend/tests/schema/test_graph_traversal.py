@@ -14,13 +14,24 @@ def load_fixture(filename: str):
 
 def test_explicit_path_beats_implicit_path():
     schema = load_fixture("graph_traversal_ambiguous_schema.json")
-    paths = find_join_paths(schema, "orders", "users")
+    # allow_fuzzy=True to discover the longer path that uses an implicit_fuzzy edge
+    paths = find_join_paths(schema, "orders", "users", allow_fuzzy=True)
     
-    assert len(paths) > 0
+    assert [p.tables for p in paths] == [
+        ["orders", "users"],
+        ["orders", "audit_logs", "users"]
+    ]
+    
     best = paths[0]
-    
-    assert best.edges[0].relationship_type == RelationshipType.EXPLICIT
+    assert [e.relationship_type for e in best.edges] == [RelationshipType.EXPLICIT]
     assert best.tables == ["orders", "users"]
+
+def test_direct_explicit_path_beats_longer_implicit_path():
+    schema = load_fixture("graph_traversal_direct_explicit_vs_long_implicit_schema.json")
+    paths = find_join_paths(schema, "orders", "users", allow_fuzzy=True)
+    
+    assert paths[0].tables == ["orders", "users"]
+    assert [edge.relationship_type for edge in paths[0].edges] == [RelationshipType.EXPLICIT]
 
 def test_fuzzy_edges_are_excluded_by_default():
     schema = load_fixture("graph_traversal_fuzzy_schema.json")
@@ -31,29 +42,29 @@ def test_fuzzy_edges_can_be_enabled_explicitly():
     schema = load_fixture("graph_traversal_fuzzy_schema.json")
     paths = find_join_paths(schema, "employees", "departments", allow_fuzzy=True)
     
-    assert len(paths) == 1
+    assert [p.tables for p in paths] == [["employees", "departments"]]
     assert paths[0].edges[0].relationship_type == RelationshipType.IMPLICIT_FUZZY
 
 def test_graph_traversal_is_cycle_safe():
     schema = load_fixture("graph_traversal_cycle_schema.json")
     # orders -> users -> payments -> orders ...
-    # This should safely terminate.
     paths = find_join_paths(schema, "users", "payments", max_depth=4)
     
-    assert len(paths) > 0
+    # Path length 1 edge vs 2 edges
+    # Shorter path ("users" -> "payments") should come first because both have 100 priority
+    assert [p.tables for p in paths] == [
+        ["users", "payments"],
+        ["users", "orders", "payments"]
+    ]
+    
     assert all(path.path_length <= 4 for path in paths)
-    assert paths[0].tables == ["users", "orders", "payments"]
 
 def test_join_path_selection_is_deterministic_for_equal_scores():
     schema = load_fixture("graph_traversal_equal_score_schema.json")
     # Path through b: a -> b -> d
     # Path through c: a -> c -> d
-    # Both have the exact same relationships and lengths, tie-breaker must decide based on lexical edge keys.
-    # We want exactly deterministic output
+    # Both have exactly the same relationships and lengths, tie-breaker decides.
     paths = find_join_paths(schema, "a", "d")
-    
-    # We should have exactly two paths
-    assert len(paths) == 2
     
     # Check deterministic order using canonical lexical keys
     assert [p.tables for p in paths] == [
@@ -68,5 +79,6 @@ def test_join_path_respects_max_depth():
     assert paths == []
     
     paths_deep = find_join_paths(schema, "a", "e", max_depth=5)
-    assert len(paths_deep) > 0
-    assert paths_deep[0].tables == ["a", "b", "c", "d", "e"]
+    assert [p.tables for p in paths_deep] == [
+        ["a", "b", "c", "d", "e"]
+    ]

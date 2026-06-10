@@ -12,10 +12,23 @@ RELATIONSHIP_TYPE_PRIORITY = {
 }
 
 class JoinPathEdge(BaseModel):
-    source_table: str
-    source_column: str
-    target_table: str
-    target_column: str
+    """
+    Traversal-oriented edge representing a single step in a join path.
+    
+    from_table / to_table represent the traversal direction during graph search.
+    relationship_source_table / relationship_target_table represent the actual
+    underlying foreign key ownership / schema contract, regardless of traversal direction.
+    """
+    from_table: str
+    from_column: str
+    to_table: str
+    to_column: str
+    
+    relationship_source_table: str
+    relationship_source_column: str
+    relationship_target_table: str
+    relationship_target_column: str
+    
     relationship_type: RelationshipType
     confidence: float | None = None
     reason: str | None = None
@@ -23,15 +36,15 @@ class JoinPathEdge(BaseModel):
 class JoinPathCandidate(BaseModel):
     tables: list[str]
     edges: list[JoinPathEdge]
-    total_score: float
-    min_confidence: float | None = None
+    min_relationship_priority: int
+    min_confidence: float
     path_length: int
 
 
 def _edge_sort_key(edge: JoinPathEdge) -> str:
     return (
-        f"{edge.source_table}.{edge.source_column}"
-        f"->{edge.target_table}.{edge.target_column}"
+        f"{edge.from_table}.{edge.from_column}"
+        f"->{edge.to_table}.{edge.to_column}"
     )
 
 def find_join_paths(
@@ -45,11 +58,9 @@ def find_join_paths(
 ) -> list[JoinPathCandidate]:
     """
     Finds valid join paths between source_table and target_table using cycle-safe DFS.
-    Prioritizes explicit paths over implicit.
+    Prioritizes explicit paths over implicit using a weakest-link scoring logic.
     """
     
-    # Precompute an adjacency list for O(1) neighbors lookup
-    # adjacency[table_name] = list of RelationshipSchema edges starting from table_name
     adjacency: dict[str, list] = {t.name: [] for t in schema.tables}
     for rel in schema.relationships:
         if rel.relationship_type == RelationshipType.DISABLED:
@@ -60,28 +71,29 @@ def find_join_paths(
         if rel.source_table in adjacency:
             adjacency[rel.source_table].append(rel)
         if rel.target_table in adjacency:
-            # Add reverse edge for traversal
             adjacency[rel.target_table].append(rel)
             
     all_paths = []
 
     def dfs(current_table: str, path_tables: list[str], path_edges: list[JoinPathEdge]):
         if current_table == target_table:
-            # Calculate scores
-            total_score = 0.0
-            min_conf = None
+            # Calculate weakest-link scores
+            min_priority = 1000
+            min_conf = 1.0
+            
             for e in path_edges:
-                base_priority = RELATIONSHIP_TYPE_PRIORITY.get(e.relationship_type, 0)
+                priority = RELATIONSHIP_TYPE_PRIORITY.get(e.relationship_type, 0)
+                if priority < min_priority:
+                    min_priority = priority
+                    
                 conf = e.confidence if e.confidence is not None else 1.0
-                total_score += base_priority * conf
-                
-                if min_conf is None or conf < min_conf:
+                if conf < min_conf:
                     min_conf = conf
 
             all_paths.append(JoinPathCandidate(
                 tables=list(path_tables),
                 edges=list(path_edges),
-                total_score=total_score,
+                min_relationship_priority=min_priority,
                 min_confidence=min_conf,
                 path_length=len(path_edges)
             ))
@@ -97,19 +109,22 @@ def find_join_paths(
                 # Cycle detected
                 continue
                 
-            # Create the edge correctly oriented according to traversal direction
             if rel.source_table == current_table:
-                src_tbl, src_col = rel.source_table, rel.source_column
-                tgt_tbl, tgt_col = rel.target_table, rel.target_column
+                from_tbl, from_col = rel.source_table, rel.source_column
+                to_tbl, to_col = rel.target_table, rel.target_column
             else:
-                src_tbl, src_col = rel.target_table, rel.target_column
-                tgt_tbl, tgt_col = rel.source_table, rel.source_column
+                from_tbl, from_col = rel.target_table, rel.target_column
+                to_tbl, to_col = rel.source_table, rel.source_column
                 
             jp_edge = JoinPathEdge(
-                source_table=src_tbl,
-                source_column=src_col,
-                target_table=tgt_tbl,
-                target_column=tgt_col,
+                from_table=from_tbl,
+                from_column=from_col,
+                to_table=to_tbl,
+                to_column=to_col,
+                relationship_source_table=rel.source_table,
+                relationship_source_column=rel.source_column,
+                relationship_target_table=rel.target_table,
+                relationship_target_column=rel.target_column,
                 relationship_type=rel.relationship_type,
                 confidence=rel.confidence,
                 reason=rel.reason
@@ -125,10 +140,11 @@ def find_join_paths(
 
     dfs(source_table, [source_table], [])
     
-    # Sort the paths: (-total_score, path_length, lexical_key)
+    # Sort the paths: (-min_priority, -min_conf, length, lexical_key)
     all_paths.sort(
         key=lambda path: (
-            -path.total_score,
+            -path.min_relationship_priority,
+            -path.min_confidence,
             path.path_length,
             "|".join(_edge_sort_key(edge) for edge in path.edges)
         )
