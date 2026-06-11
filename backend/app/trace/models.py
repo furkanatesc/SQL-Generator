@@ -67,3 +67,4 @@ class NL2SQLTrace:
     latency_ms: Dict[str, int] = field(default_factory=dict)
 
     metadata: Dict[str, Any] = field(default_factory=dict)
+    schema_context_selection: Dict[str, Any] = field(default_factory=dict)

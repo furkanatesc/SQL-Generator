@@ -13,6 +13,7 @@ def build_trace_from_pruned_schema(
     error_type: Optional[str] = None,
     latency_ms: Optional[Dict[str, int]] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    schema_context_selection: Optional[Dict[str, Any]] = None,
 ) -> NL2SQLTrace:
     debug_trace = pruned_schema.get("debug_trace", {})
 
@@ -32,4 +33,5 @@ def build_trace_from_pruned_schema(
         error_type=error_type,
         latency_ms=latency_ms or {},
         metadata=metadata or {},
+        schema_context_selection=schema_context_selection or {},
     )

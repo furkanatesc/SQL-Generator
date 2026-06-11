@@ -212,7 +212,7 @@ def test_syntax_parse_failure_attempt_metadata_carries_generated_sql_and_parse_e
     )
 
     with patch("app.sql_pipeline.SchemaPruner.prune_schema") as mock_prune:
-        mock_prune.return_value = {"tables": {"users": ["id"]}}
+        mock_prune.return_value = {"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}
         result = pipeline.run_pipeline(
             job_id="test",
             natural_query="test query",

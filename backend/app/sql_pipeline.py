@@ -10,6 +10,9 @@ from app.schema_manager import SchemaManager
 from app.schema_pruner import SchemaPruner
 from app.llm_client import NVIDIAClient, PromptTemplateManager
 from app.llm.provider import LLMProvider, SQLGenerationRequest
+from app.schema.schema_adapter import from_legacy_schema
+from app.schema.schema_context_selector import select_schema_context
+from app.schema.schema_prompt_serializer import serialize_selection_for_prompt
 
 logger = logging.getLogger("sql_pipeline")
 
@@ -160,6 +163,8 @@ class SQLGenerationPipeline:
             "attempts": [],
             "error": None
         }
+        
+        schema_selection_trace = None
 
         if log_callback:
             log_callback("SQL üretim süreci başlatıldı...", 1)
@@ -193,7 +198,8 @@ class SQLGenerationPipeline:
                     attempts=[],
                     error_message=result["error"],
                     error_type="excel_parse_error",
-                    known_secrets=known_secrets
+                    known_secrets=known_secrets,
+                    schema_selection_trace=schema_selection_trace
                 )
                 return redact_sensitive(result, known_secrets)
         elif natural_query:
@@ -229,7 +235,8 @@ class SQLGenerationPipeline:
                 attempts=[],
                 error_message=result["error"],
                 error_type="input_error",
-                known_secrets=known_secrets
+                known_secrets=known_secrets,
+                schema_selection_trace=schema_selection_trace
             )
             return redact_sensitive(result, known_secrets)
 
@@ -256,13 +263,72 @@ class SQLGenerationPipeline:
                     attempts=[],
                     error_message=result["error"],
                     error_type="schema_pruning_error",
-                    known_secrets=known_secrets
+                    known_secrets=known_secrets,
+                    schema_selection_trace=schema_selection_trace
                 )
                 return redact_sensitive(result, known_secrets)
 
             result["pruned_schema_tables"] = list(pruned_schema.get("tables", {}).keys())
             if log_callback:
                 log_callback(f"Şema budama tamamlandı. Bütçelenen token: {pruned_schema.get('estimated_tokens', 0)}. Seçilen tablolar: {', '.join(result['pruned_schema_tables'])}", 2)
+            
+            # --- Context Selection ---
+            if log_callback:
+                log_callback("Deterministik schema context selection (Sprint 21.1) başlatılıyor...", 2)
+            
+            try:
+                database_schema = from_legacy_schema(pruned_schema, dialect=dialect)
+                schema_context_selection = select_schema_context(
+                    schema=database_schema,
+                    question=natural_query or aqr.get("natural_query", "")
+                )
+                
+                prompt_schema_context = serialize_selection_for_prompt(
+                    schema=database_schema,
+                    selection=schema_context_selection,
+                    max_columns_per_table=15
+                )
+                
+                # Trace mapping
+                schema_selection_trace = {
+                    "focus_tables": schema_context_selection.focus_tables,
+                    "selected_tables": [st.table_name for st in schema_context_selection.selected_tables],
+                    "fallback_used": schema_context_selection.fallback_used,
+                    "fallback_strategy": schema_context_selection.fallback_strategy,
+                    "fallback_limit": schema_context_selection.fallback_limit,
+                    "max_fallback_tables": schema_context_selection.max_fallback_tables,
+                    "selector_version": "deterministic_v1",
+                    "selection_failed": False
+                }
+            except Exception as context_e:
+                result["error"] = f"Schema context selection failed: {context_e}"
+                if log_callback:
+                    log_callback(f"Context selection failed: {context_e}", 2)
+                    
+                schema_selection_trace = {
+                    "selector_version": "deterministic_v1",
+                    "selection_failed": True,
+                    "error_type": "schema_context_selection_exception",
+                }
+                
+                self._capture_trace_on_exit(
+                    start_time=start_time,
+                    job_id=job_id,
+                    dialect=dialect,
+                    natural_query=natural_query or aqr.get("natural_query", ""),
+                    pruned_schema={"error": result["error"]},
+                    generated_sql=None,
+                    last_generated_sql=None,
+                    sql_valid=None,
+                    sql_validation_errors=[],
+                    attempts=[],
+                    error_message=result["error"],
+                    error_type="schema_context_selection_exception",
+                    known_secrets=known_secrets,
+                    schema_selection_trace=schema_selection_trace
+                )
+                return redact_sensitive(result, known_secrets)
+
         except Exception as e:
             result["error"] = f"Şema Budama Hatası: {str(e)}"
             if log_callback:
@@ -309,7 +375,7 @@ class SQLGenerationPipeline:
                     prompt = PromptTemplateManager.get_writer_prompt(
                         natural_query=natural_query,
                         aqr=aqr,
-                        schema=pruned_schema,
+                        prompt_schema_context=prompt_schema_context,
                         previous_sql=previous_sql,
                         dialect=dialect
                     )
@@ -321,7 +387,7 @@ class SQLGenerationPipeline:
                         natural_query=natural_query,
                         original_sql=current_sql,
                         error_message=last_error,
-                        schema=pruned_schema,
+                        prompt_schema_context=prompt_schema_context,
                         dialect=dialect
                     )
                 
@@ -496,7 +562,8 @@ class SQLGenerationPipeline:
             attempts=result.get("attempts", []),
             error_message=final_error_message,
             error_type=final_error_type,
-            known_secrets=known_secrets
+            known_secrets=known_secrets,
+            schema_selection_trace=schema_selection_trace
         )
                 
         return redact_sensitive(result, known_secrets)
@@ -515,7 +582,8 @@ class SQLGenerationPipeline:
         attempts: Optional[List[Dict[str, Any]]] = None,
         error_message: Optional[str] = None,
         error_type: Optional[str] = None,
-        known_secrets: Optional[Set[str]] = None
+        known_secrets: Optional[Set[str]] = None,
+        schema_selection_trace: Optional[Dict[str, Any]] = None
     ):
         if not self.trace_store:
             return
@@ -555,6 +623,7 @@ class SQLGenerationPipeline:
                 "job_id": job_id,
                 "dialect": dialect,
                 "source": "job_pipeline"
-            }
+            },
+            schema_context_selection=schema_selection_trace
         )
         self._save_trace_safely(trace)

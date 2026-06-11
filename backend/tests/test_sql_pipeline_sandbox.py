@@ -26,7 +26,7 @@ def test_pipeline_rejection_multiple_statements_guardrail():
     fake_provider = TrackingFakeProvider(response="SELECT * FROM users; DROP TABLE users;")
     pipeline = get_mocked_pipeline(fake_provider)
     
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         result = pipeline.run_pipeline(natural_query="get users and drop table", max_attempts=1)
         
     assert result["success"] is False
@@ -50,7 +50,7 @@ def test_pipeline_rejection_admin_pragma_sandbox():
     fake_provider = TrackingFakeProvider(response="SELECT * FROM pragma;")
     pipeline = get_mocked_pipeline(fake_provider)
     
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         result = pipeline.run_pipeline(natural_query="get db version", max_attempts=1)
         
     assert result["success"] is False
