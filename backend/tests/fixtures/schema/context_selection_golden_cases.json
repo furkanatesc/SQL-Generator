@@ -1,25 +1,25 @@
 [
   {
     "id": "payments_by_customer",
-    "question": "Show payments for each customer name",
+    "question": "Show payments for each customer",
     "required_tables": ["payments", "orders", "customers"],
     "forbidden_tables": ["audit_logs", "users"],
     "required_join_edges": [
       ["payments", "order_id", "orders", "id"],
       ["orders", "customer_id", "customers", "id"]
     ],
-    "max_selected_tables": 8,
+    "max_selected_tables": 4,
     "expect_fallback": false
   },
   {
     "id": "orders_by_customer",
-    "question": "List orders with customer names",
+    "question": "List orders by customer",
     "required_tables": ["orders", "customers"],
     "forbidden_tables": ["audit_logs", "users"],
     "required_join_edges": [
       ["orders", "customer_id", "customers", "id"]
     ],
-    "max_selected_tables": 8,
+    "max_selected_tables": 3,
     "expect_fallback": false
   },
   {
@@ -40,18 +40,18 @@
       ["order_items", "product_id", "products", "id"],
       ["order_items", "order_id", "orders", "id"]
     ],
-    "max_selected_tables": 8,
+    "max_selected_tables": 4,
     "expect_fallback": false
   },
   {
     "id": "support_tickets_by_customer",
-    "question": "List support tickets for each customer name",
+    "question": "List support tickets by customer",
     "required_tables": ["support_tickets", "customers"],
     "forbidden_tables": ["audit_logs", "users"],
     "required_join_edges": [
       ["support_tickets", "customer_id", "customers", "id"]
     ],
-    "max_selected_tables": 8,
+    "max_selected_tables": 3,
     "expect_fallback": false
   },
   {
@@ -62,7 +62,7 @@
     "required_join_edges": [
       ["audit_logs", "user_id", "users", "id"]
     ],
-    "max_selected_tables": 8,
+    "max_selected_tables": 3,
     "expect_fallback": false
   }
 ]

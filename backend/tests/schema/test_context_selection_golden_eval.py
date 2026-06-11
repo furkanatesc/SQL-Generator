@@ -61,15 +61,17 @@ def test_golden_cases_reference_existing_tables(golden_schema, golden_cases):
             assert t in schema_table_names, f"Forbidden table {t} in case {case['id']} not in schema"
 
 def test_golden_cases_reference_existing_relationships(golden_schema, golden_cases):
-    # Create a set of (source, target) pairs representing existing directed edges
-    edges = {(rel.source_table, rel.target_table) for rel in golden_schema.relationships}
-    
+    # Create a set of (source, source_col, target, target_col) tuples
+    edges = {
+        (rel.source_table, rel.source_column, rel.target_table, rel.target_column) 
+        for rel in golden_schema.relationships
+    }
+
     for case in golden_cases:
         for edge in case["required_join_edges"]:
             source_table, source_col, target_table, target_col = edge
-            # Either direction is fine as long as the relationship exists in the schema
-            assert (source_table, target_table) in edges or (target_table, source_table) in edges, \
-                f"Relationship {source_table} -> {target_table} in case {case['id']} not in schema"
+            assert tuple(edge) in edges, \
+                f"Relationship {source_table}.{source_col} -> {target_table}.{target_col} in case {case['id']} not in schema"
 
 # --- Eval Tests ---
 
