@@ -120,7 +120,8 @@ def select_schema_context(
         fallback_used = True
         fallback_strategy = "deterministic_bounded_fallback"
         sorted_all_tables = sorted([t.name for t in schema.tables])
-        fallback_limit = min(max_tables, 5)
+        max_fallback_tables = 5
+        fallback_limit = min(max_tables, max_fallback_tables)
         for t_name in sorted_all_tables[:fallback_limit]:
             selected_tables.append(SelectedTable(table_name=t_name, score=0.1, reasons=["fallback"]))
     
@@ -161,5 +162,5 @@ def select_schema_context(
         fallback_used=fallback_used,
         fallback_strategy=fallback_strategy,
         fallback_limit=fallback_limit,
-        max_fallback_tables=5 if fallback_used else None
+        max_fallback_tables=max_fallback_tables
     )

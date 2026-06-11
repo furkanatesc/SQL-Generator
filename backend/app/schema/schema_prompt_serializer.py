@@ -12,7 +12,7 @@ def serialize_selection_for_prompt(schema: DatabaseSchema, selection: SchemaCont
     if schema.graph:
         from app.schema.schema_contract import SchemaGraph
         filtered_graph = SchemaGraph(
-            nodes=list(allowed),
+            nodes=sorted(allowed),
             edges=[e for e in schema.graph.edges if e.source_table in allowed and e.target_table in allowed]
         )
         

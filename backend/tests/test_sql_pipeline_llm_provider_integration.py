@@ -29,7 +29,8 @@ def get_mocked_pipeline(llm_provider=None, nvidia_client=None):
     pipeline = SQLGenerationPipeline(
         schema_manager=mock_schema_manager,
         nvidia_client=nvidia_client,
-        llm_provider=llm_provider
+        llm_provider=llm_provider,
+        trace_store=MagicMock(spec=['save'])
     )
     # Mock schema pruner to avoid real embedding API calls during test
     pipeline.schema_pruner = MagicMock()
@@ -141,6 +142,33 @@ def test_pipeline_does_not_call_real_llm_for_guardrail_failure():
     assert len(fake_provider.requests_received) > 0
 
 
+def test_pipeline_context_selection_exception_fails_closed_without_llm_call():
+    fake_provider = TrackingFakeProvider(
+        responses=["SELECT * FROM orders;"]
+    )
+    
+    pipeline = get_mocked_pipeline(llm_provider=fake_provider)
+    
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
+        # Force select_schema_context to raise an exception
+        with patch('app.sql_pipeline.select_schema_context', side_effect=RuntimeError("context selection crashed")):
+            result = pipeline.run_pipeline(natural_query="select")
+            
+    # Assert pipeline fails
+    assert result["success"] is False
+    assert result["error"] == "Schema context selection failed: context selection crashed"
+    
+    # Verify writer prompt was never called
+    assert len(fake_provider.requests_received) == 0
+    
+    # Assert trace error type
+    assert pipeline.trace_store.save.call_count == 1
+    trace = pipeline.trace_store.save.call_args[0][0]
+    assert trace.error_type == "schema_context_selection_exception"
+    assert trace.schema_context_selection["selection_failed"] is True
+    assert trace.schema_context_selection["error_type"] == "schema_context_selection_exception"
+
+
 def test_pipeline_does_not_expose_guardrail_rejected_sql_as_generated_sql():
     # Fake LLM provider returns unsafe command-like SQL
     unsafe_sql = "DROP TABLE users;"
@@ -231,3 +259,5 @@ def test_pipeline_does_not_fallback_to_full_schema_on_context_selection_exceptio
         # Verify fallback trace flag
         # We cannot easily check the store directly here, but we ensure generated_sql is None/Empty
         assert result["generated_sql"] is None or result["generated_sql"] == ""
+
+

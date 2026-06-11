@@ -124,18 +124,3 @@ def test_fallback_is_deterministic(sample_schema):
     prompt2 = get_serialized_prompt(sample_schema, selection2)
     
     assert prompt1 == prompt2
-
-def test_fallback_is_traced(sample_schema):
-    question = "unknown_term_that_matches_nothing xyz123"
-    selection = select_schema_context(sample_schema, question)
-    
-    trace_fragment = {
-        "schema_context_selection": {
-            "fallback_used": selection.fallback_used,
-            "fallback_strategy": selection.fallback_strategy,
-            "selector_version": "deterministic_v1"
-        }
-    }
-    
-    assert trace_fragment["schema_context_selection"]["fallback_used"] is True
-    assert trace_fragment["schema_context_selection"]["fallback_strategy"] == "deterministic_bounded_fallback"

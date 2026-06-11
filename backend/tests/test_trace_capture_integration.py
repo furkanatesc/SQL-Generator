@@ -400,3 +400,44 @@ def test_pipeline_trace_schema_selection_exception(mock_schema_manager, mock_nvi
     assert trace.schema_context_selection["selection_failed"] is True
     assert trace.schema_context_selection["error_type"] == "schema_context_selection_exception"
     assert trace.generated_sql is None
+
+def test_pipeline_fallback_is_traced(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store
+    )
+    
+    mock_nvidia_client.generate_sql.return_value = "SELECT * FROM table1;"
+    
+    with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
+        mock_prune.return_value = {
+            "tables": {
+                "table1": {"columns": [{"name": "col1", "type": "int", "primary_key": True}]},
+                "table2": {"columns": [{"name": "col2", "type": "int", "primary_key": True}]}
+            }
+        }
+        
+        with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
+            # Wrap select_schema_context to inject max_tables=3 as requested in the PR
+            from app.schema.schema_context_selector import select_schema_context
+            def select_schema_context_wrapper(*args, **kwargs):
+                kwargs['max_tables'] = 3
+                return select_schema_context(*args, **kwargs)
+                
+            with patch('app.sql_pipeline.select_schema_context', side_effect=select_schema_context_wrapper):
+                res = pipeline.run_pipeline(
+                    job_id="job123",
+                    natural_query="unrelated query matching nothing fallback trigger"
+                )
+            
+    assert res["success"] is True
+    assert len(store.saved) == 1
+    
+    trace = store.saved[0]
+    
+    assert trace.schema_context_selection["selector_version"] == "deterministic_v1"
+    assert trace.schema_context_selection["fallback_used"] is True
+    assert trace.schema_context_selection["fallback_strategy"] == "deterministic_bounded_fallback"
+    assert trace.schema_context_selection["fallback_limit"] == 3
