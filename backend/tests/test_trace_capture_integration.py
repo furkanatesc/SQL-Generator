@@ -38,7 +38,7 @@ def test_pipeline_trace_capture_success(mock_schema_manager, mock_nvidia_client)
     # Mock prune_schema to bypass actual pruning logic
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"test": {}},
+            "tables": {"test": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}},
             "estimated_tokens": 100,
             "debug_trace": {
                 "selected_tables": ["test"]
@@ -59,6 +59,11 @@ def test_pipeline_trace_capture_success(mock_schema_manager, mock_nvidia_client)
     trace = store.saved[0]
     assert trace.raw_query == "get test"
     assert trace.selected_tables == ["test"]
+    
+    assert trace.schema_context_selection is not None
+    assert trace.schema_context_selection["selector_version"] == "deterministic_v1"
+    assert "test" in trace.schema_context_selection["selected_tables"]
+    
     assert trace.generated_sql == "SELECT\n  *\nFROM test"
     assert trace.metadata["job_id"] == "job123"
     assert trace.metadata["dialect"] == "postgres"
@@ -84,7 +89,7 @@ def test_pipeline_trace_store_none(mock_schema_manager, mock_nvidia_client):
     
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"test": {}},
+            "tables": {"test": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}},
             "estimated_tokens": 100
         }
         
@@ -135,7 +140,7 @@ def test_pipeline_trace_save_error_does_not_break_flow(mock_schema_manager, mock
     
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"test": {}}
+            "tables": {"test": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
         
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
@@ -160,7 +165,7 @@ def test_pipeline_trace_capture_sql_validation_failure(mock_schema_manager, mock
     
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"test": {}}
+            "tables": {"test": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
         
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(False, "Missing column: missing_col")):
@@ -199,7 +204,7 @@ def test_pipeline_trace_clears_validation_errors_after_successful_retry(mock_sch
     
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"test": {}}
+            "tables": {"test": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
         
         with patch('app.sql_pipeline.SQLValidator.validate', side_effect=[
@@ -238,7 +243,7 @@ def test_pipeline_final_validation_errors_reflect_only_last_failed_attempt(mock_
     
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"users": {}}
+            "tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
         
         with patch('app.sql_pipeline.SQLValidator.validate', side_effect=[
@@ -279,7 +284,7 @@ def test_pipeline_trace_capture_unsafe_sql_fail_fast(mock_schema_manager, mock_n
 
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"customers": {}}
+            "tables": {"customers": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
 
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
@@ -316,7 +321,7 @@ def test_pipeline_trace_capture_unsafe_failure_fail_fast(mock_schema_manager, mo
 
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"users": {}}
+            "tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
 
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
@@ -349,7 +354,7 @@ def test_pipeline_trace_capture_multiple_statements_rejection(mock_schema_manage
     
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"users": {}}
+            "tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
         
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
@@ -365,3 +370,74 @@ def test_pipeline_trace_capture_multiple_statements_rejection(mock_schema_manage
     error = trace.sql_validation_errors[0]
     assert error["type"] == "multiple_statements"
     assert error["stage"] == "sql_guardrail"
+
+def test_pipeline_trace_schema_selection_exception(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store
+    )
+    
+    with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
+        mock_prune.return_value = {
+            "tables": {"test": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
+        }
+        
+        with patch("app.sql_pipeline.select_schema_context") as mock_selector:
+            mock_selector.side_effect = Exception("Malformed context")
+            
+            res = pipeline.run_pipeline(
+                job_id="job123",
+                natural_query="get test"
+            )
+            
+    assert res["success"] is False
+    assert len(store.saved) == 1
+    
+    trace = store.saved[0]
+    assert trace.error_type == "schema_context_selection_exception"
+    assert trace.schema_context_selection["selection_failed"] is True
+    assert trace.schema_context_selection["error_type"] == "schema_context_selection_exception"
+    assert trace.generated_sql is None
+
+def test_pipeline_fallback_is_traced(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store
+    )
+    
+    mock_nvidia_client.generate_sql.return_value = "SELECT * FROM table1;"
+    
+    with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
+        mock_prune.return_value = {
+            "tables": {
+                "table1": {"columns": [{"name": "col1", "type": "int", "primary_key": True}]},
+                "table2": {"columns": [{"name": "col2", "type": "int", "primary_key": True}]}
+            }
+        }
+        
+        with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
+            # Wrap select_schema_context to inject max_tables=3 as requested in the PR
+            from app.schema.schema_context_selector import select_schema_context
+            def select_schema_context_wrapper(*args, **kwargs):
+                kwargs['max_tables'] = 3
+                return select_schema_context(*args, **kwargs)
+                
+            with patch('app.sql_pipeline.select_schema_context', side_effect=select_schema_context_wrapper):
+                res = pipeline.run_pipeline(
+                    job_id="job123",
+                    natural_query="unrelated query matching nothing fallback trigger"
+                )
+            
+    assert res["success"] is True
+    assert len(store.saved) == 1
+    
+    trace = store.saved[0]
+    
+    assert trace.schema_context_selection["selector_version"] == "deterministic_v1"
+    assert trace.schema_context_selection["fallback_used"] is True
+    assert trace.schema_context_selection["fallback_strategy"] == "deterministic_bounded_fallback"
+    assert trace.schema_context_selection["fallback_limit"] == 3

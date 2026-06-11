@@ -29,11 +29,12 @@ def get_mocked_pipeline(llm_provider=None, nvidia_client=None):
     pipeline = SQLGenerationPipeline(
         schema_manager=mock_schema_manager,
         nvidia_client=nvidia_client,
-        llm_provider=llm_provider
+        llm_provider=llm_provider,
+        trace_store=MagicMock(spec=['save'])
     )
     # Mock schema pruner to avoid real embedding API calls during test
     pipeline.schema_pruner = MagicMock()
-    pipeline.schema_pruner.prune_schema.return_value = {"tables": {"customers": {}}}
+    pipeline.schema_pruner.prune_schema.return_value = {"tables": {"customers": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}
     return pipeline
 
 
@@ -94,7 +95,7 @@ def test_injected_provider_does_not_construct_nvidia_client():
         )
         pipeline.schema_pruner = MagicMock()
         pipeline.schema_pruner.prune_schema.return_value = {
-            "tables": {"customers": {}}
+            "tables": {"customers": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
 
         result = pipeline.run_pipeline(natural_query="test query")
@@ -139,6 +140,33 @@ def test_pipeline_does_not_call_real_llm_for_guardrail_failure():
     mock_nvidia_client.generate_sql.assert_not_called()
     # Ensure the fake provider was indeed invoked and rejected
     assert len(fake_provider.requests_received) > 0
+
+
+def test_pipeline_context_selection_exception_fails_closed_without_llm_call():
+    fake_provider = TrackingFakeProvider(
+        responses=["SELECT * FROM orders;"]
+    )
+    
+    pipeline = get_mocked_pipeline(llm_provider=fake_provider)
+    
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
+        # Force select_schema_context to raise an exception
+        with patch('app.sql_pipeline.select_schema_context', side_effect=RuntimeError("context selection crashed")):
+            result = pipeline.run_pipeline(natural_query="select")
+            
+    # Assert pipeline fails
+    assert result["success"] is False
+    assert result["error"] == "Schema context selection failed: context selection crashed"
+    
+    # Verify writer prompt was never called
+    assert len(fake_provider.requests_received) == 0
+    
+    # Assert trace error type
+    assert pipeline.trace_store.save.call_count == 1
+    trace = pipeline.trace_store.save.call_args[0][0]
+    assert trace.error_type == "schema_context_selection_exception"
+    assert trace.schema_context_selection["selection_failed"] is True
+    assert trace.schema_context_selection["error_type"] == "schema_context_selection_exception"
 
 
 def test_pipeline_does_not_expose_guardrail_rejected_sql_as_generated_sql():
@@ -213,3 +241,23 @@ def test_pipeline_fail_fast_on_guardrail_failure():
     assert first_attempt["sql"] == unsafe_sql
     assert first_attempt["valid"] is False
     assert any(err.get("stage") == "sql_guardrail" for err in first_attempt.get("validation_errors", []))
+
+def test_pipeline_does_not_fallback_to_full_schema_on_context_selection_exception():
+    fake_provider = DeterministicFakeLLMProvider(sql="SELECT * FROM customers")
+    
+    with patch("app.sql_pipeline.select_schema_context") as mock_selector:
+        mock_selector.side_effect = Exception("Malformed schema error mock")
+        
+        pipeline = get_mocked_pipeline(llm_provider=fake_provider)
+        
+        result = pipeline.run_pipeline(natural_query="test query")
+        
+        # Pipeline must fail immediately without invoking the LLM provider
+        assert result["success"] is False
+        assert "Schema context selection failed" in result["error"]
+        
+        # Verify fallback trace flag
+        # We cannot easily check the store directly here, but we ensure generated_sql is None/Empty
+        assert result["generated_sql"] is None or result["generated_sql"] == ""
+
+

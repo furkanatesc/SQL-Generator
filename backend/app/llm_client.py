@@ -65,31 +65,10 @@ def get_nvidia_api_key() -> str:
 
 class PromptTemplateManager:
     @staticmethod
-    def get_writer_prompt(natural_query: str, aqr: Dict[str, Any], schema: Dict[str, Any], previous_sql: Optional[str] = None, dialect: str = "postgres") -> str:
+    def get_writer_prompt(natural_query: str, aqr: Dict[str, Any], prompt_schema_context: str, previous_sql: Optional[str] = None, dialect: str = "postgres") -> str:
         """
         SQL Yazar Ajanı (SQL Generator) için kapsamlı sistem ve yönlendirme promptunu oluşturur.
         """
-        # Şemayı görselleştirerek metne dök
-        schema_text = ""
-        for table, table_meta in schema.get("tables", {}).items():
-            schema_text += f"Table: {table}\n"
-            schema_text += "  Columns:\n"
-            for col in table_meta.get("columns", []):
-                pk_str = " (PRIMARY KEY)" if col.get("primary_key") else ""
-                nullable_str = "" if col.get("nullable") else " NOT NULL"
-                schema_text += f"    - {col['name']}: {col['type']}{pk_str}{nullable_str}\n"
-            if table_meta.get("foreign_keys"):
-                schema_text += "  Foreign Keys & Relationships:\n"
-                for fk in table_meta["foreign_keys"]:
-                    rel_type = fk.get("type", "explicit")
-                    type_str = ""
-                    if rel_type == "implicit":
-                        type_str = " (Implicit Relation)"
-                    elif rel_type == "custom":
-                        type_str = " (Virtual/Custom Relation)"
-                    schema_text += f"    - {fk['column']} REFERENCES {fk['referenced_table']}({fk['referenced_column']}){type_str}\n"
-            schema_text += "\n"
-            
         business_rules_text = "\n".join([f"- {rule}" for rule in aqr.get("business_rules", [])]) if aqr.get("business_rules") else "None"
         
         revision_context = ""
@@ -105,7 +84,7 @@ NOTE: The user is asking to REVISE or UPDATE the previous query above based on t
         prompt = f"""You are an expert SQL Generator. Your task is to generate a syntactically correct {dialect} SQL query to answer the user's question based on the provided schema, AQR structure, and business rules.
 
 DATABASE SCHEMA:
-{schema_text}
+{prompt_schema_context}
 
 STRUCTURED TARGET REPRESENTATION (AQR):
 - Target Entities: {", ".join(aqr.get("entities", []))}
@@ -133,25 +112,15 @@ INSTRUCTIONS:
         return prompt
 
     @staticmethod
-    def get_corrector_prompt(natural_query: str, original_sql: str, error_message: str, schema: Dict[str, Any], dialect: str = "postgres") -> str:
+    def get_corrector_prompt(natural_query: str, original_sql: str, error_message: str, prompt_schema_context: str, dialect: str = "postgres") -> str:
         """
         SQL Eleştirmen/Düzeltici Ajanı (Corrector) için prompt hazırlar.
         """
-        schema_text = ""
-        for table, table_meta in schema.get("tables", {}).items():
-            schema_text += f"Table: {table}\n"
-            for col in table_meta.get("columns", []):
-                schema_text += f"  - {col['name']}: {col['type']}\n"
-            if table_meta.get("foreign_keys"):
-                for fk in table_meta["foreign_keys"]:
-                    schema_text += f"  - FK: {fk['column']} -> {fk['referenced_table']}({fk['referenced_column']})\n"
-            schema_text += "\n"
-
         prompt = f"""You are an expert SQL Debugger and Analyst. A previously generated {dialect} SQL query failed with an execution or validation error.
 Your task is to fix the query and output a fully correct, working version.
 
 DATABASE SCHEMA:
-{schema_text}
+{prompt_schema_context}
 
 USER QUESTION:
 "{natural_query}"

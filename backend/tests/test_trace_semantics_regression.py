@@ -22,7 +22,7 @@ def test_success_trace_contract(mock_schema_manager, mock_nvidia_client):
     pipeline = SQLGenerationPipeline(schema_manager=mock_schema_manager, nvidia_client=mock_nvidia_client, trace_store=store)
     mock_nvidia_client.generate_sql.return_value = "SELECT * FROM test"
 
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"test": {}}, "estimated_tokens": 100}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"test": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}, "estimated_tokens": 100}):
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
             pipeline.run_pipeline(job_id="j1", natural_query="q")
 
@@ -40,7 +40,7 @@ def test_successful_retry_clears_top_level_validation_errors(mock_schema_manager
     
     mock_nvidia_client.generate_sql.side_effect = ["SELECT broken", "SELECT * FROM test"]
     
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"test": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"test": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         with patch('app.sql_pipeline.SQLValidator.validate', side_effect=[(False, "err"), (True, None)]):
             pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=2)
 
@@ -60,7 +60,7 @@ def test_final_failure_uses_last_attempt_validation_errors(mock_schema_manager, 
     
     mock_nvidia_client.generate_sql.side_effect = ["SELECT broken", "DELETE FROM users;"]
     
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         with patch('app.sql_pipeline.SQLValidator.validate', side_effect=[(False, "semantic err")]):
             pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=2)
 
@@ -80,7 +80,7 @@ def test_guardrail_failure_fail_fast_trace_contract(mock_schema_manager, mock_nv
     
     mock_nvidia_client.generate_sql.side_effect = ["DELETE FROM users;", "SELECT * FROM users;"]
     
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
             pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=2)
 
@@ -99,7 +99,7 @@ def test_all_guardrail_failures_fail_fast_trace_contract(mock_schema_manager, mo
     
     mock_nvidia_client.generate_sql.side_effect = ["DROP TABLE users;", "DELETE FROM users;"]
     
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
             pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=2)
 
@@ -118,7 +118,7 @@ def test_llm_api_failure_attempt_has_validation_errors(mock_schema_manager, mock
     
     mock_nvidia_client.generate_sql.side_effect = Exception("LLM API Down")
     
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=1)
 
     trace = store.saved[0]
@@ -224,7 +224,7 @@ def test_semantic_missing_column_taxonomy_contract(mock_schema_manager, mock_nvi
 
     mock_nvidia_client.generate_sql.return_value = "SELECT missing_col FROM users"
 
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(False, "Missing column: missing_col")):
             pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=1)
 
@@ -246,7 +246,7 @@ def test_ast_parse_error_taxonomy_contract(mock_schema_manager, mock_nvidia_clie
 
     mock_nvidia_client.generate_sql.return_value = "SELECT * FROM users WHERE ;"
 
-    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {}}}):
+    with patch.object(pipeline.schema_pruner, 'prune_schema', return_value={"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}):
         with patch('app.sql_guardrail.SQLGuardrailValidator.validate', return_value=[]):
             pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=1)
 
