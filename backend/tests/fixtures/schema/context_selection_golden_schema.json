@@ -1,0 +1,116 @@
+{
+  "tables": {
+    "customers": {
+      "columns": [
+        {"name": "id", "type": "int", "primary_key": true},
+        {"name": "name", "type": "varchar"},
+        {"name": "email", "type": "varchar"}
+      ]
+    },
+    "orders": {
+      "columns": [
+        {"name": "id", "type": "int", "primary_key": true},
+        {"name": "customer_id", "type": "int"},
+        {"name": "order_date", "type": "date"},
+        {"name": "total_amount", "type": "decimal"}
+      ]
+    },
+    "payments": {
+      "columns": [
+        {"name": "id", "type": "int", "primary_key": true},
+        {"name": "order_id", "type": "int"},
+        {"name": "payment_method", "type": "varchar"},
+        {"name": "amount", "type": "decimal"}
+      ]
+    },
+    "products": {
+      "columns": [
+        {"name": "id", "type": "int", "primary_key": true},
+        {"name": "name", "type": "varchar"},
+        {"name": "price", "type": "decimal"}
+      ]
+    },
+    "order_items": {
+      "columns": [
+        {"name": "id", "type": "int", "primary_key": true},
+        {"name": "order_id", "type": "int"},
+        {"name": "product_id", "type": "int"},
+        {"name": "quantity", "type": "int"},
+        {"name": "unit_price", "type": "decimal"}
+      ]
+    },
+    "users": {
+      "columns": [
+        {"name": "id", "type": "int", "primary_key": true},
+        {"name": "username", "type": "varchar"},
+        {"name": "password_hash", "type": "varchar"},
+        {"name": "role", "type": "varchar"}
+      ]
+    },
+    "audit_logs": {
+      "columns": [
+        {"name": "id", "type": "int", "primary_key": true},
+        {"name": "user_id", "type": "int"},
+        {"name": "action", "type": "varchar"},
+        {"name": "timestamp", "type": "timestamp"}
+      ]
+    },
+    "support_tickets": {
+      "columns": [
+        {"name": "id", "type": "int", "primary_key": true},
+        {"name": "customer_id", "type": "int"},
+        {"name": "subject", "type": "varchar"},
+        {"name": "status", "type": "varchar"}
+      ]
+    }
+  },
+  "graph": {
+    "nodes": [
+      "customers", "orders", "payments", "products", "order_items", "users", "audit_logs", "support_tickets"
+    ],
+    "edges": [
+      {
+        "source": "orders",
+        "source_col": "customer_id",
+        "target": "customers",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "payments",
+        "source_col": "order_id",
+        "target": "orders",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "order_items",
+        "source_col": "order_id",
+        "target": "orders",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "order_items",
+        "source_col": "product_id",
+        "target": "products",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "support_tickets",
+        "source_col": "customer_id",
+        "target": "customers",
+        "target_col": "id",
+        "type": "explicit"
+      },
+      {
+        "source": "audit_logs",
+        "source_col": "user_id",
+        "target": "users",
+        "target_col": "id",
+        "type": "explicit"
+      }
+    ]
+  }
+}

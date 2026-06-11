@@ -1,0 +1,68 @@
+[
+  {
+    "id": "payments_by_customer",
+    "question": "Show payments for each customer",
+    "required_tables": ["payments", "orders", "customers"],
+    "forbidden_tables": ["audit_logs", "users"],
+    "required_join_edges": [
+      ["payments", "order_id", "orders", "id"],
+      ["orders", "customer_id", "customers", "id"]
+    ],
+    "max_selected_tables": 4,
+    "expect_fallback": false
+  },
+  {
+    "id": "orders_by_customer",
+    "question": "List orders by customer",
+    "required_tables": ["orders", "customers"],
+    "forbidden_tables": ["audit_logs", "users"],
+    "required_join_edges": [
+      ["orders", "customer_id", "customers", "id"]
+    ],
+    "max_selected_tables": 3,
+    "expect_fallback": false
+  },
+  {
+    "id": "unknown_question_uses_bounded_fallback",
+    "question": "xyz unknown business term",
+    "required_tables": [],
+    "forbidden_tables": [],
+    "required_join_edges": [],
+    "max_selected_tables": 5,
+    "expect_fallback": true
+  },
+  {
+    "id": "order_items_and_products",
+    "question": "Show the product names and quantities for order items in order number 123",
+    "required_tables": ["order_items", "products", "orders"],
+    "forbidden_tables": ["audit_logs", "users"],
+    "required_join_edges": [
+      ["order_items", "product_id", "products", "id"],
+      ["order_items", "order_id", "orders", "id"]
+    ],
+    "max_selected_tables": 4,
+    "expect_fallback": false
+  },
+  {
+    "id": "support_tickets_by_customer",
+    "question": "List support tickets by customer",
+    "required_tables": ["support_tickets", "customers"],
+    "forbidden_tables": ["audit_logs", "users"],
+    "required_join_edges": [
+      ["support_tickets", "customer_id", "customers", "id"]
+    ],
+    "max_selected_tables": 3,
+    "expect_fallback": false
+  },
+  {
+    "id": "audit_logs_for_user",
+    "question": "Show the latest audit log action for the user account admin",
+    "required_tables": ["audit_logs", "users"],
+    "forbidden_tables": ["customers", "orders", "payments"],
+    "required_join_edges": [
+      ["audit_logs", "user_id", "users", "id"]
+    ],
+    "max_selected_tables": 3,
+    "expect_fallback": false
+  }
+]
