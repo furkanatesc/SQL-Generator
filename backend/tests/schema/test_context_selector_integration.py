@@ -1,7 +1,7 @@
 import pytest
 from app.schema.schema_contract import DatabaseSchema, TableSchema, ColumnSchema, RelationshipSchema, RelationshipType, SchemaGraph
 from app.schema.schema_context_selector import select_schema_context
-from app.schema.prompt_serializer import serialize_schema_for_prompt
+from app.schema.schema_prompt_serializer import serialize_selection_for_prompt
 
 @pytest.fixture
 def sample_schema():
@@ -62,24 +62,24 @@ def sample_schema():
         )
     )
 
-def count_serialized_tables(prompt: str) -> int:
-    return prompt.count("TABLE ")
+def get_serialized_prompt(schema, selection):
+    return serialize_selection_for_prompt(schema, selection)
 
 def test_integration_selected_tables_only(sample_schema):
     question = "Show orders with customer names"
     selection = select_schema_context(sample_schema, question, max_tables=2)
-    prompt = serialize_schema_for_prompt(sample_schema, selection)
+    prompt = get_serialized_prompt(sample_schema, selection)
     
-    assert "TABLE customers" in prompt
-    assert "TABLE orders" in prompt
-    assert "TABLE audit_logs" not in prompt
-    assert "TABLE products" not in prompt
-    assert "TABLE payments" not in prompt
+    assert "customers" in prompt.split("Tables:")[1]
+    assert "orders" in prompt.split("Tables:")[1]
+    assert "audit_logs" not in prompt.split("Tables:")[1]
+    assert "products" not in prompt.split("Tables:")[1]
+    assert "payments" not in prompt.split("Tables:")[1]
 
 def test_prompt_relationships_include_only_selected_table_fks(sample_schema):
     question = "Show orders with customer names"
     selection = select_schema_context(sample_schema, question, max_tables=2)
-    prompt = serialize_schema_for_prompt(sample_schema, selection)
+    prompt = get_serialized_prompt(sample_schema, selection)
     
     assert "orders.customer_id -> customers.id" in prompt
     assert "payments.order_id -> orders.id" not in prompt
@@ -88,32 +88,40 @@ def test_prompt_relationships_include_only_selected_table_fks(sample_schema):
 def test_join_path_tables_are_included_in_prompt_context(sample_schema):
     question = "Show payments for each customer name"
     selection = select_schema_context(sample_schema, question, max_tables=3)
-    prompt = serialize_schema_for_prompt(sample_schema, selection)
+    prompt = get_serialized_prompt(sample_schema, selection)
     
-    assert "TABLE payments" in prompt
-    assert "TABLE customers" in prompt
+    assert "payments" in prompt.split("Relationships:")[0]
+    assert "customers" in prompt.split("Relationships:")[0]
     
-    # Depending on graph traversal direction, check path
-    # `find_join_paths` returns path tables.
-    assert "JOIN PATH: " in prompt
-    assert "orders" in prompt  # The intermediate table must be mentioned in the path
+    assert "Join Paths:" in prompt
+    
+    # Check that intermediate table (orders) is in the tables block
+    tables_block = prompt.split("Relationships:")[0]
+    assert "\norders\n" in tables_block
+    assert "  - id " in tables_block.split("\norders\n")[1]
 
 def test_fallback_uses_at_most_five_tables(sample_schema):
     question = "unknown_term_that_matches_nothing xyz123"
     selection = select_schema_context(sample_schema, question)
-    prompt = serialize_schema_for_prompt(sample_schema, selection)
+    prompt = get_serialized_prompt(sample_schema, selection)
     
-    assert count_serialized_tables(prompt) <= 5
+    assert prompt.count("  - id") <= 5
     assert selection.fallback_used is True
-    assert selection.fallback_strategy == "deterministic_top_5"
+    assert selection.fallback_strategy == "deterministic_bounded_fallback"
+
+def test_fallback_respects_max_tables_lower_than_five(sample_schema):
+    question = "unknown_term_that_matches_nothing xyz123"
+    selection = select_schema_context(sample_schema, question, max_tables=3)
+    assert len(selection.focus_tables) == 3
+    assert selection.fallback_limit == 3
 
 def test_fallback_is_deterministic(sample_schema):
     question = "unknown_term_that_matches_nothing xyz123"
     selection1 = select_schema_context(sample_schema, question)
-    prompt1 = serialize_schema_for_prompt(sample_schema, selection1)
+    prompt1 = get_serialized_prompt(sample_schema, selection1)
     
     selection2 = select_schema_context(sample_schema, question)
-    prompt2 = serialize_schema_for_prompt(sample_schema, selection2)
+    prompt2 = get_serialized_prompt(sample_schema, selection2)
     
     assert prompt1 == prompt2
 
@@ -130,4 +138,4 @@ def test_fallback_is_traced(sample_schema):
     }
     
     assert trace_fragment["schema_context_selection"]["fallback_used"] is True
-    assert trace_fragment["schema_context_selection"]["fallback_strategy"] == "deterministic_top_5"
+    assert trace_fragment["schema_context_selection"]["fallback_strategy"] == "deterministic_bounded_fallback"

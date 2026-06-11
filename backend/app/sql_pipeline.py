@@ -12,7 +12,7 @@ from app.llm_client import NVIDIAClient, PromptTemplateManager
 from app.llm.provider import LLMProvider, SQLGenerationRequest
 from app.schema.schema_adapter import from_legacy_schema
 from app.schema.schema_context_selector import select_schema_context
-from app.schema.prompt_serializer import serialize_schema_for_prompt
+from app.schema.schema_prompt_serializer import serialize_selection_for_prompt
 
 logger = logging.getLogger("sql_pipeline")
 
@@ -283,9 +283,10 @@ class SQLGenerationPipeline:
                     question=natural_query or aqr.get("natural_query", "")
                 )
                 
-                prompt_schema_context = serialize_schema_for_prompt(
+                prompt_schema_context = serialize_selection_for_prompt(
                     schema=database_schema,
-                    selection=schema_context_selection
+                    selection=schema_context_selection,
+                    max_columns_per_table=15
                 )
                 
                 # Trace mapping
@@ -294,25 +295,39 @@ class SQLGenerationPipeline:
                     "selected_tables": [st.table_name for st in schema_context_selection.selected_tables],
                     "fallback_used": schema_context_selection.fallback_used,
                     "fallback_strategy": schema_context_selection.fallback_strategy,
-                    "selector_version": "deterministic_v1"
+                    "fallback_limit": schema_context_selection.fallback_limit,
+                    "max_fallback_tables": schema_context_selection.max_fallback_tables,
+                    "selector_version": "deterministic_v1",
+                    "selection_failed": False
                 }
             except Exception as context_e:
-                # If context selector fails (e.g. invalid legacy mock in tests), fallback to old behavior
+                result["error"] = f"Schema context selection failed: {context_e}"
                 if log_callback:
-                    log_callback(f"Context selection failed, falling back to full pruned schema: {context_e}", 2)
-                schema_text = ""
-                for table, table_meta in pruned_schema.get("tables", {}).items():
-                    schema_text += f"Table: {table}\n"
-                    if isinstance(table_meta, dict):
-                        for col in table_meta.get("columns", []):
-                            pk_str = " (PRIMARY KEY)" if col.get("primary_key") else ""
-                            nullable_str = "" if col.get("nullable") else " NOT NULL"
-                            schema_text += f"  - {col.get('name')}: {col.get('type')}{pk_str}{nullable_str}\n"
-                        if table_meta.get("foreign_keys"):
-                            for fk in table_meta["foreign_keys"]:
-                                schema_text += f"  - FK: {fk.get('column')} -> {fk.get('referenced_table')}({fk.get('referenced_column')})\n"
-                    schema_text += "\n"
-                prompt_schema_context = schema_text
+                    log_callback(f"Context selection failed: {context_e}", 2)
+                    
+                schema_selection_trace = {
+                    "selector_version": "deterministic_v1",
+                    "selection_failed": True,
+                    "error_type": "schema_context_selection_exception",
+                }
+                
+                self._capture_trace_on_exit(
+                    start_time=start_time,
+                    job_id=job_id,
+                    dialect=dialect,
+                    natural_query=natural_query or aqr.get("natural_query", ""),
+                    pruned_schema={"error": result["error"]},
+                    generated_sql=None,
+                    last_generated_sql=None,
+                    sql_valid=None,
+                    sql_validation_errors=[],
+                    attempts=[],
+                    error_message=result["error"],
+                    error_type="schema_context_selection_exception",
+                    known_secrets=known_secrets,
+                    schema_selection_trace=schema_selection_trace
+                )
+                return redact_sensitive(result, known_secrets)
 
         except Exception as e:
             result["error"] = f"Şema Budama Hatası: {str(e)}"

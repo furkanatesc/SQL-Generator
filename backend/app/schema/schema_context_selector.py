@@ -14,6 +14,8 @@ class SchemaContextSelection(BaseModel):
     join_paths: list[JoinPathCandidate]
     fallback_used: bool = False
     fallback_strategy: str | None = None
+    fallback_limit: int | None = None
+    max_fallback_tables: int | None = None
 
 def _tokenize(text: str) -> set[str]:
     """Simple tokenizer that splits by non-alphanumeric characters and lowercases."""
@@ -111,9 +113,12 @@ def select_schema_context(
     fallback_used = False
     fallback_strategy = None
     
+    fallback_limit = None
+    max_fallback_tables = None
+    
     if not selected_tables:
         fallback_used = True
-        fallback_strategy = "deterministic_top_5"
+        fallback_strategy = "deterministic_bounded_fallback"
         sorted_all_tables = sorted([t.name for t in schema.tables])
         fallback_limit = min(max_tables, 5)
         for t_name in sorted_all_tables[:fallback_limit]:
@@ -154,5 +159,7 @@ def select_schema_context(
         selected_tables=selected_tables,
         join_paths=unique_paths,
         fallback_used=fallback_used,
-        fallback_strategy=fallback_strategy
+        fallback_strategy=fallback_strategy,
+        fallback_limit=fallback_limit,
+        max_fallback_tables=5 if fallback_used else None
     )

@@ -1,6 +1,36 @@
 from app.schema.schema_contract import DatabaseSchema, RelationshipType, TableSchema, ColumnSchema
 from app.schema.graph_traversal import JoinPathCandidate
 from app.schema.relationship_priority import RELATIONSHIP_TYPE_PRIORITY
+from app.schema.schema_context_selector import SchemaContextSelection
+
+def serialize_selection_for_prompt(schema: DatabaseSchema, selection: SchemaContextSelection, max_columns_per_table: int = 15) -> str:
+    allowed = set(selection.focus_tables)
+    for p in selection.join_paths:
+        allowed.update(p.tables)
+        
+    filtered_graph = None
+    if schema.graph:
+        from app.schema.schema_contract import SchemaGraph
+        filtered_graph = SchemaGraph(
+            nodes=list(allowed),
+            edges=[e for e in schema.graph.edges if e.source_table in allowed and e.target_table in allowed]
+        )
+        
+    filtered_schema = DatabaseSchema(
+        dialect=schema.dialect,
+        tables=[t for t in schema.tables if t.name in allowed],
+        relationships=[r for r in schema.relationships if r.source_table in allowed and r.target_table in allowed],
+        graph=filtered_graph,
+        version=schema.version
+    )
+    
+    return serialize_schema_for_prompt(
+        schema=filtered_schema,
+        focus_tables=selection.focus_tables,
+        join_paths=selection.join_paths,
+        max_tables=len(allowed),
+        max_columns_per_table=max_columns_per_table
+    )
 
 def serialize_schema_for_prompt(
     schema: DatabaseSchema,
@@ -98,7 +128,7 @@ def serialize_schema_for_prompt(
         valid_rels = [
             r for r in schema.relationships 
             if r.source_table in selected_table_names and r.target_table in selected_table_names
-            and r.relationship_type != RelationshipType.DISABLED
+            and r.relationship_type not in (RelationshipType.DISABLED, RelationshipType.IMPLICIT_FUZZY)
         ]
         
         def rel_sort_key(rel) -> tuple:

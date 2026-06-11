@@ -33,7 +33,7 @@ def get_mocked_pipeline(llm_provider=None, nvidia_client=None):
     )
     # Mock schema pruner to avoid real embedding API calls during test
     pipeline.schema_pruner = MagicMock()
-    pipeline.schema_pruner.prune_schema.return_value = {"tables": {"customers": {}}}
+    pipeline.schema_pruner.prune_schema.return_value = {"tables": {"customers": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}
     return pipeline
 
 
@@ -94,7 +94,7 @@ def test_injected_provider_does_not_construct_nvidia_client():
         )
         pipeline.schema_pruner = MagicMock()
         pipeline.schema_pruner.prune_schema.return_value = {
-            "tables": {"customers": {}}
+            "tables": {"customers": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
 
         result = pipeline.run_pipeline(natural_query="test query")
@@ -213,3 +213,21 @@ def test_pipeline_fail_fast_on_guardrail_failure():
     assert first_attempt["sql"] == unsafe_sql
     assert first_attempt["valid"] is False
     assert any(err.get("stage") == "sql_guardrail" for err in first_attempt.get("validation_errors", []))
+
+def test_pipeline_does_not_fallback_to_full_schema_on_context_selection_exception():
+    fake_provider = DeterministicFakeLLMProvider(sql="SELECT * FROM customers")
+    
+    with patch("app.sql_pipeline.select_schema_context") as mock_selector:
+        mock_selector.side_effect = Exception("Malformed schema error mock")
+        
+        pipeline = get_mocked_pipeline(llm_provider=fake_provider)
+        
+        result = pipeline.run_pipeline(natural_query="test query")
+        
+        # Pipeline must fail immediately without invoking the LLM provider
+        assert result["success"] is False
+        assert "Schema context selection failed" in result["error"]
+        
+        # Verify fallback trace flag
+        # We cannot easily check the store directly here, but we ensure generated_sql is None/Empty
+        assert result["generated_sql"] is None or result["generated_sql"] == ""

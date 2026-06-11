@@ -284,7 +284,7 @@ def test_pipeline_trace_capture_unsafe_sql_fail_fast(mock_schema_manager, mock_n
 
     with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
         mock_prune.return_value = {
-            "tables": {"customers": {}}
+            "tables": {"customers": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
         }
 
         with patch('app.sql_pipeline.SQLValidator.validate', return_value=(True, None)):
@@ -370,3 +370,33 @@ def test_pipeline_trace_capture_multiple_statements_rejection(mock_schema_manage
     error = trace.sql_validation_errors[0]
     assert error["type"] == "multiple_statements"
     assert error["stage"] == "sql_guardrail"
+
+def test_pipeline_trace_schema_selection_exception(mock_schema_manager, mock_nvidia_client):
+    store = RecordingTraceStore()
+    pipeline = SQLGenerationPipeline(
+        schema_manager=mock_schema_manager,
+        nvidia_client=mock_nvidia_client,
+        trace_store=store
+    )
+    
+    with patch.object(pipeline.schema_pruner, 'prune_schema') as mock_prune:
+        mock_prune.return_value = {
+            "tables": {"test": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}
+        }
+        
+        with patch("app.sql_pipeline.select_schema_context") as mock_selector:
+            mock_selector.side_effect = Exception("Malformed context")
+            
+            res = pipeline.run_pipeline(
+                job_id="job123",
+                natural_query="get test"
+            )
+            
+    assert res["success"] is False
+    assert len(store.saved) == 1
+    
+    trace = store.saved[0]
+    assert trace.error_type == "schema_context_selection_exception"
+    assert trace.schema_context_selection["selection_failed"] is True
+    assert trace.schema_context_selection["error_type"] == "schema_context_selection_exception"
+    assert trace.generated_sql is None
