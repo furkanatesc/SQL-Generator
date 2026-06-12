@@ -8,6 +8,7 @@ from unittest.mock import patch, MagicMock
 from app.sql_pipeline import SQLGenerationPipeline
 from app.llm.provider import LLMProvider, SQLGenerationRequest, SQLGenerationResponse
 from app.sql_validator import SQLValidator
+from tests.eval.eval_helpers import normalize_sql
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
 GOLDEN_SCHEMA_PATH = os.path.join(FIXTURES_DIR, "schema", "context_selection_golden_schema.json")
@@ -18,24 +19,6 @@ def load_json(path: str) -> dict | list:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-
-def normalize_sql(sql: str) -> str:
-    """
-    Normalizes SQL string to make structural fragment comparisons robust.
-    Removes quotes, normalizes spacing, and eliminates spaces around delimiters.
-    """
-    if not sql:
-        return ""
-    # Convert to lowercase
-    s = sql.lower()
-    # Remove quotes, backticks, brackets
-    s = re.sub(r'[`"\[\]]', '', s)
-    # Replace all whitespace sequences with a single space
-    s = " ".join(s.split())
-    # Remove spaces around operators and punctuation (including ->)
-    s = re.sub(r'\s*(->)\s*', r'\1', s)
-    s = re.sub(r'\s*([=,.<>()+/*;>-])\s*', r'\1', s)
-    return s.strip()
 
 
 class GoldenFakeLLMProvider(LLMProvider):
