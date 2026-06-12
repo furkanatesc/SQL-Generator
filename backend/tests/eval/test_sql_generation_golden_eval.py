@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import copy
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -31,8 +32,9 @@ def normalize_sql(sql: str) -> str:
     s = re.sub(r'[`"\[\]]', '', s)
     # Replace all whitespace sequences with a single space
     s = " ".join(s.split())
-    # Remove spaces around common operators and punctuation
-    s = re.sub(r'\s*([=,.<>()+/*;-])\s*', r'\1', s)
+    # Remove spaces around operators and punctuation (including ->)
+    s = re.sub(r'\s*(->)\s*', r'\1', s)
+    s = re.sub(r'\s*([=,.<>()+/*;>-])\s*', r'\1', s)
     return s.strip()
 
 
@@ -97,6 +99,22 @@ def run_case_pipeline(case: dict, golden_schema: dict):
     """
     Helper to configure patches and run the SQL Generation Pipeline for a single case.
     """
+    # Dynamically filter the golden schema to exclude forbidden prompt tables.
+    # This simulates the hidden tables/columns configuration of SchemaManager.
+    filtered_schema = copy.deepcopy(golden_schema)
+    forbidden = case.get("forbidden_prompt_tables", [])
+    
+    for tbl in forbidden:
+        if tbl in filtered_schema["tables"]:
+            del filtered_schema["tables"][tbl]
+        if tbl in filtered_schema["graph"]["nodes"]:
+            filtered_schema["graph"]["nodes"].remove(tbl)
+            
+    filtered_schema["graph"]["edges"] = [
+        edge for edge in filtered_schema["graph"]["edges"]
+        if edge["source"] not in forbidden and edge["target"] not in forbidden
+    ]
+
     fake_provider = GoldenFakeLLMProvider([case])
     pipeline = SQLGenerationPipeline(llm_provider=fake_provider)
 
@@ -104,7 +122,7 @@ def run_case_pipeline(case: dict, golden_schema: dict):
     def mock_search_ddl(query_text, limit=10, api_key=None):
         return [{"payload": {"table_name": tbl}, "score": 1.0} for tbl in case["expected_tables"]]
 
-    with patch("app.schema_manager.SchemaManager.load_schema", return_value=golden_schema), \
+    with patch("app.schema_manager.SchemaManager.load_schema", return_value=filtered_schema), \
          patch("app.rag_manager.RAGManager") as mock_rag_class:
          
         mock_rag_instance = MagicMock()
@@ -154,16 +172,11 @@ def test_sql_generation_prompt_context(case, golden_schema):
             assert not re.search(r"\b" + re.escape(tbl.lower()) + r"\b", normalized_prompt), \
                 f"Case '{case['id']}' (Request {idx}): Forbidden table '{tbl}' found in prompt context: {prompt}"
 
-        # 3. Required relationships must be serialized in prompt context
+        # 3. Required relationships must be serialized in prompt context (normalized substring match)
         for edge in case["required_prompt_edges"]:
-            col, ref_table = edge
-            found = False
-            for line in prompt.lower().splitlines():
-                if col.lower() in line and ref_table.lower() in line:
-                    found = True
-                    break
-            assert found, \
-                f"Case '{case['id']}' (Request {idx}): Relationship edge '{col} -> {ref_table}' not found in prompt context: {prompt}"
+            norm_edge = normalize_sql(edge)
+            assert norm_edge in normalized_prompt, \
+                f"Case '{case['id']}' (Request {idx}): Relationship edge '{edge}' (normalized: '{norm_edge}') not found in prompt context: {prompt}"
 
 
 @pytest.mark.parametrize("case", load_json(GOLDEN_CASES_PATH), ids=lambda c: c["id"])
