@@ -99,22 +99,6 @@ def run_case_pipeline(case: dict, golden_schema: dict):
     """
     Helper to configure patches and run the SQL Generation Pipeline for a single case.
     """
-    # Dynamically filter the golden schema to exclude forbidden prompt tables.
-    # This simulates the hidden tables/columns configuration of SchemaManager.
-    filtered_schema = copy.deepcopy(golden_schema)
-    forbidden = case.get("forbidden_prompt_tables", [])
-    
-    for tbl in forbidden:
-        if tbl in filtered_schema["tables"]:
-            del filtered_schema["tables"][tbl]
-        if tbl in filtered_schema["graph"]["nodes"]:
-            filtered_schema["graph"]["nodes"].remove(tbl)
-            
-    filtered_schema["graph"]["edges"] = [
-        edge for edge in filtered_schema["graph"]["edges"]
-        if edge["source"] not in forbidden and edge["target"] not in forbidden
-    ]
-
     fake_provider = GoldenFakeLLMProvider([case])
     pipeline = SQLGenerationPipeline(llm_provider=fake_provider)
 
@@ -122,7 +106,7 @@ def run_case_pipeline(case: dict, golden_schema: dict):
     def mock_search_ddl(query_text, limit=10, api_key=None):
         return [{"payload": {"table_name": tbl}, "score": 1.0} for tbl in case["expected_tables"]]
 
-    with patch("app.schema_manager.SchemaManager.load_schema", return_value=filtered_schema), \
+    with patch("app.schema_manager.SchemaManager.load_schema", return_value=golden_schema), \
          patch("app.rag_manager.RAGManager") as mock_rag_class:
          
         mock_rag_instance = MagicMock()

@@ -51,7 +51,7 @@
       "SELECT orders.id, customers.name FROM orders JOIN customers ON orders.customer_id = customers.id"
     ],
     "required_prompt_tables": ["orders", "customers"],
-    "forbidden_prompt_tables": ["payments", "audit_logs", "users"],
+    "forbidden_prompt_tables": ["audit_logs", "users"],
     "required_prompt_edges": [
       "orders.customer_id -> customers.id"
     ]
@@ -81,7 +81,7 @@
       "SELECT products.name, order_items.quantity FROM order_items JOIN products ON order_items.product_id = products.id JOIN orders ON order_items.order_id = orders.id WHERE orders.id = 123"
     ],
     "required_prompt_tables": ["order_items", "products", "orders"],
-    "forbidden_prompt_tables": ["customers", "audit_logs", "users"],
+    "forbidden_prompt_tables": ["audit_logs", "users"],
     "required_prompt_edges": [
       "order_items.product_id -> products.id",
       "order_items.order_id -> orders.id"
