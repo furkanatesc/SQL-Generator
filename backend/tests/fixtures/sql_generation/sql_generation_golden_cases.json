@@ -20,6 +20,12 @@
     "sql_responses": [
       "SELECT customers.name, payments.amount FROM customers JOIN payments ON payments.customer_id = customers.id",
       "SELECT customers.name, payments.amount FROM customers JOIN orders ON orders.customer_id = customers.id JOIN payments ON payments.order_id = orders.id"
+    ],
+    "required_prompt_tables": ["payments", "orders", "customers"],
+    "forbidden_prompt_tables": ["audit_logs", "users"],
+    "required_prompt_edges": [
+      ["order_id", "orders"],
+      ["customer_id", "customers"]
     ]
   },
   {
@@ -43,6 +49,11 @@
     "max_attempts": 1,
     "sql_responses": [
       "SELECT orders.id, customers.name FROM orders JOIN customers ON orders.customer_id = customers.id"
+    ],
+    "required_prompt_tables": ["orders", "customers"],
+    "forbidden_prompt_tables": ["audit_logs", "users"],
+    "required_prompt_edges": [
+      ["customer_id", "customers"]
     ]
   },
   {
@@ -68,6 +79,12 @@
     "max_attempts": 1,
     "sql_responses": [
       "SELECT products.name, order_items.quantity FROM order_items JOIN products ON order_items.product_id = products.id JOIN orders ON order_items.order_id = orders.id WHERE orders.id = 123"
+    ],
+    "required_prompt_tables": ["order_items", "products", "orders"],
+    "forbidden_prompt_tables": ["audit_logs", "users"],
+    "required_prompt_edges": [
+      ["product_id", "products"],
+      ["order_id", "orders"]
     ]
   },
   {
@@ -92,6 +109,11 @@
     "max_attempts": 1,
     "sql_responses": [
       "SELECT support_tickets.id, customers.name FROM support_tickets JOIN customers ON support_tickets.customer_id = customers.id"
+    ],
+    "required_prompt_tables": ["support_tickets", "customers"],
+    "forbidden_prompt_tables": ["payments", "audit_logs", "users"],
+    "required_prompt_edges": [
+      ["customer_id", "customers"]
     ]
   },
   {
@@ -117,6 +139,11 @@
     "max_attempts": 1,
     "sql_responses": [
       "SELECT audit_logs.action, users.username FROM audit_logs JOIN users ON audit_logs.user_id = users.id WHERE users.username = 'admin' ORDER BY audit_logs.timestamp DESC"
+    ],
+    "required_prompt_tables": ["audit_logs", "users"],
+    "forbidden_prompt_tables": ["customers", "orders", "payments"],
+    "required_prompt_edges": [
+      ["user_id", "users"]
     ]
   }
 ]
