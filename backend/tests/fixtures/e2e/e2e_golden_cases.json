@@ -1,0 +1,57 @@
+[
+  {
+    "id": "total_payments_by_customer_e2e",
+    "question": "Show total payments for each customer",
+    "fake_sql_responses": [
+      "SELECT customers.name, SUM(payments.amount) AS total_paid FROM customers JOIN orders ON orders.customer_id = customers.id JOIN payments ON payments.order_id = orders.id GROUP BY customers.name ORDER BY customers.name"
+    ],
+    "expected_rows": [
+      {"name": "Alice", "total_paid": 200.0},
+      {"name": "Bob", "total_paid": 200.0}
+    ],
+    "ordered": true,
+    "expected_tables": ["customers", "orders", "payments"],
+    "forbidden_tables": ["audit_logs", "support_tickets"]
+  },
+  {
+    "id": "product_quantities_for_order_e2e",
+    "question": "Show product names and quantities for order 101",
+    "fake_sql_responses": [
+      "SELECT products.name, order_items.quantity FROM order_items JOIN products ON order_items.product_id = products.id WHERE order_items.order_id = 101 ORDER BY products.name"
+    ],
+    "expected_rows": [
+      {"name": "Keyboard", "quantity": 2},
+      {"name": "Mouse", "quantity": 1}
+    ],
+    "ordered": true,
+    "expected_tables": ["products", "order_items"],
+    "forbidden_tables": ["users", "audit_logs"]
+  },
+  {
+    "id": "latest_audit_log_for_admin_e2e",
+    "question": "Show latest audit log action for user admin",
+    "fake_sql_responses": [
+      "SELECT audit_logs.action FROM audit_logs JOIN users ON audit_logs.user_id = users.id WHERE users.username = 'admin' ORDER BY audit_logs.timestamp DESC LIMIT 1"
+    ],
+    "expected_rows": [
+      {"action": "login"}
+    ],
+    "ordered": true,
+    "expected_tables": ["users", "audit_logs"],
+    "forbidden_tables": ["customers", "orders", "payments"]
+  },
+  {
+    "id": "open_support_tickets_by_customer_e2e",
+    "question": "List open support tickets by customer",
+    "fake_sql_responses": [
+      "SELECT customers.name, support_tickets.subject FROM support_tickets JOIN customers ON support_tickets.customer_id = customers.id WHERE support_tickets.status = 'open' ORDER BY customers.name, support_tickets.subject"
+    ],
+    "expected_rows": [
+      {"name": "Alice", "subject": "Cannot login"},
+      {"name": "Bob", "subject": "Payment issue"}
+    ],
+    "ordered": true,
+    "expected_tables": ["customers", "support_tickets"],
+    "forbidden_tables": ["payments", "order_items"]
+  }
+]
