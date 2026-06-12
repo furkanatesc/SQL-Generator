@@ -1,7 +1,6 @@
 import hashlib
 import random
 from typing import Protocol, Sequence, List
-from app.rag_manager import NVIDIAEmbeddingClient
 
 class EmbeddingProvider(Protocol):
     """
@@ -39,17 +38,3 @@ class FakeEmbeddingProvider:
             # Generate deterministic vector of size self.dimension
             embeddings.append([rng.uniform(-1.0, 1.0) for _ in range(self.dimension)])
         return embeddings
-
-
-class NVIDIAEmbeddingProvider:
-    """
-    Adapter around the existing NVIDIAEmbeddingClient to fit the EmbeddingProvider interface.
-    """
-    def __init__(self, api_key: str = None, model_id: str = "nvidia/llama-nemotron-embed-1b-v2", dimension: int = 1024):
-        self.provider_id = "nvidia"
-        self.model_id = model_id
-        self.dimension = dimension
-        self.client = NVIDIAEmbeddingClient(api_key=api_key)
-
-    def embed_texts(self, texts: Sequence[str]) -> List[List[float]]:
-        return self.client.get_embeddings_batch(list(texts))

@@ -7,6 +7,7 @@ from app.retrieval.embedding_pipeline import (
     EmbeddingRetryableError,
     EmbeddingNonRetryableError
 )
+from app.retrieval.nvidia_embedding_provider import NVIDIAEmbeddingProvider
 
 
 @patch("time.sleep")
@@ -60,37 +61,58 @@ def test_max_attempts_exhausted(mock_sleep):
     assert mock_sleep.call_count == 2
 
 
-@patch("time.sleep")
-def test_requests_exception_classification(mock_sleep):
+def test_unexpected_exception_fails_fast():
     """
-    Verifies that requests HTTP status code and network errors are classified correctly:
-    - HTTP 429 / 5xx -> Retryable
-    - HTTP 400 / 401 / 403 -> Non-Retryable
+    Verifies that execute_with_retry wraps any unexpected raw Exception in
+    EmbeddingNonRetryableError and fails fast without retrying.
     """
-    # 1. HTTP 429 (Transient Rate Limit)
-    mock_func_429 = MagicMock()
+    mock_func = MagicMock()
+    mock_func.side_effect = ValueError("Some unexpected error")
+
+    with pytest.raises(EmbeddingNonRetryableError, match="Unexpected error during execution: Some unexpected error"):
+        execute_with_retry(mock_func, max_attempts=3, base_delay_ms=10)
+
+    assert mock_func.call_count == 1
+
+
+@patch("app.rag_manager.NVIDIAEmbeddingClient")
+def test_nvidia_provider_exception_classification(mock_client_cls):
+    """
+    Verifies that NVIDIAEmbeddingProvider correctly classifies network/HTTP exceptions
+    raised by its client into EmbeddingRetryableError or EmbeddingNonRetryableError.
+    """
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    
+    provider = NVIDIAEmbeddingProvider(api_key="fake")
+
+    # 1. Requests Timeout -> EmbeddingRetryableError
+    mock_client.get_embeddings_batch.side_effect = requests.exceptions.Timeout("Read timeout")
+    with pytest.raises(EmbeddingRetryableError, match="NVIDIA API timeout"):
+        provider.embed_texts(["hello"])
+
+    # 2. HTTP 429 -> EmbeddingRetryableError
     resp_429 = requests.Response()
     resp_429.status_code = 429
-    mock_func_429.side_effect = requests.exceptions.HTTPError(response=resp_429)
+    mock_client.get_embeddings_batch.side_effect = requests.exceptions.HTTPError(response=resp_429)
+    with pytest.raises(EmbeddingRetryableError, match="NVIDIA HTTP transient error 429"):
+        provider.embed_texts(["hello"])
 
-    with pytest.raises(EmbeddingError, match="Max attempts \\(3\\) reached"):
-        execute_with_retry(mock_func_429, max_attempts=3, base_delay_ms=10)
-    assert mock_func_429.call_count == 3
+    # 3. HTTP 500 -> EmbeddingRetryableError
+    resp_500 = requests.Response()
+    resp_500.status_code = 500
+    mock_client.get_embeddings_batch.side_effect = requests.exceptions.HTTPError(response=resp_500)
+    with pytest.raises(EmbeddingRetryableError, match="NVIDIA HTTP transient error 500"):
+        provider.embed_texts(["hello"])
 
-    # 2. HTTP 401 (Unauthorized - Non-Retryable)
-    mock_func_401 = MagicMock()
+    # 4. HTTP 401 -> EmbeddingNonRetryableError
     resp_401 = requests.Response()
     resp_401.status_code = 401
-    mock_func_401.side_effect = requests.exceptions.HTTPError(response=resp_401)
+    mock_client.get_embeddings_batch.side_effect = requests.exceptions.HTTPError(response=resp_401)
+    with pytest.raises(EmbeddingNonRetryableError, match="NVIDIA HTTP non-retryable error 401"):
+        provider.embed_texts(["hello"])
 
-    with pytest.raises(EmbeddingNonRetryableError, match="HTTP non-retryable error 401"):
-        execute_with_retry(mock_func_401, max_attempts=3, base_delay_ms=10)
-    assert mock_func_401.call_count == 1
-
-    # 3. Connection Timeout (Retryable)
-    mock_func_timeout = MagicMock()
-    mock_func_timeout.side_effect = requests.exceptions.Timeout("Read timeout")
-
-    with pytest.raises(EmbeddingError, match="Max attempts \\(3\\) reached"):
-        execute_with_retry(mock_func_timeout, max_attempts=3, base_delay_ms=10)
-    assert mock_func_timeout.call_count == 3
+    # 5. Generic request exception -> EmbeddingRetryableError
+    mock_client.get_embeddings_batch.side_effect = requests.exceptions.RequestException("Network down")
+    with pytest.raises(EmbeddingRetryableError, match="NVIDIA network error"):
+        provider.embed_texts(["hello"])

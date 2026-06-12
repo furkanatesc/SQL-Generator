@@ -2,12 +2,12 @@ import time
 import random
 import logging
 from dataclasses import dataclass
-from typing import Literal, List, Optional
+from typing import Literal, List, Callable
 from app.schema.schema_contract import DatabaseSchema
 from app.retrieval.embedding_provider import EmbeddingProvider
 from app.retrieval.embedding_cache import EmbeddingCache, EmbeddingRecord, build_cache_key
 
-logger = logging.getLogger("embedding_pipeline")
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingError(Exception):
@@ -34,7 +34,7 @@ class EmbeddingInput:
     text: str
     summary_version: str
     schema_hash: str
-    object_type: Literal["database", "table", "column", "relationship"]
+    object_type: Literal["table", "column", "relationship"]
     object_id: str
 
 
@@ -43,12 +43,13 @@ def build_embedding_inputs(schema: DatabaseSchema) -> List[EmbeddingInput]:
     Transforms a DatabaseSchema into a list of structured EmbeddingInputs.
     Uses summarize_database_schema from Sprint 21.0 to get deterministic summaries.
     """
-    from app.schema.schema_summary import summarize_database_schema
+    from app.schema.schema_summary import summarize_database_schema, summarize_relationship
     from app.retrieval.embedding_hash import compute_summary_hash
 
     table_summaries = summarize_database_schema(schema)
     inputs = []
 
+    # 1. Generate table and column inputs
     for table in table_summaries:
         # Table summary input
         table_hash = compute_summary_hash(table.summary_text, table.summary_version)
@@ -73,16 +74,33 @@ def build_embedding_inputs(schema: DatabaseSchema) -> List[EmbeddingInput]:
                 object_id=f"{table.table_name}.{col.column_name}"
             ))
 
-        # Relationship summary inputs
-        for rel in table.relationships:
-            rel_hash = compute_summary_hash(rel.summary_text, rel.summary_version)
+    # 2. Generate relationship inputs uniquely from canonical relationships
+    all_rels = schema.relationships or []
+    if schema.graph and schema.graph.edges:
+        if not all_rels:
+            all_rels = schema.graph.edges
+
+    seen_rels = set()
+    for rel in all_rels:
+        rel_summary = summarize_relationship(rel)
+        rel_key = (
+            rel_summary.source_table,
+            rel_summary.source_column,
+            rel_summary.target_table,
+            rel_summary.target_column,
+            rel_summary.relationship_type,
+            rel_summary.confidence
+        )
+        if rel_key not in seen_rels:
+            seen_rels.add(rel_key)
+            rel_hash = compute_summary_hash(rel_summary.summary_text, rel_summary.summary_version)
             inputs.append(EmbeddingInput(
-                id=f"relationship:{rel.source_table}.{rel.source_column}->{rel.target_table}.{rel.target_column}",
-                text=rel.summary_text,
-                summary_version=rel.summary_version,
+                id=f"relationship:{rel_summary.source_table}.{rel_summary.source_column}->{rel_summary.target_table}.{rel_summary.target_column}",
+                text=rel_summary.summary_text,
+                summary_version=rel_summary.summary_version,
                 schema_hash=rel_hash,
                 object_type="relationship",
-                object_id=f"{rel.source_table}.{rel.source_column}->{rel.target_table}.{rel.target_column}"
+                object_id=f"{rel_summary.source_table}.{rel_summary.source_column}->{rel_summary.target_table}.{rel_summary.target_column}"
             ))
 
     return inputs
@@ -91,35 +109,12 @@ def build_embedding_inputs(schema: DatabaseSchema) -> List[EmbeddingInput]:
 def execute_with_retry(func, max_attempts: int = 3, base_delay_ms: float = 200, jitter: bool = True):
     """
     Helper function executing the given callable with exponential backoff and optional jitter.
-    Classifies errors into retryable vs non-retryable.
+    Knows only about EmbeddingRetryableError and EmbeddingNonRetryableError.
     """
     attempt = 0
     while attempt < max_attempts:
         try:
-            try:
-                return func()
-            except Exception as e:
-                # Classify the raw exception into an EmbeddingError
-                import requests
-                if isinstance(e, EmbeddingError):
-                    raise e
-                if isinstance(e, requests.exceptions.Timeout):
-                    raise EmbeddingRetryableError(f"Timeout occurred: {e}") from e
-                if isinstance(e, requests.exceptions.HTTPError):
-                    status_code = e.response.status_code if e.response is not None else 500
-                    if status_code == 429 or 500 <= status_code < 600:
-                        raise EmbeddingRetryableError(f"HTTP transient error {status_code}: {e}") from e
-                    raise EmbeddingNonRetryableError(f"HTTP non-retryable error {status_code}: {e}") from e
-                if isinstance(e, requests.exceptions.RequestException):
-                    raise EmbeddingRetryableError(f"Network request error: {e}") from e
-
-                # Fallback text checking for standard errors
-                err_msg = str(e).lower()
-                if any(term in err_msg for term in ["timeout", "rate limit", "too many requests", "500", "503"]):
-                    raise EmbeddingRetryableError(f"Transient error classified: {e}") from e
-
-                raise EmbeddingNonRetryableError(f"Non-retryable unexpected error: {e}") from e
-                
+            return func()
         except EmbeddingRetryableError as e:
             attempt += 1
             if attempt >= max_attempts:
@@ -131,15 +126,19 @@ def execute_with_retry(func, max_attempts: int = 3, base_delay_ms: float = 200, 
             time.sleep(delay)
         except EmbeddingNonRetryableError as e:
             raise e
+        except Exception as e:
+            # Wrap any other unexpected errors in EmbeddingNonRetryableError
+            raise EmbeddingNonRetryableError(f"Unexpected error during execution: {e}") from e
 
 
 class EmbeddingPipeline:
     """
     Embedding pipeline orchestrating provider call with caching, invalidation, and retries.
     """
-    def __init__(self, provider: EmbeddingProvider, cache: EmbeddingCache = None):
+    def __init__(self, provider: EmbeddingProvider, cache: EmbeddingCache = None, clock: Callable[[], float] = time.time):
         self.provider = provider
         self.cache = cache
+        self.clock = clock
 
     def process_schema(self, schema: DatabaseSchema) -> List[EmbeddingRecord]:
         """
@@ -181,20 +180,34 @@ class EmbeddingPipeline:
 
             vectors = execute_with_retry(call_provider)
 
+            # Validate output count
+            if len(vectors) != len(uncached_inputs):
+                raise EmbeddingNonRetryableError(
+                    f"Embedding provider returned {len(vectors)} vectors for {len(uncached_inputs)} inputs"
+                )
+
+            # Validate dimensions and create records
             for inp, key, vec in zip(uncached_inputs, uncached_keys, vectors):
+                if len(vec) != self.provider.dimension:
+                    raise EmbeddingNonRetryableError(
+                        f"Embedding dimension mismatch for {inp.id}: "
+                        f"expected={self.provider.dimension}, actual={len(vec)}"
+                    )
+
                 record = EmbeddingRecord(
                     id=inp.id,
                     text=inp.text,
-                    vector=vec,
+                    vector=tuple(vec),
                     summary_version=inp.summary_version,
                     schema_hash=inp.schema_hash,
                     provider_id=self.provider.provider_id,
                     model_id=self.provider.model_id,
                     dimension=self.provider.dimension,
-                    created_at=time.time()
+                    created_at=self.clock()
                 )
                 if self.cache:
                     self.cache.set(key, record)
                 records.append(record)
 
-        return records
+        records_map = {rec.id: rec for rec in records}
+        return [records_map[inp.id] for inp in inputs]

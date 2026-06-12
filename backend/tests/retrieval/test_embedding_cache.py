@@ -1,4 +1,3 @@
-import pytest
 import time
 from app.retrieval.embedding_hash import compute_summary_hash
 from app.retrieval.embedding_cache import InMemoryEmbeddingCache, build_cache_key, EmbeddingRecord
@@ -41,6 +40,10 @@ def test_cache_key_determinism():
         object_id="customers"
     )
 
+    # Key must be of format embedding:<sha256_hash>
+    assert base_key.startswith("embedding:")
+    assert len(base_key) == 10 + 64
+
     # 1. Changing provider_id must change key
     key_prov = build_cache_key("openai", "embed-model-1b", 1024, "schema_summary_v1", "abc123hash", "customers")
     assert base_key != key_prov
@@ -71,17 +74,17 @@ def test_cache_read_write_clear():
     Verifies memory cache basic operations: set, get, clear.
     """
     cache = InMemoryEmbeddingCache()
-    key = "embedding:test:model:128:v1:hash:table"
+    key = "embedding:testkey"
     
     record = EmbeddingRecord(
         id="table:customers",
         text="summary text",
-        vector=[0.1, 0.2, 0.3],
+        vector=(0.1, 0.2, 0.3),
         summary_version="schema_summary_v1",
         schema_hash="hash",
         provider_id="test",
         model_id="model",
-        dimension=128,
+        dimension=3,
         created_at=time.time()
     )
 
@@ -93,7 +96,8 @@ def test_cache_read_write_clear():
     cached = cache.get(key)
     assert cached is not None
     assert cached.id == "table:customers"
-    assert cached.vector == [0.1, 0.2, 0.3]
+    assert cached.vector == (0.1, 0.2, 0.3)
+    assert isinstance(cached.vector, tuple)
 
     # Clear and verify empty
     cache.clear()

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from typing import Protocol, List, Dict, Optional
-import time
+from typing import Protocol, Dict, Optional, Tuple
+import hashlib
+import json
 
 @dataclass(frozen=True)
 class EmbeddingRecord:
@@ -9,7 +10,7 @@ class EmbeddingRecord:
     """
     id: str
     text: str
-    vector: List[float]
+    vector: Tuple[float, ...]
     summary_version: str
     schema_hash: str
     provider_id: str
@@ -67,7 +68,17 @@ def build_cache_key(
     object_id: str
 ) -> str:
     """
-    Generates a deterministic cache key with format:
-    embedding:{provider_id}:{model_id}:{dimension}:{summary_version}:{schema_hash}:{object_id}
+    Generates a deterministic and collision-free cache key:
+    embedding:<sha256 of metadata payload JSON>
     """
-    return f"embedding:{provider_id}:{model_id}:{dimension}:{summary_version}:{schema_hash}:{object_id}"
+    payload = {
+        "provider_id": provider_id,
+        "model_id": model_id,
+        "dimension": dimension,
+        "summary_version": summary_version,
+        "schema_hash": schema_hash,
+        "object_id": object_id,
+    }
+    payload_str = json.dumps(payload, sort_keys=True)
+    hash_str = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
+    return f"embedding:{hash_str}"
