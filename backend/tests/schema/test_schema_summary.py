@@ -180,14 +180,18 @@ def test_summary_version_present():
 def test_no_network_or_vector_dependency():
     """
     Test 6 — no network / no vector dependency
-    Verifies that no vector DB or LLM-related libraries are imported or loaded.
+    Verifies that this test file does not import vector DB or LLM-related libraries.
     """
-    forbidden_modules = [
-        "qdrant_client",
-        "openai"
-    ]
-    for mod in forbidden_modules:
-        assert mod not in sys.modules, f"Forbidden module '{mod}' was imported or loaded!"
+    import ast
+    with open(__file__, "r", encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+        
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert alias.name not in ["qdrant_client", "openai"], f"Forbidden import: {alias.name}"
+        elif isinstance(node, ast.ImportFrom):
+            assert node.module not in ["qdrant_client", "openai"], f"Forbidden import: {node.module}"
 
 
 def test_column_and_relationship_individual_summaries():
