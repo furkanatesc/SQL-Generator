@@ -8,9 +8,10 @@ def format_type(data_type: str | None) -> str:
     """
     Standardizes and formats data types to uppercase (e.g. VARCHAR).
     Maps INT to INTEGER for SQLite compatibility.
+    If the data type is missing or None, returns 'UNKNOWN'.
     """
     if not data_type:
-        return "none"
+        return "UNKNOWN"
     u = data_type.upper()
     if u == "INT":
         return "INTEGER"
@@ -42,7 +43,6 @@ class ColumnSummary:
             f"TAGS: {tags_str}\n"
             f"VERSION: {self.summary_version}"
         )
-
 
 
 @dataclass(frozen=True)
@@ -94,9 +94,8 @@ def generate_table_summary_text(
     # Ensure columns are sorted by column_name
     sorted_cols = sorted(columns, key=lambda c: c.column_name)
     for col in sorted_cols:
-        col_line = f"- {col.column_name}"
-        if col.data_type:
-            col_line += f" {format_type(col.data_type)}"
+        type_str = format_type(col.data_type)
+        col_line = f"- {col.column_name} {type_str}"
         if col.primary_key:
             col_line += " pk"
         lines.append(col_line)
@@ -169,6 +168,10 @@ def summarize_table(schema: DatabaseSchema, table_name: str) -> TableSummary:
     Summarizes a specific table within a DatabaseSchema.
     Includes columns inside the table and all relationships associated with the table
     (either as source_table or target_table), preserving original direction.
+    
+    RELATIONSHIP SOURCE PRECEDENCE POLICY:
+    1. schema.relationships (primary source of truth)
+    2. schema.graph.edges (fallback source of truth, used only if schema.relationships is empty)
     """
     table = next((t for t in schema.tables if t.name == table_name), None)
     if not table:
@@ -178,7 +181,9 @@ def summarize_table(schema: DatabaseSchema, table_name: str) -> TableSummary:
     for col in table.columns:
         column_summaries.append(summarize_column(table, col))
 
-    # Collect unique relationships involving this table (source_table or target_table)
+    # Precedence Policy Implementation:
+    # 1. Use schema.relationships
+    # 2. Fallback to schema.graph.edges if relationships is empty
     all_rels = schema.relationships or []
     if schema.graph and schema.graph.edges:
         if not all_rels:
@@ -188,7 +193,16 @@ def summarize_table(schema: DatabaseSchema, table_name: str) -> TableSummary:
     seen_rels = set()
     for rel in all_rels:
         if rel.source_table == table_name or rel.target_table == table_name:
-            rel_key = (rel.source_table, rel.source_column, rel.target_table, rel.target_column)
+            rel_type_str = rel.relationship_type.value if hasattr(rel.relationship_type, "value") else str(rel.relationship_type)
+            # Dedup key includes relationship_type and confidence to prevent incorrect data loss
+            rel_key = (
+                rel.source_table,
+                rel.source_column,
+                rel.target_table,
+                rel.target_column,
+                rel_type_str,
+                rel.confidence
+            )
             if rel_key not in seen_rels:
                 seen_rels.add(rel_key)
                 rel_summaries.append(summarize_relationship(rel))
@@ -214,6 +228,10 @@ def summarize_database_schema(schema: DatabaseSchema) -> list[TableSummary]:
     """
     Summarizes all tables in a DatabaseSchema.
     Returns the summaries sorted by table_name.
+    
+    RELATIONSHIP SOURCE PRECEDENCE POLICY:
+    1. schema.relationships (primary source of truth)
+    2. schema.graph.edges (fallback source of truth, used only if schema.relationships is empty)
     """
     table_summaries = []
     sorted_tables = sorted(schema.tables, key=lambda t: t.name)

@@ -1,19 +1,15 @@
 import json
 import os
 import pytest
-import sys
+import inspect
 
 from app.schema.schema_adapter import from_legacy_schema
-from app.schema.schema_contract import DatabaseSchema, TableSchema, ColumnSchema, RelationshipSchema, SchemaGraph
+from app.schema.schema_contract import DatabaseSchema, TableSchema, ColumnSchema, RelationshipSchema
 from app.schema.schema_summary import (
     SCHEMA_SUMMARY_VERSION,
     summarize_database_schema,
-    summarize_table,
-    summarize_column,
-    summarize_relationship,
     ColumnSummary,
-    RelationshipSummary,
-    TableSummary
+    RelationshipSummary
 )
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
@@ -56,6 +52,7 @@ def test_stable_ordering():
                 columns=[
                     ColumnSchema(name="amount", data_type="DECIMAL"),
                     ColumnSchema(name="id", data_type="INTEGER", primary_key=True),
+                    ColumnSchema(name="order_id", data_type="INTEGER"),
                 ]
             ),
             TableSchema(
@@ -77,7 +74,7 @@ def test_stable_ordering():
         relationships=[
             RelationshipSchema(
                 source_table="payments",
-                source_column="id",
+                source_column="order_id",
                 target_table="orders",
                 target_column="id"
             ),
@@ -106,19 +103,17 @@ def test_stable_ordering():
     assert email_summary.semantic_tags == ("auth_id", "pii")
 
     # 4. Relationships must be sorted by source_table, source_column, target_table, target_column
-    # Let's inspect the order inside a TableSummary that has multiple relationships
-    # The orders table has relationships with both customers and payments
     orders_summary = next(s for s in summaries if s.table_name == "orders")
     rel_signatures = [
         f"{r.source_table}.{r.source_column} -> {r.target_table}.{r.target_column}"
         for r in orders_summary.relationships
     ]
-    # Sorted order of source_table:
+    # Sorted order:
     # 1. orders.customer_id -> customers.id (source: orders)
-    # 2. payments.id -> orders.id (source: payments)
+    # 2. payments.order_id -> orders.id (source: payments)
     assert rel_signatures == [
         "orders.customer_id -> customers.id",
-        "payments.id -> orders.id"
+        "payments.order_id -> orders.id"
     ]
 
 
@@ -180,8 +175,10 @@ def test_summary_version_present():
 def test_no_network_or_vector_dependency():
     """
     Test 6 — no network / no vector dependency
-    Verifies that this test file does not import vector DB or LLM-related libraries.
+    Verifies that no vector DB or LLM-related libraries are imported in this test file
+    or in the core summarization module itself.
     """
+    # 1. AST Check on this test file itself
     import ast
     with open(__file__, "r", encoding="utf-8") as f:
         tree = ast.parse(f.read())
@@ -192,6 +189,12 @@ def test_no_network_or_vector_dependency():
                 assert alias.name not in ["qdrant_client", "openai"], f"Forbidden import: {alias.name}"
         elif isinstance(node, ast.ImportFrom):
             assert node.module not in ["qdrant_client", "openai"], f"Forbidden import: {node.module}"
+
+    # 2. Source inspection check on schema_summary.py
+    import app.schema.schema_summary as schema_summary
+    source = inspect.getsource(schema_summary)
+    assert "qdrant" not in source.lower(), "qdrant_client was imported or referenced in schema_summary!"
+    assert "openai" not in source.lower(), "openai was imported or referenced in schema_summary!"
 
 
 def test_column_and_relationship_individual_summaries():
@@ -227,3 +230,32 @@ TYPE: explicit
 CONFIDENCE: 1.0
 VERSION: {SCHEMA_SUMMARY_VERSION}"""
     assert rel.summary_text == expected_rel_text
+
+
+def test_column_with_missing_type_shows_unknown():
+    """
+    Verifies that a column with None or empty data_type produces 'UNKNOWN' in both
+    ColumnSummary and TableSummary text outputs.
+    """
+    col = ColumnSummary(
+        table_name="customers",
+        column_name="email",
+        data_type=None,
+        nullable=False,
+    )
+    assert "TYPE: UNKNOWN" in col.summary_text
+
+    schema_with_missing_type = DatabaseSchema(
+        dialect="sqlite",
+        tables=[
+            TableSchema(
+                name="customers",
+                columns=[
+                    ColumnSchema(name="id", data_type=None, primary_key=True),
+                ]
+            )
+        ],
+        relationships=[]
+    )
+    summaries = summarize_database_schema(schema_with_missing_type)
+    assert "- id UNKNOWN pk" in summaries[0].summary_text
