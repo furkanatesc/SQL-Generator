@@ -1,11 +1,18 @@
+import dataclasses
 from app.retrieval.context_ranking_contract import (
     CONTEXT_RANKING_VERSION,
+    ContextRankingConfig,
     RankedContextItem,
     RankedContextResult
 )
 
 def test_context_ranking_version_is_context_ranking_v1():
     assert CONTEXT_RANKING_VERSION == "context_ranking_v1"
+
+def test_context_ranking_config_only_exposes_supported_v1_fields():
+    config = ContextRankingConfig(max_candidates=5, min_score=0.5)
+    fields = {f.name for f in dataclasses.fields(config)}
+    assert fields == {"max_candidates", "min_score"}
 
 def test_ranked_context_item_preserves_metadata():
     item = RankedContextItem(

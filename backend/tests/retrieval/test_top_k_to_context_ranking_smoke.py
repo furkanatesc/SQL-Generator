@@ -1,3 +1,4 @@
+import pytest
 from app.retrieval.retrieval_contract import TopKRetrievalResult, RetrievalCandidate
 from app.retrieval.context_ranking_contract import ContextRankingConfig
 from app.retrieval.context_ranker import DeterministicContextRanker
@@ -67,21 +68,21 @@ def test_top_k_retrieval_to_context_ranking_smoke():
     assert item1.id == "relationship:orders.customer_id->customers.id"
     assert item1.rank == 1
     assert item1.source_candidate_rank == 2
-    assert item1.ranking_score == 0.91
+    assert pytest.approx(item1.ranking_score, abs=1e-6) == 0.91
     assert "Relationship matched" in item1.selection_reason
     
     item2 = ranked_result.items[1]
     assert item2.id == "column:orders.status"
     assert item2.rank == 2
     assert item2.source_candidate_rank == 1
-    assert item2.ranking_score == 0.90
+    assert pytest.approx(item2.ranking_score, abs=1e-6) == 0.90
     assert "Column matched (parent table: orders)" in item2.selection_reason
     
     item3 = ranked_result.items[2]
     assert item3.id == "table:customers"
     assert item3.rank == 3
     assert item3.source_candidate_rank == 3
-    assert item3.ranking_score == 0.90
+    assert pytest.approx(item3.ranking_score, abs=1e-6) == 0.90
     assert "Table matched" in item3.selection_reason
     
     # Assert metadata preservation

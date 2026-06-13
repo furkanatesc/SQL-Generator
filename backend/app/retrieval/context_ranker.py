@@ -1,4 +1,4 @@
-from typing import Protocol, Tuple, List
+from typing import Protocol
 from app.retrieval.retrieval_contract import TopKRetrievalResult
 from app.retrieval.context_ranking_contract import (
     ContextRankingConfig,
@@ -44,7 +44,13 @@ class DeterministicContextRanker:
                 f"max_candidates must be greater than zero, got config.max_candidates={config.max_candidates}"
             )
 
-        # Check for duplicate candidate IDs
+        # Validate k_returned matches the actual size of candidates list
+        if result.k_returned != len(result.candidates):
+            raise EmbeddingNonRetryableError(
+                f"k_returned mismatch: k_returned={result.k_returned}, candidates={len(result.candidates)}"
+            )
+
+        # Check for duplicate candidate IDs and validate source candidate rank bounds
         seen_ids = set()
         for cand in result.candidates:
             if cand.id in seen_ids:
@@ -52,6 +58,11 @@ class DeterministicContextRanker:
                     f"Duplicate candidate ID detected in TopKRetrievalResult: {cand.id}"
                 )
             seen_ids.add(cand.id)
+
+            if cand.rank <= 0:
+                raise EmbeddingNonRetryableError(
+                    f"Invalid source candidate rank for {cand.id}: must be >= 1, got {cand.rank}"
+                )
 
         # If empty candidates list, return empty result
         if not result.candidates:

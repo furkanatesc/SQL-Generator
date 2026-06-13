@@ -11,13 +11,10 @@ class ContextRankingConfig:
     """
     Configuration DTO for the context ranking process.
     Specifies constraints like maximum candidates to select,
-    minimum retrieval similarity score, and flags for relationship
-    or parent table inclusion.
+    and minimum retrieval similarity score.
     """
     max_candidates: int
     min_score: float | None = None
-    include_relationships_for_selected_tables: bool = True
-    include_parent_tables_for_columns: bool = True
 
 
 @dataclass(frozen=True)

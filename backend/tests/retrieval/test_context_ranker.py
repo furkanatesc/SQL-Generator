@@ -61,6 +61,24 @@ def test_ranker_returns_empty_result_for_empty_candidates():
     assert len(result.items) == 0
     assert result.query_text == "test"
 
+def test_ranker_rejects_k_returned_candidate_count_mismatch():
+    ranker = DeterministicContextRanker()
+    query_result = TopKRetrievalResult(query_text="test", k_requested=5, k_returned=10, candidates=(
+        build_mock_candidate("table:test", "test", "table", 0.8, 1),
+    )) # 10 returned vs 1 candidates
+    config = ContextRankingConfig(max_candidates=5)
+    with pytest.raises(EmbeddingNonRetryableError, match="k_returned mismatch"):
+        ranker.rank(query_result, config)
+
+def test_ranker_rejects_candidate_rank_less_than_one():
+    ranker = DeterministicContextRanker()
+    query_result = TopKRetrievalResult(query_text="test", k_requested=5, k_returned=1, candidates=(
+        build_mock_candidate("table:test", "test", "table", 0.8, 0), # rank 0 is invalid
+    ))
+    config = ContextRankingConfig(max_candidates=5)
+    with pytest.raises(EmbeddingNonRetryableError, match="Invalid source candidate rank"):
+        ranker.rank(query_result, config)
+
 def test_ranker_sorts_by_ranking_score_desc():
     ranker = DeterministicContextRanker()
     
