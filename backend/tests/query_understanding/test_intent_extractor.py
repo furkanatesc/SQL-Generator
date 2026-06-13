@@ -90,6 +90,20 @@ def test_extractor_detects_ranking_intent():
         assert result.intent.intent_type == "ranking"
 
 
+def test_extractor_ranking_intent_implies_ordering_signal():
+    extractor = DeterministicRuleBasedIntentExtractor()
+    for kw in ["top", "highest", "lowest", "most", "least", "best", "worst"]:
+        result = extractor.extract(f"{kw} customers")
+        assert result.intent.has_ordering is True
+
+
+def test_extractor_count_sets_has_aggregation_true():
+    extractor = DeterministicRuleBasedIntentExtractor()
+    for kw in ["count", "how many", "number of"]:
+        result = extractor.extract(f"{kw} customers")
+        assert result.intent.has_aggregation is True
+
+
 def test_extractor_detects_filter_signal():
     extractor = DeterministicRuleBasedIntentExtractor()
     # "unpaid" is a filter keyword
@@ -103,7 +117,36 @@ def test_extractor_detects_filter_signal():
 
 def test_extractor_detects_grouping_signal():
     extractor = DeterministicRuleBasedIntentExtractor()
+    # has_aggregation is True (total), by customer -> matches
     result = extractor.extract("total sales by customer")
+    assert result.intent.has_grouping is True
+
+
+def test_extractor_does_not_treat_ranking_by_as_grouping():
+    extractor = DeterministicRuleBasedIntentExtractor()
+    # ranking context (no aggregate keyword) -> has_grouping is False
+    result = extractor.extract("top 10 customers by revenue")
+    assert result.intent.has_grouping is False
+
+
+def test_extractor_detects_grouping_for_aggregate_by_entity():
+    extractor = DeterministicRuleBasedIntentExtractor()
+    # "sum" is aggregate keyword, "by customer" is grouping pattern -> has_grouping is True
+    result = extractor.extract("sum sales by customer")
+    assert result.intent.has_grouping is True
+
+
+def test_extractor_detects_grouping_for_group_by():
+    extractor = DeterministicRuleBasedIntentExtractor()
+    # "group by" explicitly exists -> has_grouping is True
+    result = extractor.extract("list customers group by country")
+    assert result.intent.has_grouping is True
+
+
+def test_extractor_detects_grouping_for_per_entity():
+    extractor = DeterministicRuleBasedIntentExtractor()
+    # "per customer" exists -> has_grouping is True
+    result = extractor.extract("sales amount per customer")
     assert result.intent.has_grouping is True
 
 

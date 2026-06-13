@@ -1,5 +1,5 @@
 import re
-from typing import Protocol, List, Tuple
+from typing import Protocol, List
 from app.query_understanding.intent_contract import (
     IntentSignal,
     QueryIntent,
@@ -43,7 +43,6 @@ class DeterministicRuleBasedIntentExtractor:
         self.count_keywords = ["count", "how many", "number of"]
         self.aggregate_keywords = ["sum", "total", "average", "avg", "min", "max"]
         self.ranking_keywords = ["top", "highest", "lowest", "most", "least", "best", "worst"]
-        self.grouping_keywords = ["by", "per", "group by", "each"]
         self.ordering_keywords = ["order by", "sort by", "sorted by", "sort", "sorted", "highest", "lowest", "latest", "earliest", "newest", "oldest"]
         self.time_range_keywords = ["today", "yesterday", "last week", "last month", "this year", "between", "before", "after", "since", "until"]
         
@@ -124,22 +123,48 @@ class DeterministicRuleBasedIntentExtractor:
             reason=f"Query contains aggregation keyword(s): {', '.join(all_agg_matches)}" if has_aggregation else ""
         ))
 
-        # Grouping
-        group_matches = self._find_matches(normalized, self.grouping_keywords)
-        has_grouping = len(group_matches) > 0
+        # Grouping (Heuristic: group by, per <entity>, for each <entity>, or by <entity> when has_aggregation is True)
+        has_grouping = False
+        grouping_reason = ""
+        entities_regex = "|".join(self.join_entities)
+        
+        if "group by" in normalized:
+            has_grouping = True
+            grouping_reason = "Query contains explicit 'group by'"
+        elif re.search(rf"\bper\s+({entities_regex})\b", normalized):
+            group_match = re.search(rf"\bper\s+({entities_regex})\b", normalized).group(0)
+            has_grouping = True
+            grouping_reason = f"Query contains grouping pattern: '{group_match}'"
+        elif re.search(rf"\bfor each\s+({entities_regex})\b", normalized):
+            group_match = re.search(rf"\bfor each\s+({entities_regex})\b", normalized).group(0)
+            has_grouping = True
+            grouping_reason = f"Query contains grouping pattern: '{group_match}'"
+        elif has_aggregation and re.search(rf"\bby\s+({entities_regex})\b", normalized):
+            group_match = re.search(rf"\bby\s+({entities_regex})\b", normalized).group(0)
+            has_grouping = True
+            grouping_reason = f"Query contains aggregate and grouping pattern: '{group_match}'"
+
         signals_list.append(IntentSignal(
             name="has_grouping",
             value=has_grouping,
-            reason=f"Query contains grouping keyword(s): {', '.join(group_matches)}" if has_grouping else ""
+            reason=grouping_reason
         ))
 
-        # Ordering
+        # Ordering (Heuristic: order by keywords OR any matched ranking keywords)
         order_matches = self._find_matches(normalized, self.ordering_keywords)
-        has_ordering = len(order_matches) > 0
+        ranking_matches = self._find_matches(normalized, self.ranking_keywords)
+        has_ordering = len(order_matches) > 0 or len(ranking_matches) > 0
+        
+        order_reason = ""
+        if len(order_matches) > 0:
+            order_reason = f"Query contains ordering keyword(s): {', '.join(order_matches)}"
+        elif len(ranking_matches) > 0:
+            order_reason = f"Query contains ranking/ordering keyword(s): {', '.join(ranking_matches)}"
+
         signals_list.append(IntentSignal(
             name="has_ordering",
             value=has_ordering,
-            reason=f"Query contains ordering keyword(s): {', '.join(order_matches)}" if has_ordering else ""
+            reason=order_reason
         ))
 
         # Limit (regex matches top/first/last/limit followed by a digit)

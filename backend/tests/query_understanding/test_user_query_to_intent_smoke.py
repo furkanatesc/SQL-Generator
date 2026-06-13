@@ -26,11 +26,11 @@ def test_user_query_to_intent_extraction_smoke():
     # has_aggregation: False because no explicit aggregate keyword (sum, total, avg, count, min, max) is present
     assert result.intent.has_aggregation is False
     
-    # has_grouping: True because of "by"
-    assert result.intent.has_grouping is True
+    # has_grouping: False because "by" has no aggregate keyword context here
+    assert result.intent.has_grouping is False
     
-    # has_ordering: False because no explicit ordering keywords (order by, sort by, highest, lowest, etc.) are present
-    assert result.intent.has_ordering is False
+    # has_ordering: True because "Top" ranking keyword implies ordering
+    assert result.intent.has_ordering is True
     
     # has_limit: True because of "Top 10" pattern
     assert result.intent.has_limit is True
