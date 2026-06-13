@@ -1,6 +1,5 @@
 import json
 import os
-import pytest
 from app.schema.schema_adapter import from_legacy_schema
 from app.schema.schema_contract import DatabaseSchema
 from app.retrieval.embedding_provider import FakeEmbeddingProvider
@@ -49,6 +48,9 @@ def test_embedding_pipeline_to_top_k_retrieval_smoke():
         query_text=query_text,
         query_vector=query_vector,
         k=5,
+        provider_id=provider.provider_id,
+        model_id=provider.model_id,
+        dimension=provider.dimension,
         allowed_object_types=("table", "column", "relationship")
     )
     
@@ -74,3 +76,7 @@ def test_embedding_pipeline_to_top_k_retrieval_smoke():
         assert candidate.provider_id == "fake_provider"
         assert candidate.model_id == "fake_model"
         assert candidate.dimension == 128
+
+    # 8. Assert subsequent run yields identical candidate IDs list (ordering determinism)
+    result2 = retriever.retrieve(query, records)
+    assert [c.id for c in result2.candidates] == [c.id for c in result.candidates]

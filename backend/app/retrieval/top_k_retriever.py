@@ -37,32 +37,65 @@ class InMemoryTopKRetriever:
         if not query.allowed_object_types:
             raise EmbeddingNonRetryableError("allowed_object_types cannot be empty.")
             
+        # Verify allowed_object_types contain only valid types
+        valid_types = {"table", "column", "relationship"}
+        invalid_types = set(query.allowed_object_types) - valid_types
+        if invalid_types:
+            raise EmbeddingNonRetryableError(
+                f"Invalid allowed_object_types: {sorted(list(invalid_types))}"
+            )
+
+        # Assert query vector matches its dimension metadata
+        if len(query.query_vector) != query.dimension:
+            raise EmbeddingNonRetryableError(
+                f"Query vector size mismatch with query metadata: "
+                f"vector_size={len(query.query_vector)}, query_dimension_metadata={query.dimension}"
+            )
+
         # Zero-norm check on query vector
         query_norm = math.sqrt(sum(x * x for x in query.query_vector))
         if query_norm < 1e-9:
             raise EmbeddingNonRetryableError("Query vector cannot be a zero-norm vector.")
 
-        # Duplicate checking and dimension check on records
+        # Duplicate checking and vector space validations
         seen_ids = set()
         for rec in records:
             if rec.id in seen_ids:
                 raise EmbeddingNonRetryableError(f"Duplicate candidate ID detected in records: {rec.id}")
             seen_ids.add(rec.id)
             
+            # Match record metadata against query metadata to ensure identical embedding spaces
+            if rec.provider_id != query.provider_id:
+                raise EmbeddingNonRetryableError(
+                    f"Embedding space provider mismatch for record {rec.id}: "
+                    f"expected={query.provider_id}, got={rec.provider_id}"
+                )
+            if rec.model_id != query.model_id:
+                raise EmbeddingNonRetryableError(
+                    f"Embedding space model mismatch for record {rec.id}: "
+                    f"expected={query.model_id}, got={rec.model_id}"
+                )
+            if rec.dimension != query.dimension:
+                raise EmbeddingNonRetryableError(
+                    f"Embedding space dimension mismatch for record {rec.id}: "
+                    f"expected={query.dimension}, got={rec.dimension}"
+                )
+
+            # Record internal dimension sanity check
             if len(rec.vector) != rec.dimension:
                 raise EmbeddingNonRetryableError(
                     f"Dimension mismatch in record {rec.id}: expected={rec.dimension}, actual={len(rec.vector)}"
-                )
-            
-            if len(rec.vector) != len(query.query_vector):
-                raise EmbeddingNonRetryableError(
-                    f"Dimension mismatch between query and record {rec.id}: "
-                    f"query_dimension={len(query.query_vector)}, record_dimension={len(rec.vector)}"
                 )
 
         # 2. Filter records by allowed_object_types
         candidates = []
         for rec in records:
+            # Map object_id by splitting at the first colon
+            parts = rec.id.split(":", 1)
+            if len(parts) < 2 or not parts[1]:
+                raise EmbeddingNonRetryableError(f"Malformed record ID: {rec.id}")
+            object_id = parts[1]
+
             if rec.id.startswith("table:"):
                 obj_type = "table"
             elif rec.id.startswith("column:"):
@@ -77,18 +110,11 @@ class InMemoryTopKRetriever:
 
             # Compute similarity
             score = cosine_similarity(query.query_vector, rec.vector)
-            
-            # Map object_id by splitting at the first colon
-            parts = rec.id.split(":", 1)
-            if len(parts) < 2:
-                raise EmbeddingNonRetryableError(f"Malformed record ID: {rec.id}")
-            object_id = parts[1]
-
             candidates.append((score, rec, obj_type, object_id))
 
         # 3. Sort candidates deterministically: score descending, then record ID ascending
-        candidates.sort(key=lambda item: item[1].id)
-        candidates.sort(key=lambda item: item[0], reverse=True)
+        # Done in a single-pass sort key for efficiency and clarity
+        candidates.sort(key=lambda item: (-item[0], item[1].id))
 
         # 4. Limit to K and construct RetrievalCandidates
         top_k = candidates[:query.k]
