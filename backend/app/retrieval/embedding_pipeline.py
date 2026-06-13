@@ -80,6 +80,7 @@ def build_embedding_inputs(schema: DatabaseSchema) -> List[EmbeddingInput]:
         if not all_rels:
             all_rels = schema.graph.edges
 
+    relationship_summaries = []
     seen_rels = set()
     for rel in all_rels:
         rel_summary = summarize_relationship(rel)
@@ -89,19 +90,45 @@ def build_embedding_inputs(schema: DatabaseSchema) -> List[EmbeddingInput]:
             rel_summary.target_table,
             rel_summary.target_column,
             rel_summary.relationship_type,
-            rel_summary.confidence
+            rel_summary.confidence,
         )
         if rel_key not in seen_rels:
             seen_rels.add(rel_key)
-            rel_hash = compute_summary_hash(rel_summary.summary_text, rel_summary.summary_version)
-            inputs.append(EmbeddingInput(
-                id=f"relationship:{rel_summary.source_table}.{rel_summary.source_column}->{rel_summary.target_table}.{rel_summary.target_column}",
-                text=rel_summary.summary_text,
-                summary_version=rel_summary.summary_version,
-                schema_hash=rel_hash,
-                object_type="relationship",
-                object_id=f"{rel_summary.source_table}.{rel_summary.source_column}->{rel_summary.target_table}.{rel_summary.target_column}"
-            ))
+            relationship_summaries.append(rel_summary)
+
+    # Apply deterministic stable sorting to unique relationships
+    sorted_rels = sorted(
+        relationship_summaries,
+        key=lambda r: (
+            r.source_table,
+            r.source_column,
+            r.target_table,
+            r.target_column,
+            r.relationship_type,
+            -1.0 if r.confidence is None else r.confidence,
+        )
+    )
+
+    # Map sorted relationships to EmbeddingInputs
+    for rel_summary in sorted_rels:
+        confidence_val = rel_summary.confidence if rel_summary.confidence is not None else 'none'
+        rel_id = f"relationship:{rel_summary.source_table}.{rel_summary.source_column}->{rel_summary.target_table}.{rel_summary.target_column}|type={rel_summary.relationship_type}|confidence={confidence_val}"
+        rel_obj_id = f"{rel_summary.source_table}.{rel_summary.source_column}->{rel_summary.target_table}.{rel_summary.target_column}|type={rel_summary.relationship_type}|confidence={confidence_val}"
+        
+        rel_hash = compute_summary_hash(rel_summary.summary_text, rel_summary.summary_version)
+        inputs.append(EmbeddingInput(
+            id=rel_id,
+            text=rel_summary.summary_text,
+            summary_version=rel_summary.summary_version,
+            schema_hash=rel_hash,
+            object_type="relationship",
+            object_id=rel_obj_id
+        ))
+
+    # Check for duplicate input IDs and fail-fast
+    input_ids = [inp.id for inp in inputs]
+    if len(input_ids) != len(set(input_ids)):
+        raise EmbeddingNonRetryableError("Duplicate embedding input ids detected")
 
     return inputs
 
@@ -146,6 +173,12 @@ class EmbeddingPipeline:
         caches new values, and returns all records.
         """
         inputs = build_embedding_inputs(schema)
+        
+        # Double check for duplicate input IDs
+        input_ids = [inp.id for inp in inputs]
+        if len(input_ids) != len(set(input_ids)):
+            raise EmbeddingNonRetryableError("Duplicate embedding input ids detected")
+
         records = []
         uncached_inputs = []
         uncached_keys = []
@@ -166,6 +199,20 @@ class EmbeddingPipeline:
                 record = self.cache.get(key)
                 
             if record:
+                # Strict validation of cached record against input and provider parameters
+                if record.id != inp.id:
+                    raise EmbeddingNonRetryableError(f"Cached record ID mismatch: expected {inp.id}, got {record.id}")
+                if record.schema_hash != inp.schema_hash:
+                    raise EmbeddingNonRetryableError(f"Cached record schema hash mismatch: expected {inp.schema_hash}, got {record.schema_hash}")
+                if record.provider_id != self.provider.provider_id:
+                    raise EmbeddingNonRetryableError(f"Cached record provider ID mismatch: expected {self.provider.provider_id}, got {record.provider_id}")
+                if record.model_id != self.provider.model_id:
+                    raise EmbeddingNonRetryableError(f"Cached record model ID mismatch: expected {self.provider.model_id}, got {record.model_id}")
+                if record.dimension != self.provider.dimension:
+                    raise EmbeddingNonRetryableError(f"Cached record dimension mismatch: expected {self.provider.dimension}, got {record.dimension}")
+                if len(record.vector) != self.provider.dimension:
+                    raise EmbeddingNonRetryableError(f"Cached record vector length mismatch: expected {self.provider.dimension}, got {len(record.vector)}")
+                
                 records.append(record)
             else:
                 uncached_inputs.append(inp)
@@ -209,5 +256,11 @@ class EmbeddingPipeline:
                     self.cache.set(key, record)
                 records.append(record)
 
-        records_map = {rec.id: rec for rec in records}
+        # Validate duplicate record IDs and map back to inputs
+        records_map = {}
+        for rec in records:
+            if rec.id in records_map:
+                raise EmbeddingNonRetryableError(f"Duplicate embedding record id: {rec.id}")
+            records_map[rec.id] = rec
+
         return [records_map[inp.id] for inp in inputs]

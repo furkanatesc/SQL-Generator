@@ -1,5 +1,4 @@
 from typing import Sequence, List
-from app.retrieval.embedding_provider import EmbeddingProvider
 from app.retrieval.embedding_pipeline import EmbeddingRetryableError, EmbeddingNonRetryableError
 
 class NVIDIAEmbeddingProvider:
