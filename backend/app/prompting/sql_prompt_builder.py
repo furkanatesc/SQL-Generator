@@ -1,10 +1,9 @@
 import hashlib
-from typing import Tuple
-from app.sql_generation import SQLGenerationProviderContractError
 from app.prompting.sql_prompt_builder_contract import (
     SQLPromptBuilderConfig,
     SQLPromptBuilderSection,
     SQLPromptBuilderResult,
+    SQLPromptBuilderContractError,
     SQL_PROMPT_BUILDER_VERSION
 )
 from app.sql_generation.sql_generation_input_contract import SQLGenerationInputResult
@@ -23,14 +22,37 @@ class SQLPromptBuilder:
     ) -> SQLPromptBuilderResult:
         # 1. Validate inputs
         if input_result is None:
-            raise SQLGenerationProviderContractError("input_result cannot be None.")
+            raise SQLPromptBuilderContractError("input_result cannot be None.")
         if config is None:
-            raise SQLGenerationProviderContractError("config cannot be None.")
+            raise SQLPromptBuilderContractError("config cannot be None.")
+        
+        # Verify rendered prompt is not empty
         if not input_result.rendered_prompt or not input_result.rendered_prompt.strip():
-            raise SQLGenerationProviderContractError("input_result.rendered_prompt cannot be empty.")
+            raise SQLPromptBuilderContractError("input_result.rendered_prompt cannot be empty.")
 
-        # 2. Parse the V1 rendered prompt
-        lines = input_result.rendered_prompt.splitlines()
+        # Verify input prompt integrity
+        expected_input_sha = hashlib.sha256(
+            input_result.rendered_prompt.encode("utf-8")
+        ).hexdigest()
+        
+        if input_result.prompt_sha256 != expected_input_sha:
+            raise SQLPromptBuilderContractError(
+                "input_result.prompt_sha256 does not match the actual SHA256 of rendered_prompt."
+            )
+            
+        if input_result.prompt_char_count != len(input_result.rendered_prompt):
+            raise SQLPromptBuilderContractError(
+                "input_result.prompt_char_count does not match the actual length of rendered_prompt."
+            )
+
+        # Enforce target dialect consistency
+        if input_result.target_dialect != config.target_dialect:
+            raise SQLPromptBuilderContractError(
+                f"config.target_dialect ('{config.target_dialect}') must match "
+                f"input_result.target_dialect ('{input_result.target_dialect}')."
+            )
+
+        # 2. Lossless Parse of the V1 rendered prompt
         parts = input_result.rendered_prompt.split("## ")
         
         parsed_sections = {}
@@ -40,11 +62,23 @@ class SQLPromptBuilder:
                 continue
             part_lines = part.splitlines()
             title = part_lines[0].strip()
+            
+            # Enforce uniqueness of sections in the raw prompt
+            if title in parsed_sections:
+                raise SQLPromptBuilderContractError(
+                    f"Duplicate section '{title}' found in rendered prompt."
+                )
+                
             content_items = []
             for line in part_lines[1:]:
                 line_strip = line.strip()
+                if not line_strip:
+                    continue
+                # Lossless parsing: keep text as-is, remove bullet prefix if present
                 if line_strip.startswith("- "):
                     content_items.append(line_strip[2:].strip())
+                else:
+                    content_items.append(line_strip)
             parsed_sections[title] = tuple(content_items)
 
         # Validate presence of required sections
@@ -57,8 +91,13 @@ class SQLPromptBuilder:
         ]
         for req_title in v1_required_titles:
             if req_title not in parsed_sections:
-                raise SQLGenerationProviderContractError(
+                raise SQLPromptBuilderContractError(
                     f"Required V1 section '{req_title}' is missing in the rendered prompt."
+                )
+            # Enforce that required section has actual content
+            if not parsed_sections[req_title]:
+                raise SQLPromptBuilderContractError(
+                    f"Required section '{req_title}' cannot have empty content."
                 )
 
         if "Relationship Context" not in parsed_sections:
@@ -151,7 +190,7 @@ class SQLPromptBuilder:
 
         # Fail-fast check on max prompt chars budget
         if prompt_char_count > config.max_prompt_chars:
-            raise SQLGenerationProviderContractError(
+            raise SQLPromptBuilderContractError(
                 f"Prompt character count ({prompt_char_count}) exceeds "
                 f"maximum configured limit ({config.max_prompt_chars})."
             )
