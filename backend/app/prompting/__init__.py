@@ -35,6 +35,14 @@ from app.prompting.structured_output_contract import (
     SQLStructuredOutputContractError,
 )
 from app.prompting.structured_output_parser import SQLStructuredOutputParser
+from app.prompting.self_check_contract import (
+    SQL_SELF_CHECK_VERSION,
+    SQLSelfCheckConfig,
+    SQLSelfCheckItem,
+    SQLSelfCheckResult,
+    SQLSelfCheckContractError,
+)
+from app.prompting.self_check_generator import SQLSelfCheckGenerator
 
 __all__ = [
     "PromptPlanSection",
@@ -69,6 +77,12 @@ __all__ = [
     "SQLStructuredOutputResult",
     "SQLStructuredOutputContractError",
     "SQLStructuredOutputParser",
+    "SQL_SELF_CHECK_VERSION",
+    "SQLSelfCheckConfig",
+    "SQLSelfCheckItem",
+    "SQLSelfCheckResult",
+    "SQLSelfCheckContractError",
+    "SQLSelfCheckGenerator",
 ]
 
 
