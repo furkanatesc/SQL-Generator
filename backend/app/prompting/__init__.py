@@ -19,6 +19,15 @@ from app.prompting.few_shot_contract import (
     SQLFewShotContractError,
 )
 from app.prompting.few_shot_renderer import SQLFewShotRenderer
+from app.prompting.example_selection_contract import (
+    SQL_EXAMPLE_SELECTION_VERSION,
+    SQLExampleSelectionConfig,
+    SQLExampleSelectionCandidate,
+    SQLExampleSelectionReason,
+    SQLExampleSelectionResult,
+    SQLExampleSelectionContractError,
+)
+from app.prompting.example_selector import SQLExampleSelector
 
 __all__ = [
     "PromptPlanSection",
@@ -41,5 +50,13 @@ __all__ = [
     "SQLFewShotRenderResult",
     "SQLFewShotContractError",
     "SQLFewShotRenderer",
+    "SQL_EXAMPLE_SELECTION_VERSION",
+    "SQLExampleSelectionConfig",
+    "SQLExampleSelectionCandidate",
+    "SQLExampleSelectionReason",
+    "SQLExampleSelectionResult",
+    "SQLExampleSelectionContractError",
+    "SQLExampleSelector",
 ]
+
 
