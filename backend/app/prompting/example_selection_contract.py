@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Tuple
 from app.prompting.few_shot_contract import SQLFewShotExample, SUPPORTED_DIALECTS
@@ -83,8 +84,10 @@ class SQLExampleSelectionResult:
             raise SQLExampleSelectionContractError("selection_reasons must be a tuple.")
         if self.max_examples <= 0:
             raise SQLExampleSelectionContractError("max_examples must be a positive integer.")
-        if not self.selection_fingerprint or not self.selection_fingerprint.strip():
-            raise SQLExampleSelectionContractError("selection_fingerprint cannot be empty.")
+            
+        # Enforce fingerprint 64-char hex format
+        if not self.selection_fingerprint or not re.match(r"^[0-9a-fA-F]{64}$", self.selection_fingerprint):
+            raise SQLExampleSelectionContractError("selection_fingerprint must be a valid 64-character SHA256 hex string.")
 
         # Verify selected_example_ids order matches selected_examples ordered IDs
         expected_ids = tuple(ex.id for ex in self.selected_examples)
@@ -100,4 +103,12 @@ class SQLExampleSelectionResult:
             if reason.example_id != self.selected_examples[idx].id:
                 raise SQLExampleSelectionContractError(
                     f"Reason ID '{reason.example_id}' at index {idx} does not match selected example ID '{self.selected_examples[idx].id}'."
+                )
+
+        # Enforce selected examples dialect invariant
+        for ex in self.selected_examples:
+            if ex.dialect != self.target_dialect:
+                raise SQLExampleSelectionContractError(
+                    f"Selected example ID '{ex.id}' dialect '{ex.dialect}' "
+                    f"does not match target_dialect '{self.target_dialect}'."
                 )

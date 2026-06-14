@@ -1,9 +1,9 @@
 import hashlib
-from typing import Tuple
 from app.query_understanding.intent_context_bridge_contract import IntentContextBridgeResult
 from app.prompting.few_shot_contract import SQLFewShotExampleSet
 from app.prompting.example_selection_contract import (
     SQLExampleSelectionConfig,
+    SQLExampleSelectionCandidate,
     SQLExampleSelectionReason,
     SQLExampleSelectionResult,
     SQLExampleSelectionContractError,
@@ -31,7 +31,7 @@ class SQLExampleSelector:
         if config is None:
             raise SQLExampleSelectionContractError("config cannot be None.")
 
-        # Enforce required check
+        # Enforce required check on input example set
         if config.required and not example_set.examples:
             raise SQLExampleSelectionContractError(
                 "Example set is empty but selection is configured as required."
@@ -47,8 +47,16 @@ class SQLExampleSelector:
             else:
                 candidates.append(ex)
 
-        # 3. Score candidates deterministically
+        # Fail-fast if required=True but no dialect-compatible examples remain
+        if config.required and not candidates:
+            raise SQLExampleSelectionContractError(
+                "No dialect-compatible examples available while selection is required."
+            )
+
+        # 3. Score candidates deterministically using SQLExampleSelectionCandidate
         scored_candidates = []
+        candidate_signals = {}
+
         for ex in candidates:
             score = 0
             signals = []
@@ -75,38 +83,49 @@ class SQLExampleSelector:
                 score += 10
                 signals.append("time_range_match")
 
-            scored_candidates.append({
-                "example": ex,
-                "score": score,
-                "signals": tuple(signals)
-            })
+            candidate = SQLExampleSelectionCandidate(example=ex, score=score)
+            scored_candidates.append(candidate)
+            candidate_signals[ex.id] = tuple(signals)
 
         # 4. Sorting & Tie-breaking: score DESC, id ASC
-        scored_candidates.sort(key=lambda c: (-c["score"], c["example"].id))
+        scored_candidates.sort(key=lambda c: (-c.score, c.example.id))
 
-        # 5. Slice & Select
-        selected_candidates = scored_candidates[:config.max_examples]
-        not_selected_candidates = scored_candidates[config.max_examples:]
+        # 5. Filter out zero-score candidates (only scores > 0 are eligible)
+        eligible_candidates = [c for c in scored_candidates if c.score > 0]
+        zero_score_candidates = [c for c in scored_candidates if c.score == 0]
 
-        selected_examples = tuple(c["example"] for c in selected_candidates)
+        # Fail-fast if required=True but no relevant examples (score > 0) exist
+        if config.required and not eligible_candidates:
+            raise SQLExampleSelectionContractError(
+                "No relevant examples available while selection is required."
+            )
+
+        # 6. Slice & Select
+        selected_candidates = eligible_candidates[:config.max_examples]
+        sliced_out_candidates = eligible_candidates[config.max_examples:]
+
+        selected_examples = tuple(c.example for c in selected_candidates)
         selected_example_ids = tuple(ex.id for ex in selected_examples)
 
         # Construct selection reasons
         reasons = tuple(
             SQLExampleSelectionReason(
-                example_id=c["example"].id,
-                score=c["score"],
-                matched_signals=c["signals"]
+                example_id=c.example.id,
+                score=c.score,
+                matched_signals=candidate_signals[c.example.id]
             )
             for c in selected_candidates
         )
 
-        # Construct rejected examples list (dialect mismatched first, then lower-scored ones)
+        # Construct rejected examples list
+        # Order: dialect mismatch -> zero scored matching dialect -> score > 0 but sliced out
+        zero_score_ids = [c.example.id for c in zero_score_candidates]
+        sliced_out_ids = [c.example.id for c in sliced_out_candidates]
         rejected_example_ids = tuple(
-            rejected_by_dialect + [c["example"].id for c in not_selected_candidates]
+            rejected_by_dialect + zero_score_ids + sliced_out_ids
         )
 
-        # 6. Compute selection fingerprint deterministically
+        # 7. Compute selection fingerprint deterministically
         sorted_cand_ids = ",".join(sorted(ex.id for ex in example_set.examples))
         raw_str = (
             f"dialect:{config.target_dialect}|"

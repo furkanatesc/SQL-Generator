@@ -57,11 +57,6 @@ def build_dummy_example(
 
 
 def test_selector_rejects_unsupported_dialect():
-    selector = SQLExampleSelector()
-    bridge = build_dummy_bridge_result()
-    ex = build_dummy_example("ex1")
-    ex_set = SQLFewShotExampleSet(examples=(ex,))
-    
     with pytest.raises(SQLExampleSelectionContractError) as exc_info:
         SQLExampleSelectionConfig(target_dialect="mysql")
     assert "Unsupported target dialect: 'mysql'" in str(exc_info.value)
@@ -148,9 +143,7 @@ def test_selector_scores_join_signal():
     assert res.selected_example_ids[0] == "ex_join"
     reason = next(r for r in res.selection_reasons if r.example_id == "ex_join")
     assert "join_match" in reason.matched_signals
-    # score must be 100 (for intent mismatch as it defaults to selection) + 20 (join_match) = 120
-    # Wait, in dummy example, ex_join intent_type is 'selection', bridge intent_type is 'selection'.
-    # So intent matches (100) + join match (20) = 120.
+    # score must be 100 (intent match) + 20 (join match) = 120
     assert reason.score == 120
 
 
@@ -225,8 +218,7 @@ def test_selector_returns_rejected_example_ids():
     config = SQLExampleSelectionConfig(target_dialect="sqlite", max_examples=1)
 
     res = selector.select_examples(bridge, ex_set, config)
-    # ex2 is dialect mismatch, ex3 is over budget
-    # rejected_example_ids must track both
+    # ex2 is dialect mismatch, ex3 is over max_examples budget
     assert "ex2" in res.rejected_example_ids
     assert "ex3" in res.rejected_example_ids
 
@@ -273,6 +265,60 @@ def test_selector_is_deterministic_for_same_input():
     assert res1.selection_fingerprint == res2.selection_fingerprint
 
 
+def test_selector_rejects_no_dialect_compatible_examples_when_required():
+    selector = SQLExampleSelector()
+    bridge = build_dummy_bridge_result()
+    # ex is postgresql, config dialect is sqlite
+    ex = build_dummy_example("ex_pg", dialect="postgresql")
+    ex_set = SQLFewShotExampleSet(examples=(ex,))
+    config = SQLExampleSelectionConfig(target_dialect="sqlite", required=True)
+
+    with pytest.raises(SQLExampleSelectionContractError) as exc_info:
+        selector.select_examples(bridge, ex_set, config)
+    assert "No dialect-compatible examples available" in str(exc_info.value)
+
+
+def test_selector_does_not_select_zero_score_examples():
+    selector = SQLExampleSelector()
+    # Target intent is selection, ex1 intent is ranking (and has no signal tags overlap)
+    # This results in score 0 for ex1
+    bridge = build_dummy_bridge_result(intent_type="selection")
+    ex = build_dummy_example("ex_ranking", intent_type="ranking", tags=())
+    ex_set = SQLFewShotExampleSet(examples=(ex,))
+    config = SQLExampleSelectionConfig(target_dialect="sqlite", required=False)
+
+    res = selector.select_examples(bridge, ex_set, config)
+    # Since score is 0, it must not be selected even though max_examples is 3
+    assert res.selected_examples == ()
+    assert res.selected_example_ids == ()
+    assert "ex_ranking" in res.rejected_example_ids
+
+
+def test_selector_rejects_no_relevant_examples_when_required():
+    selector = SQLExampleSelector()
+    bridge = build_dummy_bridge_result(intent_type="selection")
+    ex = build_dummy_example("ex_ranking", intent_type="ranking", tags=())
+    ex_set = SQLFewShotExampleSet(examples=(ex,))
+    config = SQLExampleSelectionConfig(target_dialect="sqlite", required=True)
+
+    with pytest.raises(SQLExampleSelectionContractError) as exc_info:
+        selector.select_examples(bridge, ex_set, config)
+    assert "No relevant examples available while selection is required" in str(exc_info.value)
+
+
+def test_selector_allows_no_relevant_examples_when_not_required():
+    selector = SQLExampleSelector()
+    bridge = build_dummy_bridge_result(intent_type="selection")
+    ex = build_dummy_example("ex_ranking", intent_type="ranking", tags=())
+    ex_set = SQLFewShotExampleSet(examples=(ex,))
+    config = SQLExampleSelectionConfig(target_dialect="sqlite", required=False)
+
+    res = selector.select_examples(bridge, ex_set, config)
+    assert res.selected_examples == ()
+    assert res.selected_example_ids == ()
+    assert "ex_ranking" in res.rejected_example_ids
+
+
 def test_selector_does_not_call_provider_or_network(monkeypatch):
     # Guard network connections
     def block_connect(*args, **kwargs):
@@ -287,3 +333,6 @@ def test_selector_does_not_call_provider_or_network(monkeypatch):
 
     res = selector.select_examples(bridge, ex_set, config)
     assert res is not None
+    assert res.version == SQL_EXAMPLE_SELECTION_VERSION
+    assert res.selected_example_ids == ("ex1",)
+    assert len(res.selection_fingerprint) == 64
