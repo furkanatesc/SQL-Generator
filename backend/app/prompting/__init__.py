@@ -10,6 +10,15 @@ from app.prompting.sql_prompt_builder_contract import (
     SQLPromptBuilderResult,
 )
 from app.prompting.sql_prompt_builder import SQLPromptBuilder
+from app.prompting.few_shot_contract import (
+    SQL_FEW_SHOT_VERSION,
+    SQLFewShotExample,
+    SQLFewShotExampleSet,
+    SQLFewShotRenderConfig,
+    SQLFewShotRenderResult,
+    SQLFewShotContractError,
+)
+from app.prompting.few_shot_renderer import SQLFewShotRenderer
 
 __all__ = [
     "PromptPlanSection",
@@ -25,4 +34,12 @@ __all__ = [
     "SQLPromptBuilderSection",
     "SQLPromptBuilderResult",
     "SQLPromptBuilder",
+    "SQL_FEW_SHOT_VERSION",
+    "SQLFewShotExample",
+    "SQLFewShotExampleSet",
+    "SQLFewShotRenderConfig",
+    "SQLFewShotRenderResult",
+    "SQLFewShotContractError",
+    "SQLFewShotRenderer",
 ]
+
