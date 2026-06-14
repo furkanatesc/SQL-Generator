@@ -28,6 +28,13 @@ from app.prompting.example_selection_contract import (
     SQLExampleSelectionContractError,
 )
 from app.prompting.example_selector import SQLExampleSelector
+from app.prompting.structured_output_contract import (
+    SQL_STRUCTURED_OUTPUT_VERSION,
+    SQLStructuredOutputConfig,
+    SQLStructuredOutputResult,
+    SQLStructuredOutputContractError,
+)
+from app.prompting.structured_output_parser import SQLStructuredOutputParser
 
 __all__ = [
     "PromptPlanSection",
@@ -57,6 +64,11 @@ __all__ = [
     "SQLExampleSelectionResult",
     "SQLExampleSelectionContractError",
     "SQLExampleSelector",
+    "SQL_STRUCTURED_OUTPUT_VERSION",
+    "SQLStructuredOutputConfig",
+    "SQLStructuredOutputResult",
+    "SQLStructuredOutputContractError",
+    "SQLStructuredOutputParser",
 ]
 
 
