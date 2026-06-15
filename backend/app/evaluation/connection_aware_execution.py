@@ -3,6 +3,7 @@ from typing import Any, Tuple, Optional
 from app.evaluation.multi_database_execution import (
     SQLDatabaseDialect,
     SQLDatabaseExecutionRequest,
+    SQLExecutionMode,
 )
 from app.evaluation.connection_abstraction import (
     SQLResolvedConnection,
@@ -81,6 +82,41 @@ class SQLConnectionAwareExecutionPlan:
             if not isinstance(w, str):
                 raise SQLConnectionAwareExecutionContractError("All warnings must be strings")
 
+        # Semantic Invariants Validation
+        if self.uses_fixture == self.uses_connection:
+            raise SQLConnectionAwareExecutionContractError(
+                "exactly one of uses_fixture or uses_connection must be true"
+            )
+
+        if self.uses_fixture:
+            if self.resolved_connection is not None:
+                raise SQLConnectionAwareExecutionContractError(
+                    "fixture-backed plans cannot include resolved_connection"
+                )
+            if self.requires_live_connection:
+                raise SQLConnectionAwareExecutionContractError(
+                    "fixture-backed plans cannot require live connection"
+                )
+
+        if self.uses_connection:
+            if self.resolved_connection is None:
+                raise SQLConnectionAwareExecutionContractError(
+                    "connection-backed plans require resolved_connection"
+                )
+            if self.can_execute_locally:
+                raise SQLConnectionAwareExecutionContractError(
+                    "connection-backed plans cannot execute locally"
+                )
+            if not self.requires_live_connection:
+                raise SQLConnectionAwareExecutionContractError(
+                    "connection-backed plans must require live connection"
+                )
+
+        if self.effective_dialect != self.request.dialect:
+            raise SQLConnectionAwareExecutionContractError(
+                "effective_dialect must match request.dialect"
+            )
+
 
 @dataclass(frozen=True)
 class SQLConnectionAwareExecutionPlanner:
@@ -98,6 +134,11 @@ class SQLConnectionAwareExecutionPlanner:
     def plan(self, request: SQLDatabaseExecutionRequest) -> SQLConnectionAwareExecutionPlan:
         if not isinstance(request, SQLDatabaseExecutionRequest):
             raise SQLConnectionAwareExecutionContractError("request must be a SQLDatabaseExecutionRequest")
+
+        if request.config.execution_mode != SQLExecutionMode.READ_ONLY:
+            raise SQLConnectionAwareExecutionContractError(
+                "connection-aware execution planning currently supports only read_only execution mode"
+            )
 
         uses_fixture = request.fixture_ref is not None
         uses_connection = request.connection_ref is not None

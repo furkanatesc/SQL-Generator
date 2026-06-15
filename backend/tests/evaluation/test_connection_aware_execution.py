@@ -16,6 +16,7 @@ from app.evaluation.connection_abstraction import (
     SQLConnectionRegistry,
     SQLConnectionPolicy,
     SQLConnectionResolver,
+    SQLResolvedConnection,
 )
 from app.evaluation.connection_aware_execution import (
     SQL_CONNECTION_AWARE_EXECUTION_VERSION,
@@ -247,7 +248,7 @@ def test_planner_rejects_resolved_dialect_mismatch():
     assert "dialect does not match" in str(exc_info.value)
 
 
-def test_planner_rejects_non_read_only_resolved_connection():
+def test_planner_accepts_read_only_resolved_connection():
     # Since profile creation blocks non-READ_ONLY access mode, we check that resolved connection's access mode matches READ_ONLY.
     endpoint = SQLConnectionEndpoint(host="dev-host", port=5432, database="devdb")
     p = SQLConnectionProfile(
@@ -385,3 +386,213 @@ def test_planner_does_not_import_network_or_db_drivers():
     for mod in forbidden:
         assert f"import {mod}" not in content, f"Forbidden import found: {mod}"
         assert f"from {mod}" not in content, f"Forbidden import found: {mod}"
+
+
+def test_planner_rejects_non_read_only_execution_mode():
+    from app.evaluation.multi_database_execution import SQLExecutionMode
+    req_config = SQLDatabaseExecutionConfig(
+        dialect=SQLDatabaseDialect.SQLITE,
+        execution_mode=SQLExecutionMode.EXPLAIN_ONLY
+    )
+    req = SQLDatabaseExecutionRequest(
+        case_id="case_01",
+        sql="SELECT 1",
+        dialect=SQLDatabaseDialect.SQLITE,
+        fixture_ref="my_fixture",
+        connection_ref=None,
+        config=req_config
+    )
+    planner = SQLConnectionAwareExecutionPlanner()
+    with pytest.raises(SQLConnectionAwareExecutionContractError) as exc_info:
+        planner.plan(req)
+    assert "supports only read_only execution mode" in str(exc_info.value)
+
+
+def test_plan_rejects_both_fixture_and_connection_false():
+    req_config = SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.SQLITE)
+    req = SQLDatabaseExecutionRequest(
+        case_id="case_01",
+        sql="SELECT 1",
+        dialect=SQLDatabaseDialect.SQLITE,
+        fixture_ref="my_fixture",
+        connection_ref=None,
+        config=req_config
+    )
+    with pytest.raises(SQLConnectionAwareExecutionContractError) as exc_info:
+        SQLConnectionAwareExecutionPlan(
+            version=SQL_CONNECTION_AWARE_EXECUTION_VERSION,
+            request=req,
+            resolved_connection=None,
+            effective_dialect=SQLDatabaseDialect.SQLITE,
+            effective_max_rows=1000,
+            effective_timeout_seconds=2.0,
+            uses_fixture=False,  # Both false
+            uses_connection=False,
+            can_execute_locally=True,
+            requires_live_connection=False,
+            warnings=()
+        )
+    assert "exactly one" in str(exc_info.value)
+
+
+def test_plan_rejects_both_fixture_and_connection_true():
+    req_config = SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.SQLITE)
+    req = SQLDatabaseExecutionRequest(
+        case_id="case_01",
+        sql="SELECT 1",
+        dialect=SQLDatabaseDialect.SQLITE,
+        fixture_ref="my_fixture",
+        connection_ref=None,
+        config=req_config
+    )
+    with pytest.raises(SQLConnectionAwareExecutionContractError) as exc_info:
+        SQLConnectionAwareExecutionPlan(
+            version=SQL_CONNECTION_AWARE_EXECUTION_VERSION,
+            request=req,
+            resolved_connection=None,
+            effective_dialect=SQLDatabaseDialect.SQLITE,
+            effective_max_rows=1000,
+            effective_timeout_seconds=2.0,
+            uses_fixture=True,  # Both true
+            uses_connection=True,
+            can_execute_locally=True,
+            requires_live_connection=False,
+            warnings=()
+        )
+    assert "exactly one" in str(exc_info.value)
+
+
+def test_plan_rejects_fixture_plan_with_resolved_connection():
+    req_config = SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.SQLITE)
+    req = SQLDatabaseExecutionRequest(
+        case_id="case_01",
+        sql="SELECT 1",
+        dialect=SQLDatabaseDialect.SQLITE,
+        fixture_ref="my_fixture",
+        connection_ref=None,
+        config=req_config
+    )
+    
+    endpoint = SQLConnectionEndpoint(host="dev-host", port=5432, database="devdb")
+    resolved = SQLResolvedConnection(
+        version="sql_connection_abstraction_v1",
+        connection_ref="pg_conn",
+        dialect=SQLDatabaseDialect.POSTGRESQL,
+        environment=SQLConnectionEnvironment.DEV,
+        endpoint=endpoint,
+        access_mode=SQLConnectionAccessMode.READ_ONLY,
+        auth_mode=SQLConnectionAuthMode.NONE,
+        secret_ref=None,
+        max_rows=1000,
+        timeout_seconds=2.0
+    )
+    
+    with pytest.raises(SQLConnectionAwareExecutionContractError) as exc_info:
+        SQLConnectionAwareExecutionPlan(
+            version=SQL_CONNECTION_AWARE_EXECUTION_VERSION,
+            request=req,
+            resolved_connection=resolved,  # Fixture backed but has resolved_connection
+            effective_dialect=SQLDatabaseDialect.SQLITE,
+            effective_max_rows=1000,
+            effective_timeout_seconds=2.0,
+            uses_fixture=True,
+            uses_connection=False,
+            can_execute_locally=True,
+            requires_live_connection=False,
+            warnings=()
+        )
+    assert "cannot include resolved_connection" in str(exc_info.value)
+
+
+def test_plan_rejects_connection_plan_without_resolved_connection():
+    req_config = SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.POSTGRESQL)
+    req = SQLDatabaseExecutionRequest(
+        case_id="case_01",
+        sql="SELECT 1",
+        dialect=SQLDatabaseDialect.POSTGRESQL,
+        fixture_ref=None,
+        connection_ref="pg_conn",
+        config=req_config
+    )
+    with pytest.raises(SQLConnectionAwareExecutionContractError) as exc_info:
+        SQLConnectionAwareExecutionPlan(
+            version=SQL_CONNECTION_AWARE_EXECUTION_VERSION,
+            request=req,
+            resolved_connection=None,  # Connection backed but resolved_connection is None
+            effective_dialect=SQLDatabaseDialect.POSTGRESQL,
+            effective_max_rows=1000,
+            effective_timeout_seconds=2.0,
+            uses_fixture=False,
+            uses_connection=True,
+            can_execute_locally=False,
+            requires_live_connection=True,
+            warnings=()
+        )
+    assert "require resolved_connection" in str(exc_info.value)
+
+
+def test_plan_rejects_connection_plan_marked_local():
+    req_config = SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.POSTGRESQL)
+    req = SQLDatabaseExecutionRequest(
+        case_id="case_01",
+        sql="SELECT 1",
+        dialect=SQLDatabaseDialect.POSTGRESQL,
+        fixture_ref=None,
+        connection_ref="pg_conn",
+        config=req_config
+    )
+    endpoint = SQLConnectionEndpoint(host="dev-host", port=5432, database="devdb")
+    resolved = SQLResolvedConnection(
+        version="sql_connection_abstraction_v1",
+        connection_ref="pg_conn",
+        dialect=SQLDatabaseDialect.POSTGRESQL,
+        environment=SQLConnectionEnvironment.DEV,
+        endpoint=endpoint,
+        access_mode=SQLConnectionAccessMode.READ_ONLY,
+        auth_mode=SQLConnectionAuthMode.NONE,
+        secret_ref=None,
+        max_rows=1000,
+        timeout_seconds=2.0
+    )
+    with pytest.raises(SQLConnectionAwareExecutionContractError) as exc_info:
+        SQLConnectionAwareExecutionPlan(
+            version=SQL_CONNECTION_AWARE_EXECUTION_VERSION,
+            request=req,
+            resolved_connection=resolved,
+            effective_dialect=SQLDatabaseDialect.POSTGRESQL,
+            effective_max_rows=1000,
+            effective_timeout_seconds=2.0,
+            uses_fixture=False,
+            uses_connection=True,
+            can_execute_locally=True,  # Connection backed but can execute locally
+            requires_live_connection=True,
+            warnings=()
+        )
+    assert "cannot execute locally" in str(exc_info.value)
+
+
+def test_plan_rejects_effective_dialect_mismatch():
+    req_config = SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.SQLITE)
+    req = SQLDatabaseExecutionRequest(
+        case_id="case_01",
+        sql="SELECT 1",
+        dialect=SQLDatabaseDialect.SQLITE,
+        fixture_ref="my_fixture",
+        connection_ref=None,
+        config=req_config
+    )
+    with pytest.raises(SQLConnectionAwareExecutionContractError) as exc_info:
+        SQLConnectionAwareExecutionPlan(
+            version=SQL_CONNECTION_AWARE_EXECUTION_VERSION,
+            request=req,
+            resolved_connection=None,
+            effective_dialect=SQLDatabaseDialect.POSTGRESQL,  # Mismatch: request dialect is SQLITE
+            effective_max_rows=1000,
+            effective_timeout_seconds=2.0,
+            uses_fixture=True,
+            uses_connection=False,
+            can_execute_locally=True,
+            requires_live_connection=False,
+            warnings=()
+        )
+    assert "effective_dialect must match" in str(exc_info.value)
