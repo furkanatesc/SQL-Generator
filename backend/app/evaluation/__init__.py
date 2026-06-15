@@ -17,6 +17,18 @@ from .execution_accuracy import (
     SQLExecutionResultComparator,
     SQLExecutionAccuracyContractError,
 )
+from .failure_analytics import (
+    SQL_FAILURE_ANALYTICS_VERSION,
+    SQLFailureCategory,
+    SQLFailureSeverity,
+    SQLFailureSignal,
+    SQLFailureAnalysisResult,
+    SQLFailureAnalyticsRunResult,
+    SQLFailureAnalyzer,
+    SQLFailureAnalyticsContractError,
+    SQLFailureAnalyzerConfig,
+    SQLFailureCategoryCount,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -34,4 +46,14 @@ __all__ = [
     "SQLExecutionAccuracyHarness",
     "SQLExecutionResultComparator",
     "SQLExecutionAccuracyContractError",
+    "SQL_FAILURE_ANALYTICS_VERSION",
+    "SQLFailureCategory",
+    "SQLFailureSeverity",
+    "SQLFailureSignal",
+    "SQLFailureAnalysisResult",
+    "SQLFailureAnalyticsRunResult",
+    "SQLFailureAnalyzer",
+    "SQLFailureAnalyticsContractError",
+    "SQLFailureAnalyzerConfig",
+    "SQLFailureCategoryCount",
 ]
