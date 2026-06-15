@@ -50,6 +50,23 @@ def make_test_case(**kwargs):
     return SQLGoldenDatasetCase(**default_args)
 
 
+def test_config_validation():
+    # 1. empty fixtures_dir raises
+    with pytest.raises(SQLExecutionAccuracyContractError) as exc_info:
+        SQLExecutionAccuracyConfig(fixtures_dir="")
+    assert "fixtures_dir cannot be empty" in str(exc_info.value)
+
+    # 2. invalid timeout_seconds raises
+    with pytest.raises(SQLExecutionAccuracyContractError) as exc_info:
+        SQLExecutionAccuracyConfig(fixtures_dir="data", timeout_seconds=-0.5)
+    assert "timeout_seconds must be greater than 0" in str(exc_info.value)
+
+    # 3. invalid max_rows raises
+    with pytest.raises(SQLExecutionAccuracyContractError) as exc_info:
+        SQLExecutionAccuracyConfig(fixtures_dir="data", max_rows=0)
+    assert "max_rows must be greater than 0" in str(exc_info.value)
+
+
 def test_harness_empty_predicted_sql_rejected(temp_fixtures_dir):
     config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
     harness = SQLExecutionAccuracyHarness(config)
@@ -88,6 +105,38 @@ def test_harness_missing_fixture_reports_error(temp_fixtures_dir):
     assert "Fixture database not found" in case_result.execution_error
 
 
+def test_harness_reject_fixture_path_traversal(temp_fixtures_dir):
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    harness = SQLExecutionAccuracyHarness(config)
+
+    # 1. Direct call raises SQLExecutionAccuracyContractError
+    with pytest.raises(SQLExecutionAccuracyContractError) as exc_info:
+        harness._resolve_db_path("../../etc/passwd")
+    assert "fixture_ref cannot escape fixtures_dir" in str(exc_info.value)
+
+    # 2. Executing the case results in a failed result record
+    case = make_test_case(fixture_ref="../../etc/passwd")
+    case_result = harness.run_case(case, "SELECT * FROM users")
+    assert case_result.passed is False
+    assert "fixture_ref cannot escape fixtures_dir" in case_result.execution_error
+
+
+def test_harness_rejects_absolute_fixture_ref(temp_fixtures_dir):
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    harness = SQLExecutionAccuracyHarness(config)
+
+    # 1. Direct call raises SQLExecutionAccuracyContractError
+    with pytest.raises(SQLExecutionAccuracyContractError) as exc_info:
+        harness._resolve_db_path("/tmp/fixture_db")
+    assert "fixture_ref must be relative to fixtures_dir" in str(exc_info.value)
+
+    # 2. Executing the case results in a failed result record
+    case = make_test_case(fixture_ref="/tmp/fixture_db")
+    case_result = harness.run_case(case, "SELECT * FROM users")
+    assert case_result.passed is False
+    assert "fixture_ref must be relative to fixtures_dir" in case_result.execution_error
+
+
 def test_comparator_exact_ordered():
     # Exact ordered compares index-by-index and is key-order independent
     actual = [{"name": "Alice", "id": 1}, {"name": "Bob", "id": 2}]
@@ -121,6 +170,16 @@ def test_comparator_exact_unordered():
     mismatch_values = [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Charlie"}]
     assert not SQLExecutionResultComparator.compare(
         actual, mismatch_values, SQLResultComparePolicy.EXACT_UNORDERED, order_sensitive=False
+    )
+
+
+def test_exact_unordered_handles_mixed_value_types_without_crashing():
+    # Verify that different types under same key do not crash sorting in EXACT_UNORDERED
+    actual = [{"x": 1}, {"x": "1"}]
+    expected = [{"x": "1"}, {"x": 1}]
+    # This should pass without raising a TypeError
+    assert SQLExecutionResultComparator.compare(
+        actual, expected, SQLResultComparePolicy.EXACT_UNORDERED, order_sensitive=False
     )
 
 
@@ -185,13 +244,44 @@ def test_comparator_subset_allowed():
     )
 
 
-def test_comparator_null_normalization():
-    # Standardize string "None", case-insensitive "NULL", and None
-    actual = [{"name": "Alice", "score": "NULL"}, {"name": "Bob", "score": "none"}]
-    expected = [{"name": "Alice", "score": None}, {"name": "Bob", "score": None}]
-    assert SQLExecutionResultComparator.compare(
+def test_comparator_distinguishes_null_from_literal_null_string():
+    actual = [{"x": None}]
+    expected = [{"x": "NULL"}]
+    # Literal "NULL" string is NOT treated as actual database NULL (None)
+    assert not SQLExecutionResultComparator.compare(
         actual, expected, SQLResultComparePolicy.EXACT_ORDERED, order_sensitive=True
     )
+
+
+def test_comparator_rejects_invalid_policy():
+    actual = [{"x": 1}]
+    expected = [{"x": 1}]
+    with pytest.raises(SQLExecutionAccuracyContractError) as exc_info:
+        SQLExecutionResultComparator.compare(
+            actual, expected, "invalid_policy", order_sensitive=False
+        )
+    assert "Invalid result comparison policy: invalid_policy" in str(exc_info.value)
+
+
+def test_run_result_sorts_case_results_deterministically(temp_fixtures_dir):
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    harness = SQLExecutionAccuracyHarness(config)
+
+    case_c = make_test_case(case_id="case_c")
+    case_a = make_test_case(case_id="case_a")
+    case_b = make_test_case(case_id="case_b")
+
+    cases = [case_c, case_a, case_b]
+    sql_mapping = {
+        "case_c": "SELECT id, name, score FROM users ORDER BY id",
+        "case_a": "SELECT id, name, score FROM users ORDER BY id",
+        "case_b": "SELECT id, name, score FROM users ORDER BY id",
+    }
+
+    run_result = harness.run_harness(cases, sql_mapping)
+    assert run_result.case_results[0].case_id == "case_a"
+    assert run_result.case_results[1].case_id == "case_b"
+    assert run_result.case_results[2].case_id == "case_c"
 
 
 def test_harness_run_successful_case(temp_fixtures_dir):

@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import time
 from dataclasses import dataclass, field
@@ -7,7 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.sql_sandbox import ReadOnlySqlSandbox
 from app.evaluation.golden_dataset_contract import (
     SQLGoldenDatasetCase,
-    SQLGoldenDatasetManifest,
     SQLResultComparePolicy,
 )
 
@@ -22,6 +22,14 @@ class SQLExecutionAccuracyConfig:
     fixtures_dir: str
     timeout_seconds: float = 2.0
     max_rows: int = 1000
+
+    def __post_init__(self):
+        if not self.fixtures_dir or not self.fixtures_dir.strip():
+            raise SQLExecutionAccuracyContractError("fixtures_dir cannot be empty in config")
+        if self.timeout_seconds <= 0:
+            raise SQLExecutionAccuracyContractError("timeout_seconds must be greater than 0")
+        if self.max_rows <= 0:
+            raise SQLExecutionAccuracyContractError("max_rows must be greater than 0")
 
 
 @dataclass(frozen=True)
@@ -58,9 +66,6 @@ def canonicalize_value(val: Any) -> Any:
     if val is None:
         return None
     if isinstance(val, str):
-        # Canonicalize case-insensitive NULL or NONE string representations
-        if val.strip().upper() in ("NULL", "NONE"):
-            return None
         return val
     if isinstance(val, bool):
         return val
@@ -177,6 +182,11 @@ def compare_subset(
         return True
 
 
+def row_to_json_stable(row: Dict[str, Any]) -> str:
+    """Serialize row dictionary to sorted-key JSON string for stable comparisons."""
+    return json.dumps(row, sort_keys=True, default=str, separators=(",", ":"))
+
+
 class SQLExecutionResultComparator:
     @classmethod
     def canonicalize_result(cls, rows: Any) -> List[Dict[str, Any]]:
@@ -216,9 +226,9 @@ class SQLExecutionResultComparator:
             try:
                 policy = SQLResultComparePolicy(policy)
             except ValueError:
-                policy = SQLResultComparePolicy.EXACT_UNORDERED
+                raise SQLExecutionAccuracyContractError(f"Invalid result comparison policy: {policy}")
 
-        # Input results should be canonicalized before calling this, but we run it to be safe.
+        # Input results should be canonicalized before calling this
         act_canonical = cls.canonicalize_result(actual)
         exp_canonical = cls.canonicalize_result(expected)
 
@@ -233,10 +243,10 @@ class SQLExecutionResultComparator:
         elif policy == SQLResultComparePolicy.EXACT_UNORDERED:
             if len(act_canonical) != len(exp_canonical):
                 return False
-            # Unordered comparison: Convert each dictionary row to sorted items tuple, sort the collection, and compare
-            act_tuples = sorted(tuple(sorted(r.items())) for r in act_canonical)
-            exp_tuples = sorted(tuple(sorted(r.items())) for r in exp_canonical)
-            return act_tuples == exp_tuples
+            # Stable json sorting handles mixed-value types gracefully
+            act_jsons = sorted(row_to_json_stable(r) for r in act_canonical)
+            exp_jsons = sorted(row_to_json_stable(r) for r in exp_canonical)
+            return act_jsons == exp_jsons
 
         elif policy == SQLResultComparePolicy.NUMERIC_TOLERANCE:
             if len(act_canonical) != len(exp_canonical):
@@ -262,9 +272,9 @@ class SQLExecutionResultComparator:
                         return False
                 return True
             else:
-                act_tuples = sorted(tuple(sorted(r.items())) for r in act_canonical)
-                exp_tuples = sorted(tuple(sorted(r.items())) for r in exp_canonical)
-                return act_tuples == exp_tuples
+                act_jsons = sorted(row_to_json_stable(r) for r in act_canonical)
+                exp_jsons = sorted(row_to_json_stable(r) for r in exp_canonical)
+                return act_jsons == exp_jsons
 
         return False
 
@@ -278,25 +288,26 @@ def calculate_sha256(sql: Optional[str]) -> str:
 
 class SQLExecutionAccuracyHarness:
     def __init__(self, config: SQLExecutionAccuracyConfig):
-        if not config.fixtures_dir:
-            raise SQLExecutionAccuracyContractError("fixtures_dir cannot be empty in config")
         self.config = config
 
     def _resolve_db_path(self, fixture_ref: str) -> str:
-        """Find the sqlite database file matching the fixture reference."""
+        """Find and validate local sqlite database file under configured fixtures directory."""
         if not fixture_ref or not fixture_ref.strip():
             raise SQLExecutionAccuracyContractError("fixture_ref cannot be empty")
-            
-        # Try fixture_ref.db
-        path_db = os.path.join(self.config.fixtures_dir, f"{fixture_ref}.db")
-        if os.path.exists(path_db):
-            return path_db
-            
-        # Try fixture_ref
-        path_raw = os.path.join(self.config.fixtures_dir, fixture_ref)
-        if os.path.exists(path_raw):
-            return path_raw
-            
+
+        if os.path.isabs(fixture_ref):
+            raise SQLExecutionAccuracyContractError("fixture_ref must be relative to fixtures_dir")
+
+        fixtures_root = os.path.abspath(self.config.fixtures_dir)
+
+        candidate_names = (f"{fixture_ref}.db", fixture_ref)
+        for name in candidate_names:
+            candidate = os.path.abspath(os.path.join(fixtures_root, name))
+            if not candidate.startswith(fixtures_root + os.sep):
+                raise SQLExecutionAccuracyContractError("fixture_ref cannot escape fixtures_dir")
+            if os.path.exists(candidate):
+                return candidate
+
         raise SQLExecutionAccuracyContractError(f"Fixture database not found: '{fixture_ref}'")
 
     def run_case(self, case: SQLGoldenDatasetCase, predicted_sql: str) -> SQLExecutionAccuracyCaseResult:
@@ -396,14 +407,18 @@ class SQLExecutionAccuracyHarness:
                     "Custom compare policy mapped to default (exact_ordered or exact_unordered)."
                 )
 
-            passed = SQLExecutionResultComparator.compare(
-                actual=normalized_actual_result,
-                expected=normalized_expected_result,
-                policy=case.result_compare_policy,
-                order_sensitive=case.order_sensitive,
-                tolerance_policy=case.tolerance_policy,
-            )
-            execution_error = None
+            try:
+                passed = SQLExecutionResultComparator.compare(
+                    actual=normalized_actual_result,
+                    expected=normalized_expected_result,
+                    policy=case.result_compare_policy,
+                    order_sensitive=case.order_sensitive,
+                    tolerance_policy=case.tolerance_policy,
+                )
+                execution_error = None
+            except Exception as e:
+                passed = False
+                execution_error = f"Comparison execution failed: {e}"
 
         return SQLExecutionAccuracyCaseResult(
             case_id=case.case_id,
@@ -479,6 +494,9 @@ class SQLExecutionAccuracyHarness:
             if res.passed:
                 passed_count += 1
 
+        # Sort the results deterministically by case_id
+        sorted_results = tuple(sorted(results, key=lambda r: r.case_id))
+
         total = len(cases)
         failed = total - passed_count
         pass_rate = (passed_count / total) if total > 0 else 0.0
@@ -489,6 +507,6 @@ class SQLExecutionAccuracyHarness:
             passed_cases=passed_count,
             failed_cases=failed,
             pass_rate=pass_rate,
-            case_results=tuple(results),
+            case_results=sorted_results,
             duration_ms=duration_ms,
         )
