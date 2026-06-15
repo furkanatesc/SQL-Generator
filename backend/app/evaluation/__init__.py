@@ -81,6 +81,13 @@ from .connection_abstraction import (
     SQLConnectionPolicy,
     SQLConnectionAbstractionContractError,
 )
+from .connection_aware_execution import (
+    SQL_CONNECTION_AWARE_EXECUTION_VERSION,
+    SQLConnectionAwareExecutionContractError,
+    SQLConnectionAwareExecutionConfig,
+    SQLConnectionAwareExecutionPlan,
+    SQLConnectionAwareExecutionPlanner,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -152,5 +159,10 @@ __all__ = [
     "SQLResolvedConnection",
     "SQLConnectionPolicy",
     "SQLConnectionAbstractionContractError",
+    "SQL_CONNECTION_AWARE_EXECUTION_VERSION",
+    "SQLConnectionAwareExecutionContractError",
+    "SQLConnectionAwareExecutionConfig",
+    "SQLConnectionAwareExecutionPlan",
+    "SQLConnectionAwareExecutionPlanner",
 ]
 
