@@ -29,6 +29,19 @@ from .failure_analytics import (
     SQLFailureAnalyzerConfig,
     SQLFailureCategoryCount,
 )
+from .eval_gate import (
+    SQL_EVAL_GATE_VERSION,
+    SQLEvalGateStatus,
+    SQLEvalGateSeverity,
+    SQLEvalGateRuleType,
+    SQLEvalGateRule,
+    SQLEvalGateRuleResult,
+    SQLEvalGateRunSummary,
+    SQLEvalGateDecision,
+    SQLEvalGateConfig,
+    SQLEvalGateAggregator,
+    SQLEvalGateContractError,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -56,4 +69,16 @@ __all__ = [
     "SQLFailureAnalyticsContractError",
     "SQLFailureAnalyzerConfig",
     "SQLFailureCategoryCount",
+    "SQL_EVAL_GATE_VERSION",
+    "SQLEvalGateStatus",
+    "SQLEvalGateSeverity",
+    "SQLEvalGateRuleType",
+    "SQLEvalGateRule",
+    "SQLEvalGateRuleResult",
+    "SQLEvalGateRunSummary",
+    "SQLEvalGateDecision",
+    "SQLEvalGateConfig",
+    "SQLEvalGateAggregator",
+    "SQLEvalGateContractError",
 ]
+
