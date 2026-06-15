@@ -95,9 +95,20 @@ class SQLEvalGateRunSummary:
             raise SQLEvalGateContractError("Case counts cannot be negative")
         _validate_rate(self.pass_rate, "pass_rate")
 
+        if self.total_cases != self.passed_cases + self.failed_cases:
+            raise SQLEvalGateContractError("total_cases must equal passed_cases + failed_cases")
+        
+        expected_rate = (self.passed_cases / self.total_cases) if self.total_cases > 0 else 0.0
+        if abs(self.pass_rate - expected_rate) > 1e-6:
+            raise SQLEvalGateContractError(f"pass_rate {self.pass_rate} does not match expected {expected_rate}")
+
 
 @dataclass(frozen=True)
 class SQLEvalGateConfig:
+    """Configuration for the evaluation gate.
+    
+    Note: empty_dataset_status is only used when fail_on_empty_dataset is False.
+    """
     min_pass_rate: float = 0.95
     max_unknown_failure_rate: float = 0.05
     blocked_categories: Tuple[SQLFailureCategory, ...] = (
@@ -130,9 +141,19 @@ class SQLEvalGateConfig:
                 raise SQLEvalGateContractError("All warn_categories items must be SQLFailureCategory")
 
         if not isinstance(self.unknown_failure_rate_status, SQLEvalGateStatus):
-            raise SQLEvalGateContractError("unknown_failure_rate_status must be a SQLEvalGateStatus")
+            try:
+                object.__setattr__(self, "unknown_failure_rate_status", SQLEvalGateStatus(self.unknown_failure_rate_status))
+            except ValueError:
+                raise SQLEvalGateContractError("unknown_failure_rate_status must be a SQLEvalGateStatus")
+                
+        if self.unknown_failure_rate_status not in (SQLEvalGateStatus.WARN, SQLEvalGateStatus.FAIL):
+            raise SQLEvalGateContractError("unknown_failure_rate_status must be WARN or FAIL")
+
         if not isinstance(self.empty_dataset_status, SQLEvalGateStatus):
-            raise SQLEvalGateContractError("empty_dataset_status must be a SQLEvalGateStatus")
+            try:
+                object.__setattr__(self, "empty_dataset_status", SQLEvalGateStatus(self.empty_dataset_status))
+            except ValueError:
+                raise SQLEvalGateContractError("empty_dataset_status must be a SQLEvalGateStatus")
 
         if self.max_failure_count is not None:
             if not isinstance(self.max_failure_count, int) or isinstance(self.max_failure_count, bool):
@@ -244,21 +265,33 @@ class SQLEvalGateAggregator:
 
         # 1. MIN_PASS_RATE
         if total_cases == 0:
-            min_pass_rate_ok = not config.fail_on_empty_dataset
-            pass_rate_msg = "Dataset is empty."
+            empty_status = (
+                SQLEvalGateStatus.FAIL
+                if config.fail_on_empty_dataset
+                else config.empty_dataset_status
+            )
+            pass_rate_status = empty_status
+            pass_rate_msg = f"Dataset is empty; configured empty dataset status is {empty_status.value}."
+            severity = (
+                SQLEvalGateSeverity.CRITICAL
+                if empty_status == SQLEvalGateStatus.FAIL
+                else (SQLEvalGateSeverity.MEDIUM if empty_status == SQLEvalGateStatus.WARN else SQLEvalGateSeverity.INFO)
+            )
         else:
             min_pass_rate_ok = pass_rate >= config.min_pass_rate
+            pass_rate_status = SQLEvalGateStatus.PASS if min_pass_rate_ok else SQLEvalGateStatus.FAIL
             pass_rate_msg = (
                 f"Pass rate {pass_rate:.2%} meets or exceeds minimum threshold of {config.min_pass_rate:.2%}."
                 if min_pass_rate_ok
                 else f"Pass rate {pass_rate:.2%} is below minimum threshold of {config.min_pass_rate:.2%}."
             )
-        pass_rate_status = SQLEvalGateStatus.PASS if min_pass_rate_ok else SQLEvalGateStatus.FAIL
+            severity = SQLEvalGateSeverity.CRITICAL
+
         rules_evaluated.append(
             SQLEvalGateRuleResult(
                 rule_type=SQLEvalGateRuleType.MIN_PASS_RATE,
                 status=pass_rate_status,
-                severity=SQLEvalGateSeverity.CRITICAL,
+                severity=severity,
                 message=pass_rate_msg,
             )
         )

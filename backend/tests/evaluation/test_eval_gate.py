@@ -23,6 +23,17 @@ from app.evaluation.eval_gate import (
 )
 
 
+def assert_gate_consistency(decision):
+    if decision.status == SQLEvalGateStatus.FAIL:
+        assert len(decision.failed_rules) > 0
+    elif decision.status == SQLEvalGateStatus.WARN:
+        assert len(decision.warning_rules) > 0
+        assert len(decision.failed_rules) == 0
+    else:
+        assert len(decision.failed_rules) == 0
+        assert len(decision.warning_rules) == 0
+
+
 def create_mock_run(
     total: int = 10,
     passed: int = 10,
@@ -104,6 +115,7 @@ def test_gate_passes_all_green_run():
     assert decision.passed_cases == 10
     assert decision.failed_cases == 0
     assert decision.pass_rate == 1.0
+    assert_gate_consistency(decision)
 
 
 def test_gate_fails_empty_dataset_by_default():
@@ -114,6 +126,7 @@ def test_gate_fails_empty_dataset_by_default():
     assert decision.status == SQLEvalGateStatus.FAIL
     assert decision.passed is False
     assert "no test cases" in decision.decision_reason
+    assert_gate_consistency(decision)
 
 
 def test_gate_allows_empty_dataset_when_configured():
@@ -124,12 +137,36 @@ def test_gate_allows_empty_dataset_when_configured():
     decision_pass = SQLEvalGateAggregator.aggregate(run, config_pass)
     assert decision_pass.status == SQLEvalGateStatus.PASS
     assert decision_pass.passed is True
+    assert_gate_consistency(decision_pass)
     
     # 2. Configured to WARN on empty
     config_warn = SQLEvalGateConfig(fail_on_empty_dataset=False, empty_dataset_status=SQLEvalGateStatus.WARN)
     decision_warn = SQLEvalGateAggregator.aggregate(run, config_warn)
     assert decision_warn.status == SQLEvalGateStatus.WARN
     assert decision_warn.passed is True
+    assert_gate_consistency(decision_warn)
+
+
+def test_gate_empty_dataset_warn_has_warning_rule():
+    run = create_mock_run(total=0, passed=0, failed=0, categories_dict={})
+    config = SQLEvalGateConfig(fail_on_empty_dataset=False, empty_dataset_status=SQLEvalGateStatus.WARN)
+    decision = SQLEvalGateAggregator.aggregate(run, config)
+    assert decision.status == SQLEvalGateStatus.WARN
+    assert decision.passed is True
+    assert len(decision.warning_rules) > 0
+    assert any(r.status == SQLEvalGateStatus.WARN for r in decision.warning_rules)
+    assert_gate_consistency(decision)
+
+
+def test_gate_empty_dataset_configured_fail_has_failed_rule():
+    run = create_mock_run(total=0, passed=0, failed=0, categories_dict={})
+    config = SQLEvalGateConfig(fail_on_empty_dataset=True)
+    decision = SQLEvalGateAggregator.aggregate(run, config)
+    assert decision.status == SQLEvalGateStatus.FAIL
+    assert decision.passed is False
+    assert len(decision.failed_rules) > 0
+    assert any(r.status == SQLEvalGateStatus.FAIL for r in decision.failed_rules)
+    assert_gate_consistency(decision)
 
 
 def test_gate_fails_when_pass_rate_below_threshold():
@@ -141,6 +178,7 @@ def test_gate_fails_when_pass_rate_below_threshold():
     assert decision.status == SQLEvalGateStatus.FAIL
     assert decision.passed is False
     assert any(r.rule_type == SQLEvalGateRuleType.MIN_PASS_RATE and r.status == SQLEvalGateStatus.FAIL for r in decision.failed_rules)
+    assert_gate_consistency(decision)
 
 
 def test_gate_fails_on_blocked_category():
@@ -163,6 +201,7 @@ def test_gate_fails_on_blocked_category():
     assert decision.status == SQLEvalGateStatus.FAIL
     assert decision.passed is False
     assert any(r.rule_type == SQLEvalGateRuleType.BLOCK_FAILURE_CATEGORY and r.status == SQLEvalGateStatus.FAIL for r in decision.failed_rules)
+    assert_gate_consistency(decision)
 
 
 def test_gate_warns_on_warn_category():
@@ -185,6 +224,7 @@ def test_gate_warns_on_warn_category():
     assert decision.passed is True
     assert len(decision.failed_rules) == 0
     assert any(r.rule_type == SQLEvalGateRuleType.BLOCK_FAILURE_CATEGORY and r.status == SQLEvalGateStatus.WARN for r in decision.warning_rules)
+    assert_gate_consistency(decision)
 
 
 def test_gate_fail_takes_priority_over_warn():
@@ -207,6 +247,7 @@ def test_gate_fail_takes_priority_over_warn():
     decision = SQLEvalGateAggregator.aggregate(run, config)
     assert decision.status == SQLEvalGateStatus.FAIL  # FAIL wins
     assert decision.passed is False
+    assert_gate_consistency(decision)
 
 
 def test_gate_warns_or_fails_on_unknown_failure_rate_threshold():
@@ -230,6 +271,7 @@ def test_gate_warns_or_fails_on_unknown_failure_rate_threshold():
     decision_warn = SQLEvalGateAggregator.aggregate(run, config_warn)
     assert decision_warn.status == SQLEvalGateStatus.WARN
     assert decision_warn.passed is True
+    assert_gate_consistency(decision_warn)
     
     # 2. Configured as FAIL on threshold exceeded
     config_fail = SQLEvalGateConfig(
@@ -240,6 +282,7 @@ def test_gate_warns_or_fails_on_unknown_failure_rate_threshold():
     decision_fail = SQLEvalGateAggregator.aggregate(run, config_fail)
     assert decision_fail.status == SQLEvalGateStatus.FAIL
     assert decision_fail.passed is False
+    assert_gate_consistency(decision_fail)
 
 
 def test_gate_rule_results_are_deterministically_ordered():
@@ -286,6 +329,14 @@ def test_gate_config_rejects_invalid_unknown_failure_rate():
         SQLEvalGateConfig(max_unknown_failure_rate="invalid_type")  # type: ignore
 
 
+def test_gate_config_rejects_pass_unknown_failure_rate_status():
+    with pytest.raises(SQLEvalGateContractError):
+        SQLEvalGateConfig(unknown_failure_rate_status=SQLEvalGateStatus.PASS)
+        
+    with pytest.raises(SQLEvalGateContractError):
+        SQLEvalGateConfig(unknown_failure_rate_status="invalid_status")  # type: ignore
+
+
 def test_gate_category_counts_are_preserved():
     run = create_mock_run(
         total=10,
@@ -305,3 +356,14 @@ def test_gate_category_counts_are_preserved():
     assert isinstance(decision.category_counts, tuple)
     for cc in decision.category_counts:
         assert isinstance(cc, SQLFailureCategoryCount)
+
+
+def test_gate_run_summary_rejects_inconsistent_counts():
+    with pytest.raises(SQLEvalGateContractError):
+        SQLEvalGateRunSummary(total_cases=10, passed_cases=8, failed_cases=1, pass_rate=0.8)
+
+
+def test_gate_run_summary_rejects_inconsistent_pass_rate():
+    with pytest.raises(SQLEvalGateContractError):
+        # pass_rate must match passed/total = 0.8
+        SQLEvalGateRunSummary(total_cases=10, passed_cases=8, failed_cases=2, pass_rate=0.7)
