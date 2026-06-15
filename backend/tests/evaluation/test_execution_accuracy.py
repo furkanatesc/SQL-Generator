@@ -68,7 +68,7 @@ def test_config_validation():
 
 
 def test_harness_empty_predicted_sql_rejected(temp_fixtures_dir):
-    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir, use_connection_aware_orchestrator=False)
     harness = SQLExecutionAccuracyHarness(config)
     case = make_test_case()
 
@@ -86,7 +86,7 @@ def test_harness_empty_predicted_sql_rejected(temp_fixtures_dir):
 
 
 def test_harness_unsafe_ddl_rejected(temp_fixtures_dir):
-    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir, use_connection_aware_orchestrator=False)
     harness = SQLExecutionAccuracyHarness(config)
     case = make_test_case()
 
@@ -96,7 +96,7 @@ def test_harness_unsafe_ddl_rejected(temp_fixtures_dir):
 
 
 def test_harness_missing_fixture_reports_error(temp_fixtures_dir):
-    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir, use_connection_aware_orchestrator=False)
     harness = SQLExecutionAccuracyHarness(config)
     case = make_test_case(fixture_ref="nonexistent_db")
 
@@ -106,7 +106,7 @@ def test_harness_missing_fixture_reports_error(temp_fixtures_dir):
 
 
 def test_harness_reject_fixture_path_traversal(temp_fixtures_dir):
-    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir, use_connection_aware_orchestrator=False)
     harness = SQLExecutionAccuracyHarness(config)
 
     # 1. Direct call raises SQLExecutionAccuracyContractError
@@ -122,7 +122,7 @@ def test_harness_reject_fixture_path_traversal(temp_fixtures_dir):
 
 
 def test_harness_rejects_absolute_fixture_ref(temp_fixtures_dir):
-    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir, use_connection_aware_orchestrator=False)
     harness = SQLExecutionAccuracyHarness(config)
 
     # 1. Direct call raises SQLExecutionAccuracyContractError
@@ -264,7 +264,7 @@ def test_comparator_rejects_invalid_policy():
 
 
 def test_run_result_sorts_case_results_deterministically(temp_fixtures_dir):
-    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir, use_connection_aware_orchestrator=False)
     harness = SQLExecutionAccuracyHarness(config)
 
     case_c = make_test_case(case_id="case_c")
@@ -285,7 +285,7 @@ def test_run_result_sorts_case_results_deterministically(temp_fixtures_dir):
 
 
 def test_harness_run_successful_case(temp_fixtures_dir):
-    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir, use_connection_aware_orchestrator=False)
     harness = SQLExecutionAccuracyHarness(config)
     
     case = make_test_case()
