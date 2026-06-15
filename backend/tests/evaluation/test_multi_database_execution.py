@@ -120,12 +120,15 @@ def test_database_execution_request_requires_fixture_or_connection_ref():
 
 
 def test_database_execution_result_is_frozen():
+    import hashlib
+    sql = "SELECT 1"
+    sql_hash = hashlib.sha256(sql.encode("utf-8")).hexdigest()
     result = SQLDatabaseExecutionResult(
         version=SQL_MULTI_DATABASE_EXECUTION_VERSION,
         case_id="case_001",
         dialect=SQLDatabaseDialect.SQLITE,
-        sql="SELECT 1",
-        sql_sha256="abc",
+        sql=sql,
+        sql_sha256=sql_hash,
         rows=(),
         row_count=0,
         truncated=False,
@@ -135,6 +138,7 @@ def test_database_execution_result_is_frozen():
     )
     with pytest.raises(FrozenInstanceError):
         result.row_count = 5  # type: ignore
+
 
 
 def test_sqlite_adapter_declares_sqlite_dialect(tmp_path):
@@ -285,3 +289,89 @@ def test_router_routes_sqlite_request_to_sqlite_adapter(tmp_path):
     result = router.execute(request)
     assert result.row_count == 1
     assert result.rows == ({"id": 1, "name": "Alice"},)
+
+
+def test_sqlite_adapter_rejects_explain_only_mode(tmp_path):
+    db_file = tmp_path / "test_fixture.db"
+    conn = sqlite3.connect(db_file)
+    conn.close()
+
+    adapter = SQLiteDatabaseExecutionAdapter(fixtures_dir=str(tmp_path))
+    config = SQLDatabaseExecutionConfig(
+        dialect=SQLDatabaseDialect.SQLITE,
+        execution_mode=SQLExecutionMode.EXPLAIN_ONLY
+    )
+    request = SQLDatabaseExecutionRequest(
+        case_id="case_001",
+        sql="SELECT 1",
+        dialect=SQLDatabaseDialect.SQLITE,
+        fixture_ref="test_fixture",
+        connection_ref=None,
+        config=config
+    )
+    with pytest.raises(SQLMultiDatabaseExecutionContractError) as exc_info:
+        adapter.execute(request)
+    assert "only read_only execution mode" in str(exc_info.value)
+
+
+def test_database_execution_result_rejects_row_count_mismatch():
+    import hashlib
+    sql = "SELECT 1"
+    sql_hash = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+    with pytest.raises(SQLMultiDatabaseExecutionContractError) as exc_info:
+        SQLDatabaseExecutionResult(
+            version=SQL_MULTI_DATABASE_EXECUTION_VERSION,
+            case_id="case_001",
+            dialect=SQLDatabaseDialect.SQLITE,
+            sql=sql,
+            sql_sha256=sql_hash,
+            rows=(),
+            row_count=5,  # Mismatch: row_count=5 but rows is empty
+            truncated=False,
+            execution_error=None,
+            duration_ms=1.2,
+            warnings=()
+        )
+    assert "row_count must equal len(rows)" in str(exc_info.value)
+
+
+def test_database_execution_result_rejects_sql_hash_mismatch():
+    with pytest.raises(SQLMultiDatabaseExecutionContractError) as exc_info:
+        SQLDatabaseExecutionResult(
+            version=SQL_MULTI_DATABASE_EXECUTION_VERSION,
+            case_id="case_001",
+            dialect=SQLDatabaseDialect.SQLITE,
+            sql="SELECT 1",
+            sql_sha256="wrong_hash",
+            rows=(),
+            row_count=0,
+            truncated=False,
+            execution_error=None,
+            duration_ms=1.2,
+            warnings=()
+        )
+    assert "sql_sha256 must match sql" in str(exc_info.value)
+
+
+def test_sqlite_adapter_rejects_fixture_symlink_escape(tmp_path):
+    import os
+    if not hasattr(os, "symlink"):
+        pytest.skip("symlink unsupported")
+
+    fixtures_dir = tmp_path / "fixtures"
+    fixtures_dir.mkdir()
+
+    outside_db = tmp_path / "outside.db"
+    outside_db.touch()
+
+    evil_link = fixtures_dir / "evil.db"
+    try:
+        os.symlink(outside_db, evil_link)
+    except OSError:
+        pytest.skip("symlink privilege/support missing")
+
+    adapter = SQLiteDatabaseExecutionAdapter(fixtures_dir=str(fixtures_dir))
+    with pytest.raises(SQLMultiDatabaseExecutionContractError) as exc_info:
+        adapter._resolve_db_path("evil")
+    assert "escape" in str(exc_info.value)
+

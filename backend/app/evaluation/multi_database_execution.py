@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Tuple, Mapping, Optional
+from typing import Any, Tuple, Optional
+from collections.abc import Mapping
 import hashlib
 import time
 import os
@@ -142,6 +143,10 @@ class SQLDatabaseExecutionResult:
         if not self.sql_sha256 or not isinstance(self.sql_sha256, str) or not self.sql_sha256.strip():
             raise SQLMultiDatabaseExecutionContractError("sql_sha256 cannot be empty")
 
+        expected_hash = hashlib.sha256(self.sql.encode("utf-8")).hexdigest()
+        if self.sql_sha256 != expected_hash:
+            raise SQLMultiDatabaseExecutionContractError("sql_sha256 must match sql")
+
         if not isinstance(self.row_count, int) or isinstance(self.row_count, bool) or self.row_count < 0:
             raise SQLMultiDatabaseExecutionContractError("row_count must be a non-negative integer")
 
@@ -160,8 +165,11 @@ class SQLDatabaseExecutionResult:
             except TypeError:
                 raise SQLMultiDatabaseExecutionContractError("rows must be a tuple")
         for r in self.rows:
-            if not isinstance(r, dict):
+            if not isinstance(r, Mapping):
                 raise SQLMultiDatabaseExecutionContractError("Each row must be a dictionary/mapping")
+
+        if self.row_count != len(self.rows):
+            raise SQLMultiDatabaseExecutionContractError("row_count must equal len(rows)")
 
         if not isinstance(self.warnings, tuple):
             try:
@@ -211,12 +219,12 @@ class SQLiteDatabaseExecutionAdapter(SQLDatabaseExecutionAdapter):
         if os.path.isabs(fixture_ref):
             raise SQLMultiDatabaseExecutionContractError("fixture_ref must be relative to fixtures_dir")
 
-        fixtures_root = os.path.abspath(self.fixtures_dir)
+        fixtures_root = os.path.realpath(self.fixtures_dir)
 
         candidate_names = (f"{fixture_ref}.db", fixture_ref)
         for name in candidate_names:
-            candidate = os.path.abspath(os.path.join(fixtures_root, name))
-            if not candidate.startswith(fixtures_root + os.sep):
+            candidate = os.path.realpath(os.path.join(fixtures_root, name))
+            if os.path.commonpath([fixtures_root, candidate]) != fixtures_root:
                 raise SQLMultiDatabaseExecutionContractError("fixture_ref cannot escape fixtures_dir")
             if os.path.exists(candidate):
                 return candidate
@@ -232,6 +240,11 @@ class SQLiteDatabaseExecutionAdapter(SQLDatabaseExecutionAdapter):
 
         if request.connection_ref is not None:
             raise SQLMultiDatabaseExecutionContractError("SQLite adapter does not support connection_ref")
+
+        if request.config.execution_mode != SQLExecutionMode.READ_ONLY:
+            raise SQLMultiDatabaseExecutionContractError(
+                "SQLite adapter currently supports only read_only execution mode"
+            )
 
         # Resolving fixture path
         db_path = self._resolve_db_path(request.fixture_ref)
