@@ -10,6 +10,21 @@ from app.evaluation.golden_dataset_contract import (
     SQLGoldenDatasetCase,
     SQLResultComparePolicy,
 )
+from app.evaluation.multi_database_execution import (
+    SQLDatabaseDialect,
+    SQLDatabaseExecutionConfig,
+    SQLDatabaseExecutionRequest,
+    SQLDatabaseExecutionRouter,
+    SQLExecutionMode,
+    SQLiteDatabaseExecutionAdapter,
+)
+from app.evaluation.connection_aware_execution import (
+    SQLConnectionAwareExecutionPlanner,
+)
+from app.evaluation.connection_aware_execution_orchestrator import (
+    SQLConnectionAwareExecutionOrchestrator,
+    SQLConnectionAwareExecutionOutcomeStatus,
+)
 
 
 class SQLExecutionAccuracyContractError(ValueError):
@@ -22,6 +37,7 @@ class SQLExecutionAccuracyConfig:
     fixtures_dir: str
     timeout_seconds: float = 2.0
     max_rows: int = 1000
+    use_connection_aware_orchestrator: bool = True
 
     def __post_init__(self):
         if not self.fixtures_dir or not self.fixtures_dir.strip():
@@ -30,6 +46,8 @@ class SQLExecutionAccuracyConfig:
             raise SQLExecutionAccuracyContractError("timeout_seconds must be greater than 0")
         if self.max_rows <= 0:
             raise SQLExecutionAccuracyContractError("max_rows must be greater than 0")
+        if not isinstance(self.use_connection_aware_orchestrator, bool):
+            raise SQLExecutionAccuracyContractError("use_connection_aware_orchestrator must be a boolean")
 
 
 @dataclass(frozen=True)
@@ -287,8 +305,28 @@ def calculate_sha256(sql: Optional[str]) -> str:
 
 
 class SQLExecutionAccuracyHarness:
-    def __init__(self, config: SQLExecutionAccuracyConfig):
+    def __init__(
+        self,
+        config: SQLExecutionAccuracyConfig,
+        orchestrator: Optional[SQLConnectionAwareExecutionOrchestrator] = None,
+    ):
         self.config = config
+
+        if config.use_connection_aware_orchestrator:
+            if orchestrator is None:
+                # Auto-construct default SQLite fixture orchestrator
+                planner = SQLConnectionAwareExecutionPlanner()
+                adapter = SQLiteDatabaseExecutionAdapter(fixtures_dir=config.fixtures_dir)
+                router = SQLDatabaseExecutionRouter(adapters=(adapter,))
+                orchestrator = SQLConnectionAwareExecutionOrchestrator(
+                    planner=planner,
+                    router=router,
+                )
+            if not isinstance(orchestrator, SQLConnectionAwareExecutionOrchestrator):
+                raise SQLExecutionAccuracyContractError(
+                    "orchestrator must be a SQLConnectionAwareExecutionOrchestrator instance"
+                )
+        self.orchestrator = orchestrator
 
     def _resolve_db_path(self, fixture_ref: str) -> str:
         """Find and validate local sqlite database file under configured fixtures directory."""
@@ -298,24 +336,229 @@ class SQLExecutionAccuracyHarness:
         if os.path.isabs(fixture_ref):
             raise SQLExecutionAccuracyContractError("fixture_ref must be relative to fixtures_dir")
 
-        fixtures_root = os.path.abspath(self.config.fixtures_dir)
+        fixtures_root = os.path.realpath(self.config.fixtures_dir)
 
         candidate_names = (f"{fixture_ref}.db", fixture_ref)
         for name in candidate_names:
-            candidate = os.path.abspath(os.path.join(fixtures_root, name))
-            if not candidate.startswith(fixtures_root + os.sep):
+            candidate = os.path.realpath(os.path.join(fixtures_root, name))
+            if os.path.commonpath([fixtures_root, candidate]) != fixtures_root:
                 raise SQLExecutionAccuracyContractError("fixture_ref cannot escape fixtures_dir")
             if os.path.exists(candidate):
                 return candidate
 
         raise SQLExecutionAccuracyContractError(f"Fixture database not found: '{fixture_ref}'")
 
-    def run_case(self, case: SQLGoldenDatasetCase, predicted_sql: str) -> SQLExecutionAccuracyCaseResult:
-        """Executes a single predicted SQL query against DB fixture and compares result."""
-        # 1. Validate empty predicted SQL
-        if not predicted_sql or not predicted_sql.strip():
-            raise SQLExecutionAccuracyContractError("predicted_sql cannot be empty")
+    def _build_execution_request(
+        self,
+        case: SQLGoldenDatasetCase,
+        predicted_sql: str,
+    ) -> SQLDatabaseExecutionRequest:
+        """Build a SQLDatabaseExecutionRequest from a golden dataset case."""
+        try:
+            dialect = SQLDatabaseDialect(case.dialect)
+        except ValueError:
+            raise SQLExecutionAccuracyContractError(f"Invalid dialect in case: {case.dialect}")
 
+        exec_config = SQLDatabaseExecutionConfig(
+            dialect=dialect,
+            timeout_seconds=self.config.timeout_seconds,
+            max_rows=self.config.max_rows,
+            execution_mode=SQLExecutionMode.READ_ONLY,
+        )
+
+        return SQLDatabaseExecutionRequest(
+            case_id=case.case_id,
+            sql=predicted_sql,
+            dialect=dialect,
+            fixture_ref=case.fixture_ref,
+            connection_ref=None,
+            config=exec_config,
+        )
+
+    def _run_case_via_orchestrator(
+        self, case: SQLGoldenDatasetCase, predicted_sql: str
+    ) -> SQLExecutionAccuracyCaseResult:
+        """Execute predicted SQL via connection-aware orchestrator and compare results."""
+        start_time = time.monotonic()
+        warnings_list = []
+
+        # 1. Build execution request
+        try:
+            request = self._build_execution_request(case, predicted_sql)
+        except Exception as e:
+            duration_ms = (time.monotonic() - start_time) * 1000.0
+            return SQLExecutionAccuracyCaseResult(
+                case_id=case.case_id,
+                dialect=case.dialect,
+                fixture_ref=case.fixture_ref,
+                predicted_sql=predicted_sql,
+                predicted_sql_sha256=calculate_sha256(predicted_sql),
+                gold_sql_sha256=calculate_sha256(case.gold_sql),
+                passed=False,
+                comparison_policy=str(case.result_compare_policy),
+                expected_row_count=0,
+                actual_row_count=0,
+                normalized_expected_result=None,
+                normalized_actual_result=None,
+                execution_error=f"Request build failed: {e}",
+                duration_ms=duration_ms,
+                warnings=(),
+            )
+
+        # 2. Execute via orchestrator
+        outcome = self.orchestrator.execute(request)
+
+        # 3. Map outcome status
+        if outcome.status == SQLConnectionAwareExecutionOutcomeStatus.BLOCKED_LIVE_CONNECTION:
+            duration_ms = (time.monotonic() - start_time) * 1000.0
+            return SQLExecutionAccuracyCaseResult(
+                case_id=case.case_id,
+                dialect=case.dialect,
+                fixture_ref=case.fixture_ref,
+                predicted_sql=predicted_sql,
+                predicted_sql_sha256=calculate_sha256(predicted_sql),
+                gold_sql_sha256=calculate_sha256(case.gold_sql),
+                passed=False,
+                comparison_policy=str(case.result_compare_policy),
+                expected_row_count=None,
+                actual_row_count=None,
+                normalized_expected_result=None,
+                normalized_actual_result=None,
+                execution_error="blocked_live_connection",
+                duration_ms=duration_ms,
+                warnings=(),
+            )
+
+        if outcome.status == SQLConnectionAwareExecutionOutcomeStatus.REJECTED:
+            duration_ms = (time.monotonic() - start_time) * 1000.0
+            return SQLExecutionAccuracyCaseResult(
+                case_id=case.case_id,
+                dialect=case.dialect,
+                fixture_ref=case.fixture_ref,
+                predicted_sql=predicted_sql,
+                predicted_sql_sha256=calculate_sha256(predicted_sql),
+                gold_sql_sha256=calculate_sha256(case.gold_sql),
+                passed=False,
+                comparison_policy=str(case.result_compare_policy),
+                expected_row_count=None,
+                actual_row_count=None,
+                normalized_expected_result=None,
+                normalized_actual_result=None,
+                execution_error=outcome.error or "rejected",
+                duration_ms=duration_ms,
+                warnings=(),
+            )
+
+        # 4. EXECUTED — extract actual result from execution_result
+        actual_row_count = None
+        normalized_actual_result = None
+        predicted_error = None
+
+        if outcome.execution_result is not None:
+            if outcome.execution_result.execution_error is not None:
+                predicted_error = outcome.execution_result.execution_error
+                actual_row_count = 0
+            else:
+                try:
+                    rows_as_dicts = [dict(r) for r in outcome.execution_result.rows]
+                    normalized_actual_result = SQLExecutionResultComparator.canonicalize_result(
+                        rows_as_dicts
+                    )
+                    actual_row_count = len(normalized_actual_result)
+                except Exception as e:
+                    predicted_error = f"Result canonicalization failed: {e}"
+                    actual_row_count = 0
+        else:
+            predicted_error = "No execution result in EXECUTED outcome"
+            actual_row_count = 0
+
+        # 5. Resolve expected result (same logic as legacy path)
+        normalized_expected_result = None
+        expected_row_count = None
+        gold_error = None
+        db_path = None
+
+        if case.expected_result is not None:
+            try:
+                normalized_expected_result = SQLExecutionResultComparator.canonicalize_result(
+                    case.expected_result
+                )
+                expected_row_count = len(normalized_expected_result)
+            except Exception as e:
+                gold_error = f"Expected result canonicalization failed: {e}"
+                expected_row_count = 0
+        elif case.gold_sql:
+            try:
+                db_path = self._resolve_db_path(case.fixture_ref)
+                gold_sandbox = ReadOnlySqlSandbox(
+                    db_path,
+                    timeout_seconds=self.config.timeout_seconds,
+                    max_rows=self.config.max_rows,
+                )
+                gold_result = gold_sandbox.execute(case.gold_sql)
+                normalized_expected_result = SQLExecutionResultComparator.canonicalize_result(
+                    gold_result
+                )
+                expected_row_count = len(normalized_expected_result)
+            except Exception as e:
+                gold_error = f"Gold SQL execution failed: {e}"
+                expected_row_count = 0
+        else:
+            gold_error = "No expected_result or gold_sql available for case verification"
+            expected_row_count = 0
+
+        # 6. Compare
+        passed = False
+        execution_error = None
+
+        if predicted_error:
+            passed = False
+            execution_error = predicted_error
+        elif gold_error:
+            passed = False
+            execution_error = gold_error
+        else:
+            if case.result_compare_policy == SQLResultComparePolicy.CUSTOM:
+                warnings_list.append(
+                    "Custom compare policy mapped to default (exact_ordered or exact_unordered)."
+                )
+            try:
+                passed = SQLExecutionResultComparator.compare(
+                    actual=normalized_actual_result,
+                    expected=normalized_expected_result,
+                    policy=case.result_compare_policy,
+                    order_sensitive=case.order_sensitive,
+                    tolerance_policy=case.tolerance_policy,
+                )
+                execution_error = None
+            except Exception as e:
+                passed = False
+                execution_error = f"Comparison execution failed: {e}"
+
+        duration_ms = (time.monotonic() - start_time) * 1000.0
+
+        return SQLExecutionAccuracyCaseResult(
+            case_id=case.case_id,
+            dialect=case.dialect,
+            fixture_ref=case.fixture_ref,
+            predicted_sql=predicted_sql,
+            predicted_sql_sha256=calculate_sha256(predicted_sql),
+            gold_sql_sha256=calculate_sha256(case.gold_sql),
+            passed=passed,
+            comparison_policy=str(case.result_compare_policy),
+            expected_row_count=expected_row_count,
+            actual_row_count=actual_row_count,
+            normalized_expected_result=normalized_expected_result,
+            normalized_actual_result=normalized_actual_result,
+            execution_error=execution_error,
+            duration_ms=duration_ms,
+            warnings=tuple(warnings_list),
+        )
+
+    def _run_case_legacy(
+        self, case: SQLGoldenDatasetCase, predicted_sql: str
+    ) -> SQLExecutionAccuracyCaseResult:
+        """Legacy direct sandbox execution path (use_connection_aware_orchestrator=False)."""
         start_time = time.monotonic()
         warnings_list = []
         db_path = None
@@ -437,6 +680,17 @@ class SQLExecutionAccuracyHarness:
             duration_ms=duration_ms,
             warnings=tuple(warnings_list),
         )
+
+    def run_case(self, case: SQLGoldenDatasetCase, predicted_sql: str) -> SQLExecutionAccuracyCaseResult:
+        """Executes a single predicted SQL query against DB fixture and compares result."""
+        # 1. Validate empty predicted SQL
+        if not predicted_sql or not predicted_sql.strip():
+            raise SQLExecutionAccuracyContractError("predicted_sql cannot be empty")
+
+        if self.config.use_connection_aware_orchestrator:
+            return self._run_case_via_orchestrator(case, predicted_sql)
+        else:
+            return self._run_case_legacy(case, predicted_sql)
 
     def run_harness(self, cases: List[SQLGoldenDatasetCase], predicted_sqls: Dict[str, str]) -> SQLExecutionAccuracyRunResult:
         """Runs the harness on a batch of evaluation cases and aggregates results."""
