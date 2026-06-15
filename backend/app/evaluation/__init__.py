@@ -54,6 +54,19 @@ from .regression_dashboard import (
     SQLRegressionDashboardConfig,
     SQLRegressionDashboardBuilder,
 )
+from .multi_database_execution import (
+    SQL_MULTI_DATABASE_EXECUTION_VERSION,
+    SQLDatabaseDialect,
+    SQLExecutionMode,
+    SQLExecutionAdapterCapability,
+    SQLDatabaseExecutionConfig,
+    SQLDatabaseExecutionRequest,
+    SQLDatabaseExecutionResult,
+    SQLDatabaseExecutionAdapter,
+    SQLiteDatabaseExecutionAdapter,
+    SQLDatabaseExecutionRouter,
+    SQLMultiDatabaseExecutionContractError,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -102,5 +115,16 @@ __all__ = [
     "SQLRegressionDashboardReport",
     "SQLRegressionDashboardConfig",
     "SQLRegressionDashboardBuilder",
+    "SQL_MULTI_DATABASE_EXECUTION_VERSION",
+    "SQLDatabaseDialect",
+    "SQLExecutionMode",
+    "SQLExecutionAdapterCapability",
+    "SQLDatabaseExecutionConfig",
+    "SQLDatabaseExecutionRequest",
+    "SQLDatabaseExecutionResult",
+    "SQLDatabaseExecutionAdapter",
+    "SQLiteDatabaseExecutionAdapter",
+    "SQLDatabaseExecutionRouter",
+    "SQLMultiDatabaseExecutionContractError",
 ]
 
