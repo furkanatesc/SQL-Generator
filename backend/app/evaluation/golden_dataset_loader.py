@@ -1,6 +1,7 @@
 import json
 import os
 import yaml
+from dataclasses import fields
 from typing import Any, Dict
 
 from .golden_dataset_contract import (
@@ -8,6 +9,15 @@ from .golden_dataset_contract import (
     SQLGoldenDatasetCase,
     SQLGoldenDatasetContractError,
     SQLGoldenDatasetManifest,
+)
+
+REQUIRED_FIELDS = (
+    "case_id",
+    "question",
+    "dialect",
+    "schema_snapshot_id",
+    "fixture_ref",
+    "gold_sql",
 )
 
 
@@ -18,7 +28,10 @@ class SQLGoldenDatasetLoader:
         if not isinstance(data, dict):
             raise SQLGoldenDatasetContractError("Manifest data must be a dictionary")
         
-        version = data.get("version", SQL_GOLDEN_DATASET_VERSION)
+        if "version" not in data:
+            raise SQLGoldenDatasetContractError("Manifest data must contain a 'version' field")
+        version = data["version"]
+        
         raw_cases = data.get("cases")
         
         if raw_cases is None:
@@ -29,17 +42,7 @@ class SQLGoldenDatasetLoader:
             
         cases_list = []
         # Inspect valid fields of SQLGoldenDatasetCase to prevent unknown keys
-        from dataclasses import fields
         valid_fields = {f.name for f in fields(SQLGoldenDatasetCase)}
-        
-        required_fields = {
-            "case_id",
-            "question",
-            "dialect",
-            "schema_snapshot_id",
-            "fixture_ref",
-            "gold_sql",
-        }
 
         for raw_case in raw_cases:
             if not isinstance(raw_case, dict):
@@ -50,8 +53,8 @@ class SQLGoldenDatasetLoader:
                 if k not in valid_fields:
                     raise SQLGoldenDatasetContractError(f"Unknown field '{k}' in case schema")
             
-            # Check for missing required fields explicitly
-            for rf in required_fields:
+            # Check for missing required fields explicitly in deterministic order
+            for rf in REQUIRED_FIELDS:
                 if rf not in raw_case or raw_case[rf] is None:
                     raise SQLGoldenDatasetContractError(f"{rf} cannot be empty")
             

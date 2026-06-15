@@ -118,3 +118,46 @@ def test_loader_rejects_nondeterministic_or_invalid_manifest(invalid_content, er
     with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
         SQLGoldenDatasetLoader.load_from_json(invalid_content)
     assert error_snippet in str(exc_info.value)
+
+
+def test_loader_rejects_missing_manifest_version():
+    content = '{"cases": []}'
+    with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
+        SQLGoldenDatasetLoader.load_from_json(content)
+    assert "Manifest data must contain a 'version' field" in str(exc_info.value)
+
+
+def test_loader_missing_required_fields_error_order_is_deterministic():
+    # If case_id and question are both missing, case_id should be checked first
+    raw_data = {
+        "version": "sql_golden_dataset_v2",
+        "cases": [
+            {
+                # case_id and question are missing
+                "dialect": "sqlite",
+                "schema_snapshot_id": "snap_01",
+                "fixture_ref": "fix_01",
+                "gold_sql": "SELECT 1;",
+            }
+        ]
+    }
+    with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
+        SQLGoldenDatasetLoader.load_from_dict(raw_data)
+    assert "case_id cannot be empty" in str(exc_info.value)
+
+    # If question and dialect are missing (but case_id is present), question should be checked next
+    raw_data_2 = {
+        "version": "sql_golden_dataset_v2",
+        "cases": [
+            {
+                "case_id": "c1",
+                # question and dialect are missing
+                "schema_snapshot_id": "snap_01",
+                "fixture_ref": "fix_01",
+                "gold_sql": "SELECT 1;",
+            }
+        ]
+    }
+    with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
+        SQLGoldenDatasetLoader.load_from_dict(raw_data_2)
+    assert "question cannot be empty" in str(exc_info.value)

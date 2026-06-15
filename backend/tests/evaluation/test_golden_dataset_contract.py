@@ -83,6 +83,14 @@ def test_case_rejects_empty_fixture_ref(invalid_fixture):
     assert "fixture_ref cannot be empty" in str(exc_info.value)
 
 
+@pytest.mark.parametrize("invalid_gold_sql", [None, "", "   "])
+def test_case_rejects_empty_gold_sql(invalid_gold_sql):
+    args = make_valid_case_args(gold_sql=invalid_gold_sql)
+    with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
+        SQLGoldenDatasetCase(**args)
+    assert "gold_sql cannot be empty" in str(exc_info.value)
+
+
 def test_case_rejects_invalid_compare_policy():
     args = make_valid_case_args(result_compare_policy="invalid_policy")
     with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
@@ -183,3 +191,58 @@ def test_tags_normalized_to_tuple():
     assert case.risk_tags == ("pii", "slow")
     assert case.operator_tags == ("join",)
     assert case.pii_tags == ()
+
+
+@pytest.mark.parametrize("invalid_tags", [
+    [123, "slow"],
+    ["slow", True],
+    [{"tag": "pii"}],
+    ["slow", None]
+])
+def test_tags_reject_non_string_items(invalid_tags):
+    args = make_valid_case_args(risk_tags=invalid_tags)
+    with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
+        SQLGoldenDatasetCase(**args)
+    assert "must be strings" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("invalid_alt_sql", [
+    [123, "SELECT 1"],
+    ["SELECT 1", False],
+    [{"sql": "SELECT 1"}],
+    ["SELECT 1", None]
+])
+def test_alt_valid_sql_rejects_non_string_items(invalid_alt_sql):
+    args = make_valid_case_args(alt_valid_sql=invalid_alt_sql)
+    with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
+        SQLGoldenDatasetCase(**args)
+    assert "must be strings" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("empty_tags", [
+    ["", "pii"],
+    ["slow", "   "]
+])
+def test_tags_reject_empty_items(empty_tags):
+    args = make_valid_case_args(risk_tags=empty_tags)
+    with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
+        SQLGoldenDatasetCase(**args)
+    assert "Empty or whitespace string is not allowed" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("empty_alt_sql", [
+    ["", "SELECT 1"],
+    ["SELECT 1", "   "]
+])
+def test_alt_valid_sql_rejects_empty_items(empty_alt_sql):
+    args = make_valid_case_args(alt_valid_sql=empty_alt_sql)
+    with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
+        SQLGoldenDatasetCase(**args)
+    assert "Empty or whitespace string is not allowed" in str(exc_info.value)
+
+
+def test_alt_valid_sql_rejects_single_string():
+    args = make_valid_case_args(alt_valid_sql="SELECT 1")
+    with pytest.raises(SQLGoldenDatasetContractError) as exc_info:
+        SQLGoldenDatasetCase(**args)
+    assert "must be a collection of strings, not a single string" in str(exc_info.value)

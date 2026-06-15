@@ -38,6 +38,12 @@ class SQLGoldenDatasetConfig:
     supported_dialects: Tuple[str, ...] = ("sqlite", "postgresql", "oracle")
 
 
+def _validate_not_empty(val: Any, name: str):
+    """Helper to validate that a string field is not None, empty, or whitespace-only."""
+    if not val or not isinstance(val, str) or not val.strip():
+        raise SQLGoldenDatasetContractError(f"{name} cannot be empty")
+
+
 @dataclass(frozen=True)
 class SQLGoldenDatasetCase:
     case_id: str
@@ -65,20 +71,17 @@ class SQLGoldenDatasetCase:
 
     def __post_init__(self):
         # Validate required fields are not empty
-        if not self.case_id or not isinstance(self.case_id, str) or not self.case_id.strip():
-            raise SQLGoldenDatasetContractError("case_id cannot be empty")
-        if not self.question or not isinstance(self.question, str) or not self.question.strip():
-            raise SQLGoldenDatasetContractError("question cannot be empty")
-        if not self.schema_snapshot_id or not isinstance(self.schema_snapshot_id, str) or not self.schema_snapshot_id.strip():
-            raise SQLGoldenDatasetContractError("schema_snapshot_id cannot be empty")
-        if not self.fixture_ref or not isinstance(self.fixture_ref, str) or not self.fixture_ref.strip():
-            raise SQLGoldenDatasetContractError("fixture_ref cannot be empty")
+        _validate_not_empty(self.case_id, "case_id")
+        _validate_not_empty(self.question, "question")
+        _validate_not_empty(self.schema_snapshot_id, "schema_snapshot_id")
+        _validate_not_empty(self.fixture_ref, "fixture_ref")
+        _validate_not_empty(self.gold_sql, "gold_sql")
 
-        # Validate dialect is supported
-        supported_dialects = {"sqlite", "postgresql", "oracle"}
-        if self.dialect not in supported_dialects:
+        # Validate dialect is supported according to config
+        config = SQLGoldenDatasetConfig()
+        if self.dialect not in config.supported_dialects:
             raise SQLGoldenDatasetContractError(
-                f"Unsupported dialect '{self.dialect}'. Supported dialects: {sorted(supported_dialects)}"
+                f"Unsupported dialect '{self.dialect}'. Supported dialects: {sorted(config.supported_dialects)}"
             )
 
         # Validate and coerce enums
@@ -109,26 +112,36 @@ class SQLGoldenDatasetCase:
                     "Approved case must have expected_result or a non-empty no_expected_result_reason"
                 )
 
-        # Normalize and sort collections to ensure tuple determinism
-        self._normalize_collection("alt_valid_sql")
-        self._normalize_collection("risk_tags")
-        self._normalize_collection("operator_tags")
-        self._normalize_collection("pii_tags")
+        # Normalize and strictly check collections
+        self._normalize_collection("alt_valid_sql", allow_single_str=False)
+        self._normalize_collection("risk_tags", allow_single_str=True)
+        self._normalize_collection("operator_tags", allow_single_str=True)
+        self._normalize_collection("pii_tags", allow_single_str=True)
 
-    def _normalize_collection(self, field_name: str):
+    def _normalize_collection(self, field_name: str, allow_single_str: bool = False):
         val = getattr(self, field_name)
         if val is None:
             normalized = ()
-        elif isinstance(val, (list, tuple, set)):
-            # convert elements to strings and sort them to guarantee determinism
-            normalized = tuple(sorted(str(x) for x in val))
         elif isinstance(val, str):
+            if not allow_single_str:
+                raise SQLGoldenDatasetContractError(
+                    f"{field_name} must be a collection of strings, not a single string"
+                )
+            if not val.strip():
+                raise SQLGoldenDatasetContractError(f"Empty or whitespace string is not allowed in {field_name}")
             normalized = (val,)
+        elif isinstance(val, (list, tuple, set)):
+            # Verify all items are non-empty strings and not booleans
+            for item in val:
+                if not isinstance(item, str) or isinstance(item, bool):
+                    raise SQLGoldenDatasetContractError(
+                        f"All items in {field_name} must be strings, found type {type(item).__name__}"
+                    )
+                if not item.strip():
+                    raise SQLGoldenDatasetContractError(f"Empty or whitespace string is not allowed in {field_name}")
+            normalized = tuple(sorted(val))
         else:
-            try:
-                normalized = tuple(sorted(str(x) for x in val))
-            except TypeError:
-                raise SQLGoldenDatasetContractError(f"{field_name} must be a collection of strings")
+            raise SQLGoldenDatasetContractError(f"{field_name} must be a collection of strings")
         
         object.__setattr__(self, field_name, normalized)
 
