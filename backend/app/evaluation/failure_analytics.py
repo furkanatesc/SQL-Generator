@@ -16,6 +16,12 @@ class SQLFailureAnalyticsContractError(ValueError):
     pass
 
 
+def _validate_not_empty(val: Any, name: str):
+    """Helper to validate that a string field is not None, empty, or whitespace-only."""
+    if not val or not isinstance(val, str) or not val.strip():
+        raise SQLFailureAnalyticsContractError(f"{name} cannot be empty")
+
+
 class SQLFailureCategory(str, Enum):
     PASSED = "passed"
     EMPTY_PREDICTED_SQL = "empty_predicted_sql"
@@ -29,7 +35,7 @@ class SQLFailureCategory(str, Enum):
     VALUE_MISMATCH = "value_mismatch"
     ORDER_MISMATCH = "order_mismatch"
     NUMERIC_TOLERANCE_MISMATCH = "numeric_tolerance_mismatch"
-    DIALECT_MISMATCH_WARNING = "dialect_mismatch_warning"
+    DIALECT_MISMATCH_WARNING = "dialect_mismatch_warning"  # Warning-only category reserved for signals.
     UNKNOWN_FAILURE = "unknown_failure"
 
 
@@ -42,10 +48,19 @@ class SQLFailureSeverity(str, Enum):
 
 
 @dataclass(frozen=True)
+class SQLFailureAnalyzerConfig:
+    include_zero_count_categories: bool = True
+    include_warning_signals: bool = True
+
+
+@dataclass(frozen=True)
 class SQLFailureSignal:
     name: str
     value: Any
     description: Optional[str] = None
+
+    def __post_init__(self):
+        _validate_not_empty(self.name, "name")
 
 
 @dataclass(frozen=True)
@@ -57,6 +72,47 @@ class SQLFailureAnalysisResult:
     evidence: str
     signals: Tuple[SQLFailureSignal, ...] = field(default_factory=tuple)
 
+    def __post_init__(self):
+        _validate_not_empty(self.case_id, "case_id")
+        _validate_not_empty(self.evidence, "evidence")
+        
+        if not isinstance(self.category, SQLFailureCategory):
+            try:
+                object.__setattr__(self, "category", SQLFailureCategory(self.category))
+            except ValueError:
+                raise SQLFailureAnalyticsContractError(f"Invalid category: {self.category}")
+                
+        if not isinstance(self.severity, SQLFailureSeverity):
+            try:
+                object.__setattr__(self, "severity", SQLFailureSeverity(self.severity))
+            except ValueError:
+                raise SQLFailureAnalyticsContractError(f"Invalid severity: {self.severity}")
+                
+        if not isinstance(self.signals, tuple):
+            try:
+                object.__setattr__(self, "signals", tuple(self.signals))
+            except TypeError:
+                raise SQLFailureAnalyticsContractError("signals must be a collection of SQLFailureSignal")
+                
+        for s in self.signals:
+            if not isinstance(s, SQLFailureSignal):
+                raise SQLFailureAnalyticsContractError("All signals must be instances of SQLFailureSignal")
+
+
+@dataclass(frozen=True)
+class SQLFailureCategoryCount:
+    category: SQLFailureCategory
+    count: int
+
+    def __post_init__(self):
+        if not isinstance(self.category, SQLFailureCategory):
+            try:
+                object.__setattr__(self, "category", SQLFailureCategory(self.category))
+            except ValueError:
+                raise SQLFailureAnalyticsContractError(f"Invalid category: {self.category}")
+        if self.count < 0:
+            raise SQLFailureAnalyticsContractError("Count cannot be negative")
+
 
 @dataclass(frozen=True)
 class SQLFailureAnalyticsRunResult:
@@ -64,9 +120,33 @@ class SQLFailureAnalyticsRunResult:
     passed_cases: int
     failed_cases: int
     pass_rate: float
-    category_counts: Dict[SQLFailureCategory, int]
+    category_counts: Tuple[SQLFailureCategoryCount, ...]
     case_results: Tuple[SQLFailureAnalysisResult, ...]
     duration_ms: float
+
+    def __post_init__(self):
+        if self.total_cases < 0 or self.passed_cases < 0 or self.failed_cases < 0:
+            raise SQLFailureAnalyticsContractError("Case counts cannot be negative")
+        
+        if not isinstance(self.category_counts, tuple):
+            try:
+                object.__setattr__(self, "category_counts", tuple(self.category_counts))
+            except TypeError:
+                raise SQLFailureAnalyticsContractError("category_counts must be a tuple")
+                
+        for c in self.category_counts:
+            if not isinstance(c, SQLFailureCategoryCount):
+                raise SQLFailureAnalyticsContractError("All category_counts items must be SQLFailureCategoryCount")
+
+        if not isinstance(self.case_results, tuple):
+            try:
+                object.__setattr__(self, "case_results", tuple(self.case_results))
+            except TypeError:
+                raise SQLFailureAnalyticsContractError("case_results must be a tuple")
+                
+        for r in self.case_results:
+            if not isinstance(r, SQLFailureAnalysisResult):
+                raise SQLFailureAnalyticsContractError("All case_results items must be SQLFailureAnalysisResult")
 
 
 class SQLFailureAnalyzer:
@@ -207,19 +287,20 @@ class SQLFailureAnalyzer:
                 signals=tuple(signals),
             )
 
-        # Column shape mismatch (keys are different)
-        if act_res and exp_res:
-            act_cols = set(act_res[0].keys())
-            exp_cols = set(exp_res[0].keys())
-            if act_cols != exp_cols:
-                return SQLFailureAnalysisResult(
-                    case_id=result.case_id,
-                    category=SQLFailureCategory.COLUMN_SHAPE_MISMATCH,
-                    severity=SQLFailureSeverity.MEDIUM,
-                    passed=False,
-                    evidence=f"Column shape mismatch: expected columns {sorted(exp_cols)}, got {sorted(act_cols)}.",
-                    signals=tuple(signals),
-                )
+        # Column shape mismatch - check shape mismatch across ALL rows
+        if len(act_res) == len(exp_res):
+            for i in range(len(act_res)):
+                act_cols = set(act_res[i].keys())
+                exp_cols = set(exp_res[i].keys())
+                if act_cols != exp_cols:
+                    return SQLFailureAnalysisResult(
+                        case_id=result.case_id,
+                        category=SQLFailureCategory.COLUMN_SHAPE_MISMATCH,
+                        severity=SQLFailureSeverity.MEDIUM,
+                        passed=False,
+                        evidence=f"Column shape mismatch on row {i}: expected columns {sorted(exp_cols)}, got {sorted(act_cols)}.",
+                        signals=tuple(signals),
+                    )
 
         # Order mismatch (exact_ordered failed, but exact_unordered passes)
         is_exact_ordered = result.comparison_policy in (
@@ -268,7 +349,11 @@ class SQLFailureAnalyzer:
         )
 
     @classmethod
-    def analyze_run(cls, run_result: SQLExecutionAccuracyRunResult) -> SQLFailureAnalyticsRunResult:
+    def analyze_run(
+        cls,
+        run_result: SQLExecutionAccuracyRunResult,
+        config: Optional[SQLFailureAnalyzerConfig] = None
+    ) -> SQLFailureAnalyticsRunResult:
         """Analyze and classify a complete run result, sorting the list by case_id."""
         if not isinstance(run_result, SQLExecutionAccuracyRunResult):
             raise SQLFailureAnalyticsContractError(
@@ -276,22 +361,31 @@ class SQLFailureAnalyzer:
             )
 
         start_time = time.monotonic()
+        cfg = config or SQLFailureAnalyzerConfig()
+
         results = [cls.analyze_case(r) for r in run_result.case_results]
 
         # Sort results deterministically by case_id
         sorted_results = tuple(sorted(results, key=lambda r: r.case_id))
 
-        # Initialize counts
-        counts = {cat: 0 for cat in SQLFailureCategory}
+        # Initialize counts mapping
+        counts_dict = {cat: 0 for cat in SQLFailureCategory}
         passed_cases = 0
         failed_cases = 0
 
         for r in sorted_results:
-            counts[r.category] += 1
+            counts_dict[r.category] += 1
             if r.passed:
                 passed_cases += 1
             else:
                 failed_cases += 1
+
+        # Format category counts to the structured immutable category_counts tuple
+        category_counts_list = []
+        for cat in SQLFailureCategory:
+            count = counts_dict[cat]
+            if count > 0 or cfg.include_zero_count_categories:
+                category_counts_list.append(SQLFailureCategoryCount(category=cat, count=count))
 
         total = len(sorted_results)
         pass_rate = (passed_cases / total) if total > 0 else 0.0
@@ -302,7 +396,7 @@ class SQLFailureAnalyzer:
             passed_cases=passed_cases,
             failed_cases=failed_cases,
             pass_rate=pass_rate,
-            category_counts=counts,
+            category_counts=tuple(category_counts_list),
             case_results=sorted_results,
             duration_ms=duration_ms,
         )

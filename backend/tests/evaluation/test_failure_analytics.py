@@ -11,6 +11,8 @@ from app.evaluation.failure_analytics import (
     SQLFailureAnalyticsRunResult,
     SQLFailureAnalyzer,
     SQLFailureAnalyticsContractError,
+    SQLFailureAnalyzerConfig,
+    SQLFailureCategoryCount,
 )
 
 
@@ -40,6 +42,15 @@ def test_analyzer_version_is_v1():
     assert SQL_FAILURE_ANALYTICS_VERSION == "sql_failure_analytics_v1"
 
 
+def test_sql_failure_analyzer_config():
+    config = SQLFailureAnalyzerConfig(
+        include_zero_count_categories=False,
+        include_warning_signals=False
+    )
+    assert config.include_zero_count_categories is False
+    assert config.include_warning_signals is False
+
+
 def test_failure_analysis_result_is_frozen():
     res = SQLFailureAnalysisResult(
         case_id="c1",
@@ -49,7 +60,22 @@ def test_failure_analysis_result_is_frozen():
         evidence="passed"
     )
     with pytest.raises((FrozenInstanceError, AttributeError)):
-        res.category = SQLFailureCategory.UNKNOWN_FAILURE
+        res.category = SQLFailureCategory.UNKNOWN_FAILURE  # type: ignore
+
+
+def test_failure_analytics_run_result_category_counts_are_immutable():
+    counts = (SQLFailureCategoryCount(SQLFailureCategory.PASSED, 1),)
+    run = SQLFailureAnalyticsRunResult(
+        total_cases=1,
+        passed_cases=1,
+        failed_cases=0,
+        pass_rate=1.0,
+        category_counts=counts,
+        case_results=(),
+        duration_ms=10.0
+    )
+    with pytest.raises((FrozenInstanceError, AttributeError)):
+        run.category_counts = ()  # type: ignore
 
 
 def test_analyzer_marks_passed_case_as_passed():
@@ -145,6 +171,21 @@ def test_analyzer_classifies_column_shape_mismatch():
         actual_row_count=2,
         normalized_expected_result=[{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}],
         normalized_actual_result=[{"id": 1, "score": 95}, {"id": 2, "score": 80}],
+    )
+    analysis = SQLFailureAnalyzer.analyze_case(res)
+    assert analysis.passed is False
+    assert analysis.category == SQLFailureCategory.COLUMN_SHAPE_MISMATCH
+    assert analysis.severity == SQLFailureSeverity.MEDIUM
+
+
+def test_analyzer_detects_column_shape_mismatch_beyond_first_row():
+    # Columns are identical on first row, but second row differs
+    res = make_mock_case_result(
+        passed=False,
+        expected_row_count=2,
+        actual_row_count=2,
+        normalized_expected_result=[{"id": 1}, {"id": 2, "name": "Bob"}],
+        normalized_actual_result=[{"id": 1}, {"id": 2, "score": 80}],
     )
     analysis = SQLFailureAnalyzer.analyze_case(res)
     assert analysis.passed is False
@@ -260,11 +301,17 @@ def test_failure_analytics_run_result_counts_categories():
     )
 
     analysis_run = SQLFailureAnalyzer.analyze_run(run)
-    counts = analysis_run.category_counts
-    assert counts[SQLFailureCategory.PASSED] == 1
-    assert counts[SQLFailureCategory.EMPTY_PREDICTED_SQL] == 1
-    assert counts[SQLFailureCategory.ROW_COUNT_MISMATCH] == 1
-    assert counts[SQLFailureCategory.SQL_EXECUTION_ERROR] == 0
+    
+    # Locate counts
+    passed_count = next(c.count for c in analysis_run.category_counts if c.category == SQLFailureCategory.PASSED)
+    empty_sql_count = next(c.count for c in analysis_run.category_counts if c.category == SQLFailureCategory.EMPTY_PREDICTED_SQL)
+    row_count_mismatch_count = next(c.count for c in analysis_run.category_counts if c.category == SQLFailureCategory.ROW_COUNT_MISMATCH)
+    sql_error_count = next(c.count for c in analysis_run.category_counts if c.category == SQLFailureCategory.SQL_EXECUTION_ERROR)
+
+    assert passed_count == 1
+    assert empty_sql_count == 1
+    assert row_count_mismatch_count == 1
+    assert sql_error_count == 0
 
 
 def test_analyzer_invalid_arguments_raise_error():
@@ -273,3 +320,66 @@ def test_analyzer_invalid_arguments_raise_error():
 
     with pytest.raises(SQLFailureAnalyticsContractError):
         SQLFailureAnalyzer.analyze_run("invalid_input")  # type: ignore
+
+
+# --- Dataclass Parameter Validation Tests ---
+
+def test_failure_analysis_result_rejects_empty_case_id():
+    with pytest.raises(SQLFailureAnalyticsContractError) as exc:
+        SQLFailureAnalysisResult(
+            case_id="",
+            category=SQLFailureCategory.PASSED,
+            severity=SQLFailureSeverity.INFO,
+            passed=True,
+            evidence="passed"
+        )
+    assert "case_id cannot be empty" in str(exc.value)
+
+
+def test_failure_analysis_result_rejects_invalid_category():
+    with pytest.raises(SQLFailureAnalyticsContractError) as exc:
+        SQLFailureAnalysisResult(
+            case_id="c1",
+            category="invalid_category",  # type: ignore
+            severity=SQLFailureSeverity.INFO,
+            passed=True,
+            evidence="passed"
+        )
+    assert "Invalid category" in str(exc.value)
+
+
+def test_failure_analysis_result_rejects_invalid_severity():
+    with pytest.raises(SQLFailureAnalyticsContractError) as exc:
+        SQLFailureAnalysisResult(
+            case_id="c1",
+            category=SQLFailureCategory.PASSED,
+            severity="wat",  # type: ignore
+            passed=True,
+            evidence="passed"
+        )
+    assert "Invalid severity" in str(exc.value)
+
+
+def test_failure_analysis_result_rejects_empty_evidence():
+    with pytest.raises(SQLFailureAnalyticsContractError) as exc:
+        SQLFailureAnalysisResult(
+            case_id="c1",
+            category=SQLFailureCategory.PASSED,
+            severity=SQLFailureSeverity.INFO,
+            passed=True,
+            evidence="  "
+        )
+    assert "evidence cannot be empty" in str(exc.value)
+
+
+def test_failure_analysis_result_rejects_non_signal_items():
+    with pytest.raises(SQLFailureAnalyticsContractError) as exc:
+        SQLFailureAnalysisResult(
+            case_id="c1",
+            category=SQLFailureCategory.PASSED,
+            severity=SQLFailureSeverity.INFO,
+            passed=True,
+            evidence="passed",
+            signals=("not_a_signal_obj",)  # type: ignore
+        )
+    assert "All signals must be instances of SQLFailureSignal" in str(exc.value)

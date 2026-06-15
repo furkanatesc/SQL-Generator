@@ -26,6 +26,8 @@ from .failure_analytics import (
     SQLFailureAnalyticsRunResult,
     SQLFailureAnalyzer,
     SQLFailureAnalyticsContractError,
+    SQLFailureAnalyzerConfig,
+    SQLFailureCategoryCount,
 )
 
 __all__ = [
@@ -52,4 +54,6 @@ __all__ = [
     "SQLFailureAnalyticsRunResult",
     "SQLFailureAnalyzer",
     "SQLFailureAnalyticsContractError",
+    "SQLFailureAnalyzerConfig",
+    "SQLFailureCategoryCount",
 ]
