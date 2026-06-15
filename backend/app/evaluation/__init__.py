@@ -88,6 +88,14 @@ from .connection_aware_execution import (
     SQLConnectionAwareExecutionPlan,
     SQLConnectionAwareExecutionPlanner,
 )
+from .connection_aware_execution_orchestrator import (
+    SQL_CONNECTION_AWARE_EXECUTION_ORCHESTRATOR_VERSION,
+    SQLConnectionAwareExecutionOrchestratorContractError,
+    SQLConnectionAwareExecutionOrchestratorConfig,
+    SQLConnectionAwareExecutionOutcomeStatus,
+    SQLConnectionAwareExecutionOutcome,
+    SQLConnectionAwareExecutionOrchestrator,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -164,5 +172,11 @@ __all__ = [
     "SQLConnectionAwareExecutionConfig",
     "SQLConnectionAwareExecutionPlan",
     "SQLConnectionAwareExecutionPlanner",
+    "SQL_CONNECTION_AWARE_EXECUTION_ORCHESTRATOR_VERSION",
+    "SQLConnectionAwareExecutionOrchestratorContractError",
+    "SQLConnectionAwareExecutionOrchestratorConfig",
+    "SQLConnectionAwareExecutionOutcomeStatus",
+    "SQLConnectionAwareExecutionOutcome",
+    "SQLConnectionAwareExecutionOrchestrator",
 ]
 
