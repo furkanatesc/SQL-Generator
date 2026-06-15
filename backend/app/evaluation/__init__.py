@@ -67,6 +67,20 @@ from .multi_database_execution import (
     SQLDatabaseExecutionRouter,
     SQLMultiDatabaseExecutionContractError,
 )
+from .connection_abstraction import (
+    SQL_CONNECTION_ABSTRACTION_VERSION,
+    SQLConnectionEnvironment,
+    SQLConnectionAuthMode,
+    SQLConnectionAccessMode,
+    SQLConnectionSecretRef,
+    SQLConnectionEndpoint,
+    SQLConnectionProfile,
+    SQLConnectionRegistry,
+    SQLConnectionResolver,
+    SQLResolvedConnection,
+    SQLConnectionPolicy,
+    SQLConnectionAbstractionContractError,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -126,5 +140,17 @@ __all__ = [
     "SQLiteDatabaseExecutionAdapter",
     "SQLDatabaseExecutionRouter",
     "SQLMultiDatabaseExecutionContractError",
+    "SQL_CONNECTION_ABSTRACTION_VERSION",
+    "SQLConnectionEnvironment",
+    "SQLConnectionAuthMode",
+    "SQLConnectionAccessMode",
+    "SQLConnectionSecretRef",
+    "SQLConnectionEndpoint",
+    "SQLConnectionProfile",
+    "SQLConnectionRegistry",
+    "SQLConnectionResolver",
+    "SQLResolvedConnection",
+    "SQLConnectionPolicy",
+    "SQLConnectionAbstractionContractError",
 ]
 
