@@ -39,6 +39,20 @@ class SQLConnectionSecretRef:
         if not isinstance(self.key, str) or not self.key.strip():
             raise SQLConnectionAbstractionContractError("key cannot be empty")
 
+        if len(self.key) > 100:
+            raise SQLConnectionAbstractionContractError("key is too long to be a valid identifier")
+        if any(c.isspace() for c in self.key):
+            raise SQLConnectionAbstractionContractError("key cannot contain whitespace")
+        if "://" in self.key or "://" in self.provider:
+            raise SQLConnectionAbstractionContractError("key/provider cannot contain URLs or connection strings")
+
+        key_lower = self.key.lower()
+        for pattern in ["password=", "token=", "secret=", "key="]:
+            if pattern in key_lower:
+                raise SQLConnectionAbstractionContractError(
+                    "key cannot contain assignment patterns suggesting raw secret values"
+                )
+
 
 @dataclass(frozen=True)
 class SQLConnectionEndpoint:
@@ -152,6 +166,8 @@ class SQLConnectionRegistry:
     def get_profile(self, connection_ref: str) -> SQLConnectionProfile:
         if not isinstance(connection_ref, str):
             raise SQLConnectionAbstractionContractError("connection_ref must be a string")
+        if not connection_ref.strip():
+            raise SQLConnectionAbstractionContractError("connection_ref cannot be empty")
 
         for p in self.profiles:
             if p.connection_ref == connection_ref:
@@ -162,8 +178,16 @@ class SQLConnectionRegistry:
 
 @dataclass(frozen=True)
 class SQLConnectionPolicy:
-    allowed_environments: Tuple[SQLConnectionEnvironment, ...]
-    allowed_dialects: Tuple[SQLDatabaseDialect, ...]
+    allowed_environments: Tuple[SQLConnectionEnvironment, ...] = (
+        SQLConnectionEnvironment.LOCAL,
+        SQLConnectionEnvironment.DEV,
+        SQLConnectionEnvironment.STAGING,
+    )
+    allowed_dialects: Tuple[SQLDatabaseDialect, ...] = (
+        SQLDatabaseDialect.SQLITE,
+        SQLDatabaseDialect.POSTGRESQL,
+        SQLDatabaseDialect.ORACLE,
+    )
     require_read_only: bool = True
     allow_prod: bool = False
 
@@ -174,13 +198,15 @@ class SQLConnectionPolicy:
             except TypeError:
                 raise SQLConnectionAbstractionContractError("allowed_environments must be a tuple")
 
-        # Validate allowed_environments items are enums
+        normalized_envs = []
         for env in self.allowed_environments:
-            if not isinstance(env, SQLConnectionEnvironment):
-                try:
-                    SQLConnectionEnvironment(env)
-                except ValueError:
-                    raise SQLConnectionAbstractionContractError(f"Invalid allowed environment: {env}")
+            try:
+                normalized_envs.append(
+                    env if isinstance(env, SQLConnectionEnvironment) else SQLConnectionEnvironment(env)
+                )
+            except ValueError:
+                raise SQLConnectionAbstractionContractError(f"Invalid allowed environment: {env}")
+        object.__setattr__(self, "allowed_environments", tuple(normalized_envs))
 
         if not isinstance(self.allowed_dialects, tuple):
             try:
@@ -188,13 +214,15 @@ class SQLConnectionPolicy:
             except TypeError:
                 raise SQLConnectionAbstractionContractError("allowed_dialects must be a tuple")
 
-        # Validate allowed_dialects items are enums
+        normalized_dialects = []
         for d in self.allowed_dialects:
-            if not isinstance(d, SQLDatabaseDialect):
-                try:
-                    SQLDatabaseDialect(d)
-                except ValueError:
-                    raise SQLConnectionAbstractionContractError(f"Invalid allowed dialect: {d}")
+            try:
+                normalized_dialects.append(
+                    d if isinstance(d, SQLDatabaseDialect) else SQLDatabaseDialect(d)
+                )
+            except ValueError:
+                raise SQLConnectionAbstractionContractError(f"Invalid allowed dialect: {d}")
+        object.__setattr__(self, "allowed_dialects", tuple(normalized_dialects))
 
         if not isinstance(self.require_read_only, bool):
             raise SQLConnectionAbstractionContractError("require_read_only must be a boolean")

@@ -308,3 +308,88 @@ def test_resolver_does_not_open_network_connection():
     for mod in forbidden_modules:
         assert f"import {mod}" not in content, f"Forbidden import found: {mod}"
         assert f"from {mod}" not in content, f"Forbidden import found: {mod}"
+
+
+def test_policy_normalizes_allowed_environment_strings():
+    policy = SQLConnectionPolicy(
+        allowed_environments=("dev", "local"),
+        allowed_dialects=(SQLDatabaseDialect.SQLITE,)
+    )
+    assert SQLConnectionEnvironment.DEV in policy.allowed_environments
+    assert SQLConnectionEnvironment.LOCAL in policy.allowed_environments
+    for env in policy.allowed_environments:
+        assert isinstance(env, SQLConnectionEnvironment)
+
+
+def test_policy_normalizes_allowed_dialect_strings():
+    policy = SQLConnectionPolicy(
+        allowed_environments=(SQLConnectionEnvironment.DEV,),
+        allowed_dialects=("sqlite", "postgresql")
+    )
+    assert SQLDatabaseDialect.SQLITE in policy.allowed_dialects
+    assert SQLDatabaseDialect.POSTGRESQL in policy.allowed_dialects
+    for dialect in policy.allowed_dialects:
+        assert isinstance(dialect, SQLDatabaseDialect)
+
+
+def test_resolver_accepts_normalized_string_policy_values():
+    endpoint = SQLConnectionEndpoint(host="localhost", port=5432, database="db")
+    p = SQLConnectionProfile(
+        connection_ref="pg_ref",
+        dialect=SQLDatabaseDialect.POSTGRESQL,
+        environment=SQLConnectionEnvironment.DEV,
+        endpoint=endpoint,
+        access_mode=SQLConnectionAccessMode.READ_ONLY,
+        auth_mode=SQLConnectionAuthMode.NONE,
+        secret_ref=None
+    )
+    registry = SQLConnectionRegistry(profiles=(p,))
+    policy = SQLConnectionPolicy(
+        allowed_environments=("dev", "local"),
+        allowed_dialects=("postgresql", "sqlite"),
+        require_read_only=True,
+        allow_prod=False
+    )
+    resolver = SQLConnectionResolver(registry=registry, policy=policy)
+    resolved = resolver.resolve("pg_ref")
+    assert resolved.connection_ref == "pg_ref"
+
+
+def test_policy_default_rejects_prod():
+    policy = SQLConnectionPolicy()
+    assert SQLConnectionEnvironment.PROD not in policy.allowed_environments
+    assert policy.allow_prod is False
+    assert policy.require_read_only is True
+
+
+def test_secret_ref_rejects_potential_raw_secret_keys():
+    # Long key
+    with pytest.raises(SQLConnectionAbstractionContractError):
+        SQLConnectionSecretRef(provider="vault", key="a" * 101)
+
+    # Whitespace key
+    with pytest.raises(SQLConnectionAbstractionContractError):
+        SQLConnectionSecretRef(provider="vault", key="my password")
+
+    # URL key/provider
+    with pytest.raises(SQLConnectionAbstractionContractError):
+        SQLConnectionSecretRef(provider="vault", key="mysql://user:pass@host/db")
+    with pytest.raises(SQLConnectionAbstractionContractError):
+        SQLConnectionSecretRef(provider="http://vault", key="mykey")
+
+    # Assignment patterns
+    with pytest.raises(SQLConnectionAbstractionContractError):
+        SQLConnectionSecretRef(provider="vault", key="password=abc")
+    with pytest.raises(SQLConnectionAbstractionContractError):
+        SQLConnectionSecretRef(provider="vault", key="token=123")
+    with pytest.raises(SQLConnectionAbstractionContractError):
+        SQLConnectionSecretRef(provider="vault", key="my-secret=xyz")
+
+
+def test_registry_rejects_empty_connection_ref_lookup():
+    registry = SQLConnectionRegistry(profiles=())
+    with pytest.raises(SQLConnectionAbstractionContractError):
+        registry.get_profile("")
+    with pytest.raises(SQLConnectionAbstractionContractError):
+        registry.get_profile("   ")
+
