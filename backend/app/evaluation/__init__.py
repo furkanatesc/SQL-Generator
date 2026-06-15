@@ -42,6 +42,18 @@ from .eval_gate import (
     SQLEvalGateAggregator,
     SQLEvalGateContractError,
 )
+from .regression_dashboard import (
+    SQL_REGRESSION_DASHBOARD_VERSION,
+    SQLRegressionDashboardContractError,
+    SQLRegressionDashboardSeverity,
+    SQLRegressionDashboardMetric,
+    SQLRegressionDashboardFailureBreakdown,
+    SQLRegressionDashboardCaseRow,
+    SQLRegressionDashboardGateSummary,
+    SQLRegressionDashboardReport,
+    SQLRegressionDashboardConfig,
+    SQLRegressionDashboardBuilder,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -80,5 +92,15 @@ __all__ = [
     "SQLEvalGateConfig",
     "SQLEvalGateAggregator",
     "SQLEvalGateContractError",
+    "SQL_REGRESSION_DASHBOARD_VERSION",
+    "SQLRegressionDashboardContractError",
+    "SQLRegressionDashboardSeverity",
+    "SQLRegressionDashboardMetric",
+    "SQLRegressionDashboardFailureBreakdown",
+    "SQLRegressionDashboardCaseRow",
+    "SQLRegressionDashboardGateSummary",
+    "SQLRegressionDashboardReport",
+    "SQLRegressionDashboardConfig",
+    "SQLRegressionDashboardBuilder",
 ]
 
