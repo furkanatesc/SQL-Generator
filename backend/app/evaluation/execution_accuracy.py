@@ -3,24 +3,23 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.sql_sandbox import ReadOnlySqlSandbox
 from app.evaluation.golden_dataset_contract import (
     SQLGoldenDatasetCase,
     SQLResultComparePolicy,
 )
-
-if TYPE_CHECKING:
-    from app.evaluation.connection_aware_execution_orchestrator import (
-        SQLConnectionAwareExecutionOrchestrator,
-    )
-
 from app.evaluation.multi_database_execution import (
     SQLDatabaseDialect,
     SQLDatabaseExecutionConfig,
     SQLDatabaseExecutionRequest,
+    SQLDatabaseExecutionRouter,
     SQLExecutionMode,
+    SQLiteDatabaseExecutionAdapter,
+)
+from app.evaluation.connection_aware_execution import (
+    SQLConnectionAwareExecutionPlanner,
 )
 from app.evaluation.connection_aware_execution_orchestrator import (
     SQLConnectionAwareExecutionOrchestrator,
@@ -315,8 +314,13 @@ class SQLExecutionAccuracyHarness:
 
         if config.use_connection_aware_orchestrator:
             if orchestrator is None:
-                raise SQLExecutionAccuracyContractError(
-                    "orchestrator is required when use_connection_aware_orchestrator is True"
+                # Auto-construct default SQLite fixture orchestrator
+                planner = SQLConnectionAwareExecutionPlanner()
+                adapter = SQLiteDatabaseExecutionAdapter(fixtures_dir=config.fixtures_dir)
+                router = SQLDatabaseExecutionRouter(adapters=(adapter,))
+                orchestrator = SQLConnectionAwareExecutionOrchestrator(
+                    planner=planner,
+                    router=router,
                 )
             if not isinstance(orchestrator, SQLConnectionAwareExecutionOrchestrator):
                 raise SQLExecutionAccuracyContractError(
@@ -332,12 +336,12 @@ class SQLExecutionAccuracyHarness:
         if os.path.isabs(fixture_ref):
             raise SQLExecutionAccuracyContractError("fixture_ref must be relative to fixtures_dir")
 
-        fixtures_root = os.path.abspath(self.config.fixtures_dir)
+        fixtures_root = os.path.realpath(self.config.fixtures_dir)
 
         candidate_names = (f"{fixture_ref}.db", fixture_ref)
         for name in candidate_names:
-            candidate = os.path.abspath(os.path.join(fixtures_root, name))
-            if not candidate.startswith(fixtures_root + os.sep):
+            candidate = os.path.realpath(os.path.join(fixtures_root, name))
+            if os.path.commonpath([fixtures_root, candidate]) != fixtures_root:
                 raise SQLExecutionAccuracyContractError("fixture_ref cannot escape fixtures_dir")
             if os.path.exists(candidate):
                 return candidate
@@ -348,14 +352,8 @@ class SQLExecutionAccuracyHarness:
         self,
         case: SQLGoldenDatasetCase,
         predicted_sql: str,
-        connection_ref: Optional[str] = None,
     ) -> SQLDatabaseExecutionRequest:
-        """Build a SQLDatabaseExecutionRequest from a golden dataset case.
-
-        If connection_ref is provided, it overrides fixture_ref (used for
-        connection-backed execution testing). Otherwise fixture_ref from the
-        case is used.
-        """
+        """Build a SQLDatabaseExecutionRequest from a golden dataset case."""
         try:
             dialect = SQLDatabaseDialect(case.dialect)
         except ValueError:
@@ -367,16 +365,6 @@ class SQLExecutionAccuracyHarness:
             max_rows=self.config.max_rows,
             execution_mode=SQLExecutionMode.READ_ONLY,
         )
-
-        if connection_ref is not None:
-            return SQLDatabaseExecutionRequest(
-                case_id=case.case_id,
-                sql=predicted_sql,
-                dialect=dialect,
-                fixture_ref=None,
-                connection_ref=connection_ref,
-                config=exec_config,
-            )
 
         return SQLDatabaseExecutionRequest(
             case_id=case.case_id,

@@ -133,26 +133,80 @@ def make_orchestrator(fixtures_dir: str) -> SQLConnectionAwareExecutionOrchestra
     )
 
 
-def make_exploding_orchestrator() -> SQLConnectionAwareExecutionOrchestrator:
-    """Create an orchestrator with ExplodingRouter — for connection_ref blocking tests.
+class BlockingOrchestrator(SQLConnectionAwareExecutionOrchestrator):
+    """Fake orchestrator that always returns BLOCKED_LIVE_CONNECTION outcome."""
+    def __init__(self):
+        # Bypass full init
+        pass
 
-    Includes a resolver with a PostgreSQL dev profile so the planner can
-    successfully resolve connection_ref requests. The orchestrator then blocks
-    the request at the live-connection gate without reaching the router.
-    """
-    profile = _make_pg_dev_profile("pg_dev_conn")
-    resolver = _make_resolver_with_profiles(profile)
-    planner = SQLConnectionAwareExecutionPlanner(
-        resolver=resolver,
-        config=SQLConnectionAwareExecutionConfig(allow_live_connection_plans=True),
-    )
-    router = ExplodingRouter()
-    config = SQLConnectionAwareExecutionOrchestratorConfig()
-    return SQLConnectionAwareExecutionOrchestrator(
-        planner=planner,
-        router=router,
-        config=config,
-    )
+    def execute(self, request: SQLDatabaseExecutionRequest):
+        from app.evaluation.connection_aware_execution_orchestrator import SQLConnectionAwareExecutionOutcome
+        from app.evaluation.connection_aware_execution import SQLConnectionAwareExecutionPlan
+        
+        from app.evaluation.connection_abstraction import (
+            SQLResolvedConnection,
+            SQLConnectionEnvironment,
+            SQLConnectionEndpoint,
+            SQLConnectionAccessMode,
+            SQLConnectionAuthMode,
+        )
+        
+        dummy_conn = SQLResolvedConnection(
+            version="sql_connection_abstraction_v1",
+            connection_ref="dummy_conn",
+            dialect=request.dialect,
+            environment=SQLConnectionEnvironment.DEV,
+            endpoint=SQLConnectionEndpoint(host="dummy", port=5432, database="dummy"),
+            access_mode=SQLConnectionAccessMode.READ_ONLY,
+            auth_mode=SQLConnectionAuthMode.NONE,
+            secret_ref=None,
+            max_rows=1000,
+            timeout_seconds=2.0,
+        )
+        
+        # Create a dummy plan to satisfy outcome invariant checks
+        dummy_plan = SQLConnectionAwareExecutionPlan(
+            version="sql_connection_aware_execution_v1",
+            request=request,
+            resolved_connection=dummy_conn,
+            effective_dialect=request.dialect,
+            effective_max_rows=1000,
+            effective_timeout_seconds=2.0,
+            uses_fixture=False,
+            uses_connection=True,
+            can_execute_locally=False,
+            requires_live_connection=True,
+            warnings=(),
+        )
+        
+        return SQLConnectionAwareExecutionOutcome(
+            version="sql_connection_aware_execution_orchestrator_v1",
+            request=request,
+            plan=dummy_plan,
+            status=SQLConnectionAwareExecutionOutcomeStatus.BLOCKED_LIVE_CONNECTION,
+            execution_result=None,
+            error="Live connection execution is blocked in this version",
+            warnings=(),
+        )
+
+
+class RejectingOrchestrator(SQLConnectionAwareExecutionOrchestrator):
+    """Fake orchestrator that always returns REJECTED outcome."""
+    def __init__(self):
+        # Bypass full init
+        pass
+
+    def execute(self, request: SQLDatabaseExecutionRequest):
+        from app.evaluation.connection_aware_execution_orchestrator import SQLConnectionAwareExecutionOutcome
+        return SQLConnectionAwareExecutionOutcome(
+            version="sql_connection_aware_execution_orchestrator_v1",
+            request=request,
+            plan=None,
+            status=SQLConnectionAwareExecutionOutcomeStatus.REJECTED,
+            execution_result=None,
+            error="planner rejected request",
+            warnings=(),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -166,12 +220,6 @@ class TestExecutionAccuracyUsesOrchestratorByDefault:
     def test_default_config_has_orchestrator_enabled(self):
         config = SQLExecutionAccuracyConfig(fixtures_dir="data")
         assert config.use_connection_aware_orchestrator is True
-
-    def test_harness_requires_orchestrator_when_enabled(self):
-        config = SQLExecutionAccuracyConfig(fixtures_dir="data")
-        with pytest.raises(SQLExecutionAccuracyContractError) as exc_info:
-            SQLExecutionAccuracyHarness(config)
-        assert "orchestrator is required" in str(exc_info.value)
 
     def test_harness_accepts_orchestrator_when_enabled(self, temp_fixtures_dir):
         config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
@@ -215,7 +263,19 @@ class TestExecutionAccuracyBlocksConnectionRefWithoutRouterCall:
     def test_connection_ref_does_not_reach_router(self, temp_fixtures_dir):
         """Build a connection_ref request directly through the orchestrator
         to verify the router is not called."""
-        orchestrator = make_exploding_orchestrator()
+        # Create an orchestrator with a real planner+resolver to properly plan it,
+        # but with ExplodingRouter to ensure router isn't hit
+        profile = _make_pg_dev_profile("pg_dev_conn")
+        resolver = _make_resolver_with_profiles(profile)
+        planner = SQLConnectionAwareExecutionPlanner(
+            resolver=resolver,
+            config=SQLConnectionAwareExecutionConfig(allow_live_connection_plans=True),
+        )
+        router = ExplodingRouter()
+        config_orch = SQLConnectionAwareExecutionOrchestratorConfig()
+        orchestrator = SQLConnectionAwareExecutionOrchestrator(
+            planner=planner, router=router, config=config_orch
+        )
 
         config = SQLDatabaseExecutionConfig(
             dialect=SQLDatabaseDialect.POSTGRESQL,
@@ -244,67 +304,42 @@ class TestExecutionAccuracyMapsBlockedLiveConnectionToFailedResult:
     """test_execution_accuracy_maps_blocked_live_connection_to_failed_result"""
 
     def test_blocked_outcome_produces_failed_accuracy_result(self, temp_fixtures_dir):
-        """Simulate a case that triggers BLOCKED_LIVE_CONNECTION through
-        the harness _run_case_via_orchestrator path via _build_execution_request."""
-        orchestrator = make_exploding_orchestrator()
+        """Simulate a case that triggers BLOCKED_LIVE_CONNECTION and verify it's caught by harness."""
+        orchestrator = BlockingOrchestrator()
 
         config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
         harness = SQLExecutionAccuracyHarness(config, orchestrator=orchestrator)
 
-        # Build a request manually through orchestrator to simulate blocked
-        exec_config = SQLDatabaseExecutionConfig(
-            dialect=SQLDatabaseDialect.POSTGRESQL,
-            timeout_seconds=2.0,
-            max_rows=1000,
-            execution_mode=SQLExecutionMode.READ_ONLY,
-        )
-        request = SQLDatabaseExecutionRequest(
-            case_id="conn_blocked_1",
-            sql="SELECT 1",
-            dialect=SQLDatabaseDialect.POSTGRESQL,
-            fixture_ref=None,
-            connection_ref="pg_dev_conn",
-            config=exec_config,
-        )
+        case = make_test_case()
+        predicted_sql = "SELECT 1"
 
-        outcome = orchestrator.execute(request)
-        assert outcome.status == SQLConnectionAwareExecutionOutcomeStatus.BLOCKED_LIVE_CONNECTION
+        result = harness.run_case(case, predicted_sql)
 
-        # The accuracy result should be failed
-        assert outcome.execution_result is None
-        assert outcome.error is not None
-        assert "blocked" in outcome.error.lower() or "live" in outcome.error.lower()
+        assert result.passed is False
+        assert result.execution_error == "blocked_live_connection"
+        assert result.actual_row_count is None
+        assert result.normalized_actual_result is None
 
 
 class TestExecutionAccuracyMapsRejectedOutcomeToFailedResult:
     """test_execution_accuracy_maps_rejected_outcome_to_failed_result"""
 
     def test_rejected_outcome_produces_failed_accuracy_result(self, temp_fixtures_dir):
-        """Create a case that will be rejected by the planner (e.g., EXPLAIN_ONLY mode)."""
-        orchestrator = make_orchestrator(temp_fixtures_dir)
+        """Simulate a case that gets REJECTED by planner and verify harness failure."""
+        orchestrator = RejectingOrchestrator()
+        
         config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir)
         harness = SQLExecutionAccuracyHarness(config, orchestrator=orchestrator)
 
-        # Build a request that the planner will reject (EXPLAIN_ONLY mode)
-        exec_config = SQLDatabaseExecutionConfig(
-            dialect=SQLDatabaseDialect.SQLITE,
-            timeout_seconds=2.0,
-            max_rows=1000,
-            execution_mode=SQLExecutionMode.EXPLAIN_ONLY,
-        )
-        request = SQLDatabaseExecutionRequest(
-            case_id="rejected_1",
-            sql="SELECT 1",
-            dialect=SQLDatabaseDialect.SQLITE,
-            fixture_ref="test_db",
-            connection_ref=None,
-            config=exec_config,
-        )
+        case = make_test_case()
+        predicted_sql = "SELECT 1"
 
-        outcome = orchestrator.execute(request)
-        assert outcome.status == SQLConnectionAwareExecutionOutcomeStatus.REJECTED
-        assert outcome.execution_result is None
-        assert outcome.error is not None
+        result = harness.run_case(case, predicted_sql)
+
+        assert result.passed is False
+        assert result.execution_error == "planner rejected request"
+        assert result.actual_row_count is None
+        assert result.normalized_actual_result is None
 
 
 class TestExecutionAccuracyPreservesSuccessfulSQLiteComparison:

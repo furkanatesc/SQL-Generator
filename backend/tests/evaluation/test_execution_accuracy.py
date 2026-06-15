@@ -137,6 +137,23 @@ def test_harness_rejects_absolute_fixture_ref(temp_fixtures_dir):
     assert "fixture_ref must be relative to fixtures_dir" in case_result.execution_error
 
 
+def test_harness_rejects_symlink_fixture_escape(temp_fixtures_dir):
+    # Try to create a symlink to a parent directory (e.g. /tmp)
+    # The fixture_ref would be "escape_link/passwd"
+    escape_link_path = os.path.join(temp_fixtures_dir, "escape_link")
+    try:
+        os.symlink(os.path.dirname(temp_fixtures_dir), escape_link_path, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symlinks not supported on this OS/filesystem")
+
+    config = SQLExecutionAccuracyConfig(fixtures_dir=temp_fixtures_dir, use_connection_aware_orchestrator=False)
+    harness = SQLExecutionAccuracyHarness(config)
+
+    with pytest.raises(SQLExecutionAccuracyContractError) as exc_info:
+        harness._resolve_db_path(os.path.join("escape_link", "some_file"))
+    assert "fixture_ref cannot escape fixtures_dir" in str(exc_info.value)
+
+
 def test_comparator_exact_ordered():
     # Exact ordered compares index-by-index and is key-order independent
     actual = [{"name": "Alice", "id": 1}, {"name": "Bob", "id": 2}]
