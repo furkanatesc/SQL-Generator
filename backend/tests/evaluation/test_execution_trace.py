@@ -127,7 +127,7 @@ def test_execution_trace_record_is_immutable():
         execution_mode="read_only",
         has_fixture_ref=True,
         has_connection_ref=False,
-        sql_sha256="hash",
+        sql_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         plan_status="planned",
         outcome_status="executed",
         warnings=(),
@@ -144,7 +144,7 @@ def test_execution_trace_serialization_is_deterministic():
         execution_mode="read_only",
         has_fixture_ref=True,
         has_connection_ref=False,
-        sql_sha256="hash",
+        sql_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         plan_status="planned",
         outcome_status="executed",
         warnings=("warn1", "warn2"),
@@ -163,7 +163,7 @@ def test_execution_trace_serialization_is_deterministic():
     assert d1["execution_mode"] == "read_only"
     assert d1["has_fixture_ref"] is True
     assert d1["has_connection_ref"] is False
-    assert d1["sql_sha256"] == "hash"
+    assert d1["sql_sha256"] == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     assert d1["plan_status"] == "planned"
     assert d1["outcome_status"] == "executed"
     assert d1["warnings"] == ["warn1", "warn2"]
@@ -280,3 +280,84 @@ def test_execution_trace_does_not_import_network_or_db_drivers():
         check=True
     )
     assert "FORBIDDEN" not in res.stdout, f"Importing execution_trace imported forbidden driver: {res.stdout}"
+
+
+def test_execution_trace_rejects_invalid_plan_status():
+    with pytest.raises(SQLExecutionTraceContractError, match="Invalid plan_status"):
+        SQLExecutionTraceRecord(
+            version=SQL_EXECUTION_TRACE_VERSION,
+            case_id="c1",
+            dialect="sqlite",
+            execution_mode="read_only",
+            has_fixture_ref=True,
+            has_connection_ref=False,
+            sql_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            plan_status="maybe_planned",
+            outcome_status="executed",
+            warnings=(),
+        )
+
+
+def test_execution_trace_rejects_invalid_outcome_status():
+    with pytest.raises(SQLExecutionTraceContractError, match="Invalid outcome_status"):
+        SQLExecutionTraceRecord(
+            version=SQL_EXECUTION_TRACE_VERSION,
+            case_id="c1",
+            dialect="sqlite",
+            execution_mode="read_only",
+            has_fixture_ref=True,
+            has_connection_ref=False,
+            sql_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            plan_status="planned",
+            outcome_status="silently_failed",
+            warnings=(),
+        )
+
+
+def test_execution_trace_rejects_non_string_warning():
+    with pytest.raises(SQLExecutionTraceContractError, match="All warnings must be strings"):
+        SQLExecutionTraceRecord(
+            version=SQL_EXECUTION_TRACE_VERSION,
+            case_id="c1",
+            dialect="sqlite",
+            execution_mode="read_only",
+            has_fixture_ref=True,
+            has_connection_ref=False,
+            sql_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            plan_status="planned",
+            outcome_status="executed",
+            warnings=("good_warning", 123),  # type: ignore
+        )
+
+
+def test_execution_trace_rejects_negative_duration_ms():
+    with pytest.raises(SQLExecutionTraceContractError, match="duration_ms cannot be negative"):
+        SQLExecutionTraceRecord(
+            version=SQL_EXECUTION_TRACE_VERSION,
+            case_id="c1",
+            dialect="sqlite",
+            execution_mode="read_only",
+            has_fixture_ref=True,
+            has_connection_ref=False,
+            sql_sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            plan_status="planned",
+            outcome_status="executed",
+            warnings=(),
+            duration_ms=-10.0,
+        )
+
+
+def test_execution_trace_rejects_invalid_sql_sha256():
+    with pytest.raises(SQLExecutionTraceContractError, match="sql_sha256 must be a lowercase SHA-256 hex digest"):
+        SQLExecutionTraceRecord(
+            version=SQL_EXECUTION_TRACE_VERSION,
+            case_id="c1",
+            dialect="sqlite",
+            execution_mode="read_only",
+            has_fixture_ref=True,
+            has_connection_ref=False,
+            sql_sha256="invalid-sha",
+            plan_status="planned",
+            outcome_status="executed",
+            warnings=(),
+        )

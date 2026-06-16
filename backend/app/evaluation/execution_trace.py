@@ -41,14 +41,28 @@ class SQLExecutionTraceRecord:
             raise SQLExecutionTraceContractError("has_fixture_ref must be a boolean")
         if not isinstance(self.has_connection_ref, bool):
             raise SQLExecutionTraceContractError("has_connection_ref must be a boolean")
-        if not self.sql_sha256 or not isinstance(self.sql_sha256, str) or not self.sql_sha256.strip():
-            raise SQLExecutionTraceContractError("sql_sha256 cannot be empty")
-        if not self.plan_status or not isinstance(self.plan_status, str) or not self.plan_status.strip():
-            raise SQLExecutionTraceContractError("plan_status cannot be empty")
-        if not self.outcome_status or not isinstance(self.outcome_status, str) or not self.outcome_status.strip():
-            raise SQLExecutionTraceContractError("outcome_status cannot be empty")
+        
+        import re
+        if not self.sql_sha256 or not isinstance(self.sql_sha256, str) or not re.fullmatch(r"[a-f0-9]{64}", self.sql_sha256):
+            raise SQLExecutionTraceContractError("sql_sha256 must be a lowercase SHA-256 hex digest")
+            
+        _ALLOWED_PLAN_STATUSES = {"planned", "no_plan"}
+        if self.plan_status not in _ALLOWED_PLAN_STATUSES:
+            raise SQLExecutionTraceContractError(f"Invalid plan_status: {self.plan_status}")
+            
+        _ALLOWED_OUTCOME_STATUSES = {"executed", "blocked_live_connection", "rejected"}
+        if self.outcome_status not in _ALLOWED_OUTCOME_STATUSES:
+            raise SQLExecutionTraceContractError(f"Invalid outcome_status: {self.outcome_status}")
+            
         if not isinstance(self.warnings, tuple):
             raise SQLExecutionTraceContractError("warnings must be a tuple")
+        for warning in self.warnings:
+            if not isinstance(warning, str):
+                raise SQLExecutionTraceContractError("All warnings must be strings")
+
+        if self.duration_ms is not None:
+            if not isinstance(self.duration_ms, (int, float)) or isinstance(self.duration_ms, bool) or self.duration_ms < 0:
+                raise SQLExecutionTraceContractError("duration_ms cannot be negative")
 
     @classmethod
     def from_outcome(
