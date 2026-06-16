@@ -96,6 +96,11 @@ from .connection_aware_execution_orchestrator import (
     SQLConnectionAwareExecutionOutcome,
     SQLConnectionAwareExecutionOrchestrator,
 )
+from .execution_trace import (
+    SQL_EXECUTION_TRACE_VERSION,
+    SQLExecutionTraceContractError,
+    SQLExecutionTraceRecord,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -178,5 +183,8 @@ __all__ = [
     "SQLConnectionAwareExecutionOutcomeStatus",
     "SQLConnectionAwareExecutionOutcome",
     "SQLConnectionAwareExecutionOrchestrator",
+    "SQL_EXECUTION_TRACE_VERSION",
+    "SQLExecutionTraceContractError",
+    "SQLExecutionTraceRecord",
 ]
 
