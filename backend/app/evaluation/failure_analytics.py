@@ -1,4 +1,5 @@
 import time
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
@@ -9,6 +10,19 @@ from app.evaluation.execution_accuracy import (
 )
 
 SQL_FAILURE_ANALYTICS_VERSION = "sql_failure_analytics_v1"
+
+_SECRET_KEY_VALUE_REGEX = re.compile(
+    r'(password|pwd|secret|key|token|api_key|credential|pass)\s*(=|:)\s*[^\s,;]+',
+    re.IGNORECASE
+)
+_BEARER_TOKEN_REGEX = re.compile(
+    r'Bearer\s+[^\s,;]+',
+    re.IGNORECASE
+)
+_URI_CREDENTIALS_REGEX = re.compile(
+    r'([^:]+://[^:]+:)([^@]+)(@)',
+    re.IGNORECASE
+)
 
 
 class SQLFailureAnalyticsContractError(ValueError):
@@ -36,6 +50,8 @@ class SQLFailureCategory(str, Enum):
     ORDER_MISMATCH = "order_mismatch"
     NUMERIC_TOLERANCE_MISMATCH = "numeric_tolerance_mismatch"
     DIALECT_MISMATCH_WARNING = "dialect_mismatch_warning"  # Warning-only category reserved for signals.
+    BLOCKED_LIVE_CONNECTION = "blocked_live_connection"
+    REJECTED_BY_ORCHESTRATOR = "rejected_by_orchestrator"
     UNKNOWN_FAILURE = "unknown_failure"
 
 
@@ -150,6 +166,25 @@ class SQLFailureAnalyticsRunResult:
 
 
 class SQLFailureAnalyzer:
+    @staticmethod
+    def _redact_secrets(text: str, fixture_ref: Optional[str] = None) -> str:
+        if not text:
+            return text
+        
+        # Redact key=value or key:value credential patterns
+        text = _SECRET_KEY_VALUE_REGEX.sub(r'\1\2[REDACTED]', text)
+        
+        # Redact Bearer tokens
+        text = _BEARER_TOKEN_REGEX.sub('Bearer [REDACTED]', text)
+        
+        # Redact generic URI password components (e.g. postgres://user:pass@host/db)
+        text = _URI_CREDENTIALS_REGEX.sub(r'\1[REDACTED]\3', text)
+        
+        if fixture_ref:
+            text = text.replace(fixture_ref, "[REDACTED_CONNECTION]")
+            
+        return text
+
     @classmethod
     def analyze_case(cls, result: SQLExecutionAccuracyCaseResult) -> SQLFailureAnalysisResult:
         """Analyze a single SQLExecutionAccuracyCaseResult and classify failure category and severity."""
@@ -192,7 +227,7 @@ class SQLFailureAnalyzer:
                     category=SQLFailureCategory.EMPTY_PREDICTED_SQL,
                     severity=SQLFailureSeverity.HIGH,
                     passed=False,
-                    evidence=f"Empty predicted SQL query: {err}",
+                    evidence=cls._redact_secrets(f"Empty predicted SQL query: {err}", result.fixture_ref),
                     signals=tuple(signals),
                 )
 
@@ -207,7 +242,7 @@ class SQLFailureAnalyzer:
                     category=SQLFailureCategory.UNSAFE_SQL_REJECTED,
                     severity=SQLFailureSeverity.CRITICAL,
                     passed=False,
-                    evidence=f"Unsafe SQL or write statement rejected: {err}",
+                    evidence=cls._redact_secrets(f"Unsafe SQL or write statement rejected: {err}", result.fixture_ref),
                     signals=tuple(signals),
                 )
 
@@ -222,7 +257,7 @@ class SQLFailureAnalyzer:
                     category=SQLFailureCategory.FIXTURE_NOT_FOUND,
                     severity=SQLFailureSeverity.CRITICAL,
                     passed=False,
-                    evidence=f"Fixture database not found: {err}",
+                    evidence=cls._redact_secrets(f"Fixture database not found: {err}", result.fixture_ref),
                     signals=tuple(signals),
                 )
 
@@ -233,7 +268,7 @@ class SQLFailureAnalyzer:
                     category=SQLFailureCategory.GOLD_SQL_EXECUTION_ERROR,
                     severity=SQLFailureSeverity.HIGH,
                     passed=False,
-                    evidence=f"Gold reference SQL execution failed: {err}",
+                    evidence=cls._redact_secrets(f"Gold reference SQL execution failed: {err}", result.fixture_ref),
                     signals=tuple(signals),
                 )
 
@@ -244,7 +279,37 @@ class SQLFailureAnalyzer:
                     category=SQLFailureCategory.EXPECTED_RESULT_INVALID,
                     severity=SQLFailureSeverity.HIGH,
                     passed=False,
-                    evidence=f"Expected result was malformed or invalid: {err}",
+                    evidence=cls._redact_secrets(f"Expected result was malformed or invalid: {err}", result.fixture_ref),
+                    signals=tuple(signals),
+                )
+
+            # Blocked live connection (Sprint 25.5)
+            if err_lower == "blocked_live_connection":
+                return SQLFailureAnalysisResult(
+                    case_id=result.case_id,
+                    category=SQLFailureCategory.BLOCKED_LIVE_CONNECTION,
+                    severity=SQLFailureSeverity.CRITICAL,
+                    passed=False,
+                    evidence=cls._redact_secrets(f"Live database execution is blocked by policy: {err}", result.fixture_ref),
+                    signals=tuple(signals),
+                )
+
+            # Rejected by orchestrator (Sprint 25.5)
+            if (
+                err_lower.startswith("rejected_by_orchestrator")
+                or err_lower == "rejected"
+                or err_lower.startswith("rejected:")
+                or "rejected by orchestrator" in err_lower
+            ):
+                reason = err
+                if err_lower.startswith("rejected_by_orchestrator:"):
+                    reason = err[len("rejected_by_orchestrator:"):].strip()
+                return SQLFailureAnalysisResult(
+                    case_id=result.case_id,
+                    category=SQLFailureCategory.REJECTED_BY_ORCHESTRATOR,
+                    severity=SQLFailureSeverity.HIGH,
+                    passed=False,
+                    evidence=cls._redact_secrets(f"Execution request was rejected by the orchestrator: {reason}", result.fixture_ref),
                     signals=tuple(signals),
                 )
 
@@ -254,7 +319,7 @@ class SQLFailureAnalyzer:
                 category=SQLFailureCategory.SQL_EXECUTION_ERROR,
                 severity=SQLFailureSeverity.MEDIUM,
                 passed=False,
-                evidence=f"SQL execution error during sandbox run: {err}",
+                evidence=cls._redact_secrets(f"SQL execution error during sandbox run: {err}", result.fixture_ref),
                 signals=tuple(signals),
             )
 

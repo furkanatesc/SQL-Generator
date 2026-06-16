@@ -337,7 +337,7 @@ class TestExecutionAccuracyMapsRejectedOutcomeToFailedResult:
         result = harness.run_case(case, predicted_sql)
 
         assert result.passed is False
-        assert result.execution_error == "planner rejected request"
+        assert result.execution_error == "rejected_by_orchestrator: planner rejected request"
         assert result.actual_row_count is None
         assert result.normalized_actual_result is None
 

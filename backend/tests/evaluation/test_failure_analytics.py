@@ -383,3 +383,158 @@ def test_failure_analysis_result_rejects_non_signal_items():
             signals=("not_a_signal_obj",)  # type: ignore
         )
     assert "All signals must be instances of SQLFailureSignal" in str(exc.value)
+
+
+# --- Sprint 25.5 Tests ---
+
+def test_execution_accuracy_failure_analysis_maps_sqlite_execution_error():
+    res = make_mock_case_result(
+        passed=False,
+        execution_error="no such table: users"
+    )
+    analysis = SQLFailureAnalyzer.analyze_case(res)
+    assert analysis.passed is False
+    assert analysis.category == SQLFailureCategory.SQL_EXECUTION_ERROR
+    assert analysis.severity == SQLFailureSeverity.MEDIUM
+    assert "no such table: users" in analysis.evidence
+
+
+def test_execution_accuracy_failure_analysis_maps_blocked_live_connection():
+    res = make_mock_case_result(
+        passed=False,
+        execution_error="blocked_live_connection"
+    )
+    analysis = SQLFailureAnalyzer.analyze_case(res)
+    assert analysis.passed is False
+    assert analysis.category == SQLFailureCategory.BLOCKED_LIVE_CONNECTION
+    assert analysis.severity == SQLFailureSeverity.CRITICAL
+    assert "blocked by policy" in analysis.evidence
+
+
+def test_execution_accuracy_failure_analysis_maps_rejected_orchestrator_outcome():
+    res1 = make_mock_case_result(
+        passed=False,
+        execution_error="rejected_by_orchestrator: complexity limit exceeded"
+    )
+    analysis1 = SQLFailureAnalyzer.analyze_case(res1)
+    assert analysis1.passed is False
+    assert analysis1.category == SQLFailureCategory.REJECTED_BY_ORCHESTRATOR
+    assert analysis1.severity == SQLFailureSeverity.HIGH
+    assert "complexity limit exceeded" in analysis1.evidence
+
+    res2 = make_mock_case_result(
+        passed=False,
+        execution_error="rejected"
+    )
+    analysis2 = SQLFailureAnalyzer.analyze_case(res2)
+    assert analysis2.passed is False
+    assert analysis2.category == SQLFailureCategory.REJECTED_BY_ORCHESTRATOR
+    assert analysis2.severity == SQLFailureSeverity.HIGH
+
+
+def test_execution_accuracy_failure_analysis_ignores_successful_execution():
+    res = make_mock_case_result(
+        passed=True,
+        execution_error="some ignored error string"
+    )
+    analysis = SQLFailureAnalyzer.analyze_case(res)
+    assert analysis.passed is True
+    assert analysis.category == SQLFailureCategory.PASSED
+    assert analysis.severity == SQLFailureSeverity.INFO
+
+
+def test_execution_accuracy_failure_analysis_does_not_leak_connection_ref_or_secret():
+    res = make_mock_case_result(
+        passed=False,
+        fixture_ref="prod-postgres-main",
+        execution_error="Failed to connect to prod-postgres-main: password: secret123; api_key=xyz987; Bearer tkn456; postgres://user:mysecretpwd@host/db?sslmode=require"
+    )
+    analysis = SQLFailureAnalyzer.analyze_case(res)
+    assert "prod-postgres-main" not in analysis.evidence
+    assert "secret123" not in analysis.evidence
+    assert "xyz987" not in analysis.evidence
+    assert "tkn456" not in analysis.evidence
+    assert "mysecretpwd" not in analysis.evidence
+    
+    assert "[REDACTED_CONNECTION]" in analysis.evidence
+    assert "password:[REDACTED]" in analysis.evidence
+    assert "api_key=[REDACTED]" in analysis.evidence
+    assert "Bearer [REDACTED]" in analysis.evidence
+    assert "postgres://user:[REDACTED]@host" in analysis.evidence
+
+
+def test_execution_accuracy_failure_analysis_does_not_import_network_or_db_drivers():
+    import subprocess
+    import sys
+    code = (
+        "import sys\n"
+        "import app.evaluation.failure_analytics\n"
+        "forbidden = ['psycopg', 'psycopg2', 'oracledb', 'cx_Oracle', 'pymysql', 'pyodbc', 'mysql']\n"
+        "for mod in forbidden:\n"
+        "    if mod in sys.modules:\n"
+        "        print(f'FORBIDDEN:{mod}')\n"
+    )
+    res = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+    assert "FORBIDDEN" not in res.stdout, f"Importing failure_analytics imported forbidden driver: {res.stdout}"
+
+
+def test_execution_accuracy_failure_analysis_preserves_deterministic_category():
+    res = make_mock_case_result(
+        passed=False,
+        execution_error="predicted_sql cannot be empty"
+    )
+    analysis = SQLFailureAnalyzer.analyze_case(res)
+    assert analysis.category == SQLFailureCategory.EMPTY_PREDICTED_SQL
+
+
+def test_execution_accuracy_failure_analysis_rejected_orchestrator_integration():
+    from app.evaluation.execution_accuracy import SQLExecutionAccuracyConfig, SQLExecutionAccuracyHarness
+    from app.evaluation.connection_aware_execution_orchestrator import SQLConnectionAwareExecutionOrchestrator, SQLConnectionAwareExecutionOutcome, SQLConnectionAwareExecutionOutcomeStatus
+    from app.evaluation.multi_database_execution import SQLDatabaseExecutionRequest
+    from app.evaluation.golden_dataset_contract import SQLGoldenDatasetCase, SQLResultComparePolicy, SQLGoldenDatasetTier, SQLAdjudicationStatus
+    
+    class StubRejectedOrchestrator(SQLConnectionAwareExecutionOrchestrator):
+        def __init__(self):
+            pass
+        def execute(self, request: SQLDatabaseExecutionRequest):
+            return SQLConnectionAwareExecutionOutcome(
+                version="sql_connection_aware_execution_orchestrator_v1",
+                request=request,
+                plan=None,
+                status=SQLConnectionAwareExecutionOutcomeStatus.REJECTED,
+                execution_result=None,
+                error="Local execution is not supported for dialect: postgresql",
+                warnings=(),
+            )
+            
+    config = SQLExecutionAccuracyConfig(fixtures_dir="data")
+    harness = SQLExecutionAccuracyHarness(config, orchestrator=StubRejectedOrchestrator())
+    
+    case = SQLGoldenDatasetCase(
+        case_id="integration_reject_test",
+        question="Get all data",
+        dialect="postgresql",
+        schema_snapshot_id="snap",
+        fixture_ref="db_ref",
+        gold_sql="SELECT 1",
+        tier=SQLGoldenDatasetTier.CORE_REGRESSION,
+        adjudication_status=SQLAdjudicationStatus.APPROVED,
+        no_expected_result_reason="Run reference gold_sql",
+        result_compare_policy=SQLResultComparePolicy.EXACT_UNORDERED,
+    )
+    case_result = harness.run_case(case, "SELECT 1")
+    
+    assert case_result.passed is False
+    assert case_result.execution_error == "rejected_by_orchestrator: Local execution is not supported for dialect: postgresql"
+    
+    analysis = SQLFailureAnalyzer.analyze_case(case_result)
+    assert analysis.passed is False
+    assert analysis.category == SQLFailureCategory.REJECTED_BY_ORCHESTRATOR
+    assert analysis.severity == SQLFailureSeverity.HIGH
+    assert "Local execution is not supported for dialect: postgresql" in analysis.evidence
+

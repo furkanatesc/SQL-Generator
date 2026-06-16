@@ -444,7 +444,7 @@ class SQLExecutionAccuracyHarness:
                 actual_row_count=None,
                 normalized_expected_result=None,
                 normalized_actual_result=None,
-                execution_error=outcome.error or "rejected",
+                execution_error=f"rejected_by_orchestrator: {outcome.error or 'rejected'}",
                 duration_ms=duration_ms,
                 warnings=(),
             )
