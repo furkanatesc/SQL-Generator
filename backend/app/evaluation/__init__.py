@@ -101,6 +101,16 @@ from .execution_trace import (
     SQLExecutionTraceContractError,
     SQLExecutionTraceRecord,
 )
+from .postgres_adapter import (
+    SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
+    SQLPostgresAdapterContractError,
+    SQLPostgresAdapterStatus,
+    SQLPostgresAdapterCapability,
+    SQLPostgresAdapterConfig,
+    SQLPostgresAdapterExecutionRequest,
+    SQLPostgresAdapterExecutionResult,
+    SQLPostgresAdapterContract,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -186,5 +196,13 @@ __all__ = [
     "SQL_EXECUTION_TRACE_VERSION",
     "SQLExecutionTraceContractError",
     "SQLExecutionTraceRecord",
+    "SQL_POSTGRES_ADAPTER_CONTRACT_VERSION",
+    "SQLPostgresAdapterContractError",
+    "SQLPostgresAdapterStatus",
+    "SQLPostgresAdapterCapability",
+    "SQLPostgresAdapterConfig",
+    "SQLPostgresAdapterExecutionRequest",
+    "SQLPostgresAdapterExecutionResult",
+    "SQLPostgresAdapterContract",
 ]
 
