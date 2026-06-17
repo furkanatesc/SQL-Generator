@@ -168,3 +168,56 @@ def test_postgres_adapter_import_does_not_load_socket_or_network_clients():
         check=True
     )
     assert "FORBIDDEN" not in res.stdout, f"Importing postgres_adapter loaded network client: {res.stdout}"
+
+
+def test_postgres_adapter_capability_rejects_live_execution_true():
+    with pytest.raises(SQLPostgresAdapterContractError, match="cannot support live execution"):
+        SQLPostgresAdapterCapability(
+            version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
+            dialect="postgresql",
+            supports_live_execution=True,
+            supports_driver_execution=False,
+            supports_network_execution=False,
+            supports_read_only_queries=False,
+        )
+
+
+def test_postgres_adapter_capability_rejects_driver_execution_true():
+    with pytest.raises(SQLPostgresAdapterContractError, match="cannot support driver execution"):
+        SQLPostgresAdapterCapability(
+            version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
+            dialect="postgresql",
+            supports_live_execution=False,
+            supports_driver_execution=True,
+            supports_network_execution=False,
+            supports_read_only_queries=False,
+        )
+
+
+def test_postgres_adapter_capability_rejects_network_execution_true():
+    with pytest.raises(SQLPostgresAdapterContractError, match="cannot support network execution"):
+        SQLPostgresAdapterCapability(
+            version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
+            dialect="postgresql",
+            supports_live_execution=False,
+            supports_driver_execution=False,
+            supports_network_execution=True,
+            supports_read_only_queries=False,
+        )
+
+
+def test_postgres_adapter_capability_rejects_read_only_queries_true():
+    with pytest.raises(SQLPostgresAdapterContractError, match="cannot support read-only query execution yet"):
+        SQLPostgresAdapterCapability(
+            version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
+            dialect="postgresql",
+            supports_live_execution=False,
+            supports_driver_execution=False,
+            supports_network_execution=False,
+            supports_read_only_queries=True,
+        )
+
+
+def test_postgres_adapter_contract_rejects_unsafe_custom_capability():
+    with pytest.raises(SQLPostgresAdapterContractError, match="capability must be a SQLPostgresAdapterCapability"):
+        SQLPostgresAdapterContract(capability="not-a-capability-obj")  # type: ignore

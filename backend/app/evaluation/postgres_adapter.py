@@ -39,6 +39,23 @@ class SQLPostgresAdapterCapability:
         if not isinstance(self.supports_read_only_queries, bool):
             raise SQLPostgresAdapterContractError("supports_read_only_queries must be a boolean")
 
+        if self.supports_live_execution is not False:
+            raise SQLPostgresAdapterContractError(
+                "PostgreSQL adapter stub cannot support live execution"
+            )
+        if self.supports_driver_execution is not False:
+            raise SQLPostgresAdapterContractError(
+                "PostgreSQL adapter stub cannot support driver execution"
+            )
+        if self.supports_network_execution is not False:
+            raise SQLPostgresAdapterContractError(
+                "PostgreSQL adapter stub cannot support network execution"
+            )
+        if self.supports_read_only_queries is not False:
+            raise SQLPostgresAdapterContractError(
+                "PostgreSQL adapter stub cannot support read-only query execution yet"
+            )
+
 
 @dataclass(frozen=True)
 class SQLPostgresAdapterConfig:
@@ -122,6 +139,11 @@ class SQLPostgresAdapterExecutionResult:
 
 class SQLPostgresAdapterContract:
     def __init__(self, capability: Optional[SQLPostgresAdapterCapability] = None):
+        if capability is not None:
+            if not isinstance(capability, SQLPostgresAdapterCapability):
+                raise SQLPostgresAdapterContractError(
+                    "capability must be a SQLPostgresAdapterCapability"
+                )
         self._capability = capability or SQLPostgresAdapterCapability(
             version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
             dialect="postgresql",
