@@ -52,7 +52,7 @@ SQLGen, tek bir prompt ile SQL üretip hata vermesini beklemek yerine, kendi iç
 
 ### 4. Hibrit RAG (Retrieval-Augmented Generation)
 SQLGen, şirketinizin iş kurallarını ve geçmiş onaylı SQL sorgularını hafızasında tutmak için yerel bir Qdrant vektör veritabanı kullanır:
-- **Schema Embedding Index (Cross-lingual):** NVIDIA'nın çok dilli (`llama-3.2-nv-embedqa-1b-v2`) modeli kullanılarak veritabanı şemasının anlamsal parmak izi çıkartılır. Türkçe bir sorgudaki ("ülke", "müşteri") kavramları, herhangi bir çeviriye veya statik sözlüğe ihtiyaç duymadan, doğrudan anlamsal yakınlık (Cosine Similarity) ile İngilizce şema tablolarıyla eşleştirir.
+- **Schema Embedding Index (Cross-lingual):** NVIDIA'nın çok dilli (`nvidia/llama-nemotron-embed-1b-v2`, 2048 boyut) modeli kullanılarak veritabanı şemasının anlamsal parmak izi çıkartılır. Türkçe bir sorgudaki ("ülke", "müşteri") kavramları, herhangi bir çeviriye veya statik sözlüğe ihtiyaç duymadan, doğrudan anlamsal yakınlık (Cosine Similarity) ile İngilizce şema tablolarıyla eşleştirir.
 - **İş Kuralları Kataloğu:** Şirket içi KPI tanımlarını ve kodlama standartlarını semantik olarak arar (örn: active = 1 filtresinin "aktif üyeler" anlamına geldiğini bilir).
 - **SQL Geçmişi (Few-Shot):** Doğal dil sorgusuna benzer geçmiş başarılı sorguları bularak LLM'e bağlam içi örnekler sağlar ve başarı oranını artırır.
 

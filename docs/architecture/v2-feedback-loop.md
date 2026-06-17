@@ -1,5 +1,10 @@
 # v2 — Feedback ile Öğrenen Sistem
 
+> ⏸️ **DURUM: ERTELENDİ (2026-06-18).** Bu faz bilinçli olarak ertelenmiştir;
+> bunun yerine v3 execution-accuracy hattı (Phase 9–10) önceliklendirildi.
+> İptal değildir — v3 stabilleştikten sonra tekrar ele alınacaktır. Üst düzey
+> durum için `ROADMAP.md`.
+
 ## Amaç
 Sistem artık sadece statik kurallarla çalışmayacak. Trace kayıtlarından ve kullanıcı/hata feedback’inden öğrenmeye başlayacak.
 Dikkat: LLM runtime karar verici olmayacak, önerici olacak. İnsan onayı ile kurallar aktifleşecek.
