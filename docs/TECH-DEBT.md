@@ -6,7 +6,7 @@ yöntemleri (workarounds) ve teknik borç (technical debt) notlarını içerir.
 değiştirilmelidir.
 
 > Sürüm geçmişi için `CHANGELOG.md`, yol haritası için `ROADMAP.md` ve
-> `docs/architecture/` dosyalarına bakın.
+> `docs/PLANNED-SPRINTS.md` dosyalarına bakın.
 
 ---
 
