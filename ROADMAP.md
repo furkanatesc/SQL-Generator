@@ -8,7 +8,9 @@ kararlar `docs/architecture/` altındadır ve kanonik kaynaktır:
 - [`docs/architecture/v3-graphrag-ppr.md`](docs/architecture/v3-graphrag-ppr.md) — GraphRAG / PPR / Dynamic Subgraph
 - [`docs/architecture/v4-enterprise.md`](docs/architecture/v4-enterprise.md) — Enterprise-Grade Platform
 
-Tamamlanan işler için `CHANGELOG.md`, teknik borç için `docs/TECH-DEBT.md`.
+Tamamlanan işler için `CHANGELOG.md` ve `docs/SPRINT-PR-LOG.md`, ileriye dönük
+detaylı sprint planı için `docs/PLANNED-SPRINTS.md` (Phase 7–15 · Sprint
+25.8 → 34.7), teknik borç için `docs/TECH-DEBT.md`.
 
 > `SPRINTHARITASI.txt` ve `senioryolharitası.txt` eski/kişisel notlardır ve bu
 > dosya tarafından **geçersiz kılınmıştır** (arşivlenebilir).

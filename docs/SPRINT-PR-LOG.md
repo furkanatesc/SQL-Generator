@@ -7,6 +7,7 @@ sprint ve PR bazında listeler. `main` branch git geçmişinden üretilmiştir
 - Sürüm/özet görünümü için: `CHANGELOG.md`
 - İleriye dönük plan ve "şu an neredeyiz": `ROADMAP.md`
 - Faz bazlı mimari kararlar: `docs/architecture/`
+- İleriye dönük (henüz yapılmamış) sprintler: `docs/PLANNED-SPRINTS.md`
 
 > ⚠️ **Numara tutarsızlıkları (faithful):** Gerçek geçmişte sprint numaraları
 > yer yer tekrar ediyor (ör. iki ayrı "Sprint 21.0", iki "21.1") ve bazı PR
