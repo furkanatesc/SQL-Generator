@@ -34,11 +34,10 @@ Bu dosya yol haritasının **tek giriş noktasıdır**. Eksen: **Phase → Sprin
 | 14 | SaaS / Multi-Tenant Readiness | 33.x | 🗓️ Planlı |
 | 15 | Desktop Readiness | 34.x | 🗓️ Planlı |
 
-> **Feedback / öğrenen sistem notu:** Phase 8'deki `27.3 User Feedback Capture`
-> feedback'i *toplar* ama planda bunu *tüketen* (kurala/öneriye çeviren) bir
-> adım yok. "Öğrenen sistem" (value index, trace mining, rule promotion) şu an
-> planda **yok**; ileride ayrı ele alınacak bir fikir olarak duruyor. Bkz.
-> `docs/PLANNED-SPRINTS.md` → "Önerilen Ek Sprintler".
+> **Feedback / öğrenen sistem notu:** `27.3 User Feedback Capture` feedback'i
+> *toplar*; bunu *tüketen* minimal adım `27.9 Feedback Review → Rule Suggestion`
+> olarak Phase 8'e eklendi. Tam "öğrenen sistem" (value index, trace mining,
+> rule promotion) hâlâ daha ileri bir aşama; bkz. `docs/PLANNED-SPRINTS.md`.
 
 ---
 

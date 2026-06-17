@@ -44,6 +44,10 @@ governance.
 | 26.5 | PII / PHI Detection Contract |
 | 26.6 | Audit Event Contract |
 | 26.7 | Approval Workflow Contract |
+| 26.8 | Prompt-Injection / NL Abuse Defense |
+| 26.9 | Result-Set Privacy & Row/Size Limits |
+| 26.10 | Connection Credential Vault (server-side) |
+| 26.11 | Policy / Security Eval |
 
 > ⚠️ Phase 14 (SaaS) ile örtüşme: tenant boundary (26.1 ↔ 33.0), RBAC/permission
 > (26.0 ↔ 33.2), audit (26.6 ↔ 33.6). Phase 7 = **backend sözleşme/politika
@@ -65,6 +69,9 @@ context seçildi?", "hangi policy blocked etti?" sorularına cevap verebilmek.
 | 27.5 | Debug Bundle Export |
 | 27.6 | Metrics Contract |
 | 27.7 | Admin Observability Dashboard Backend |
+| 27.8 | Cost & LLM Usage Telemetry |
+| 27.9 | Feedback Review → Rule Suggestion |
+| 27.10 | Per-Release Accuracy Regression Gate |
 
 ---
 
@@ -83,6 +90,8 @@ production-grade çözmek.
 | 28.5 | Missing Foreign Key Inference v2 |
 | 28.6 | Schema Cache Invalidation |
 | 28.7 | Incremental Schema Sync |
+| 28.8 | Embedding / RAG Re-Index Pipeline |
+| 28.9 | Semantic / Result Cache |
 
 > Not: Bu faz, frontend'deki `maxNodesLimit=5` geçici çözümünün (bkz.
 > `docs/TECH-DEBT.md`) kalıcı çözümünü de kapsamalıdır.
@@ -102,6 +111,7 @@ güvenli şekilde eklemek. *(25.x stub'larının production karşılığı.)*
 | 29.4 | Oracle Docker/Test Harness Strategy |
 | 29.5 | MySQL Adapter Contract |
 | 29.6 | SQL Server Adapter Contract |
+| 29.7 | Adapter Conformance Eval Suite |
 
 ---
 
@@ -119,6 +129,7 @@ dönüştürmek.
 | 30.5 | Query History API |
 | 30.6 | Feedback API |
 | 30.7 | Admin API |
+| 30.8 | Authentication (AuthN: login / SSO / API keys / sessions) |
 
 ---
 
@@ -137,6 +148,7 @@ olgunlaştırmak.
 | 31.5 | Error / Warning UX |
 | 31.6 | Query History UX |
 | 31.7 | Feedback UX |
+| 31.8 | Connection Onboarding / Schema Import UX |
 
 ---
 
@@ -156,6 +168,9 @@ check, backup/restore ve logging altyapısını kurmak.
 | 32.7 | Health Checks |
 | 32.8 | Backup / Restore |
 | 32.9 | Logging Pipeline |
+| 32.10 | LLM Provider Resilience & Failover |
+| 32.11 | CI/CD Release Pipeline + Staging |
+| 32.12 | API Load / Concurrency Testing |
 
 ---
 
@@ -196,50 +211,25 @@ hazırlamak.
 
 ---
 
-## Önerilen Ek Sprintler (review bekliyor)
+## Kalite incelemesinde eklenen sprintler (2026-06-18)
 
-Bunlar planda **gözden kaçmış olabileceğini düşündüğüm** boşluklar. Henüz onaylı
-değil — kabul edersen ilgili faza taşırız, istemezsen sileriz. Her biri mevcut
-bir faza eklenecek şekilde önerilmiştir.
+Aşağıdaki 15 sprint bir kalite/gap incelemesi sonucu yukarıdaki fazlara
+**eklenmiştir** (gerekçeler PR #124):
 
-### 🔴 En kritik: Sürekli Değerlendirme (Continuous Eval)
-Sprint 21–25'te **büyük bir eval/regression harness** kuruldu; ama Phase 7–15'te
-bu altyapıyı **kullanan/sürdüren tek bir adım yok**. Yeni adapter, policy ve API
-eklendikçe doğruluk sessizce gerileyebilir.
-| Öneri | Hangi faza | Neden |
-|---|---|---|
-| **Per-release Accuracy Regression Gate** | Phase 8 (27.x) | Her faz çıkışında golden/execution eval gate; doğruluk düşüşünü yakalar |
-| **Adapter Conformance Eval** | Phase 10 (29.x) | PG/Oracle/MySQL/MSSQL aynı paylaşılan sözleşme testinden geçsin; adapter sapması önlenir |
-| **Policy / Security Eval** | Phase 7 (26.x) | Permission/PII/read-only kurallarının gerçekten enforce edildiğini doğrulayan testler |
-
-### Güvenlik boşlukları (→ Phase 7)
-| Öneri | Neden |
-|---|---|
-| **26.8 Prompt-Injection / NL Abuse Defense** | Query Risk Classifier üretilen SQL'i sınıflar; ama kullanıcının doğal dil girdisiyle LLM'i kandırıp (jailbreak/exfiltration) güvensiz SQL ürettirmesine karşı savunma yok |
-| **26.9 Result-Set Privacy & Limits** | 26.4/26.5 *şema/kolon* PII'sini kapsar; ama dönen **satır verisindeki** PII, satır/boyut tavanı ve export kısıtı yok |
-| **26.10 Connection Credential Vault (server-side)** | Phase 13 secrets = app sırları, Phase 15 vault = desktop. Sunucu tarafında gerçek DB bağlantı kimliklerinin şifreli saklanması/rotasyonu eksik |
-
-### Maliyet & Dayanıklılık (→ Phase 8/13)
-| Öneri | Neden |
-|---|---|
-| **27.8 Cost & LLM Usage Telemetry** | Per-request/per-tenant token + LLM maliyet ölçümü — Phase 14 "Usage Metering / Billing"i besler |
-| **32.10 LLM Provider Resilience & Failover** | NIM ~40 RPM rate-limit (kendi tasarım dokümanında geçiyor); backoff + model/provider failover olmadan production'da kırılgan |
-
-### Performans (→ Phase 9)
-| Öneri | Neden |
-|---|---|
-| **28.8 Embedding / RAG Re-Index Pipeline** | Şema değişince (28.7 incremental sync) Qdrant embedding + business-rule RAG yeniden indekslenmeli; 28.6 cache invalidation bunu kapsamıyor |
-| **28.9 Semantic / Result Cache** | Anlamca eşdeğer sorgu için doğrulanmış SQL'i pipeline'ı atlayarak döndürme — büyük maliyet/latency kazancı (eski backlog'da vardı, düşmüş) |
-
-### Ürün boşlukları (→ Phase 11/12/13)
-| Öneri | Neden |
-|---|---|
-| **30.8 Authentication (AuthN)** | Phase 14 RBAC = *yetkilendirme*; ama login/SSO/API-key/session = *kimlik doğrulama* hiç yok. AuthN olmadan RBAC eksik |
-| **31.8 Connection Onboarding / Schema Import UX** | UI'da explorer/composer var ama "veritabanı bağla / şema içe aktar" akışı yok |
-| **32.11 CI/CD Release Pipeline + Staging** | Phase 13 docker-compose'u var ama otomatik build/test/deploy ve staging ortamı yok |
-| **32.12 API Load / Concurrency Testing** | 28.0 benchmark sadece şema; SaaS multi-tenant öncesi API yük/eşzamanlılık testi gerekli |
-
-### Feedback'i tüketme (öğrenen sistem tohumu)
-| Öneri | Neden |
-|---|---|
-| **27.9 Feedback Review → Rule Suggestion** | `27.3 User Feedback Capture` feedback'i *toplar* ama tüketen yok. En azından manuel onaylı "feedback → kural önerisi" akışı, "öğrenen sistem" fikrinin minimal ilk adımıdır |
+- **Sürekli değerlendirme (en kritik):** `27.10` Per-Release Accuracy Regression
+  Gate, `29.7` Adapter Conformance Eval, `26.11` Policy/Security Eval — Sprint
+  21–25'te kurulan eval harness'ını sürdürür (yoksa yeni adapter/policy/API
+  eklendikçe doğruluk sessizce geriler).
+- **Güvenlik:** `26.8` Prompt-Injection/NL Abuse Defense, `26.9` Result-Set
+  Privacy & Limits (dönen satır verisindeki PII + satır/boyut tavanı),
+  `26.10` Connection Credential Vault (server-side).
+- **Maliyet & dayanıklılık:** `27.8` Cost & LLM Usage Telemetry,
+  `32.10` LLM Provider Resilience & Failover (NIM ~40 RPM).
+- **Performans:** `28.8` Embedding/RAG Re-Index Pipeline, `28.9` Semantic/Result
+  Cache.
+- **Ürün:** `30.8` Authentication (AuthN — RBAC'ın eksik tamamlayıcısı),
+  `31.8` Connection Onboarding/Schema Import UX, `32.11` CI/CD + Staging,
+  `32.12` API Load/Concurrency Testing.
+- **Feedback'i tüketme:** `27.9` Feedback Review → Rule Suggestion — `27.3`'ün
+  topladığı feedback'i (manuel onaylı) kurala çevirir; öğrenen sistemin minimal
+  tohumu.

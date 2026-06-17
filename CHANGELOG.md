@@ -47,8 +47,8 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   her çağrıya `NOT_IMPLEMENTED` döner ve capability sözleşmesi canlı/driver/network
   execution'ı aktif olarak yasaklar. Gerçek execution henüz yoktur.
 - Feedback-loop / öğrenen sistem çıktıları (Trace Mining, Pending Rules,
-  Value Index, Feedback UI) planda yok; aday olarak `docs/PLANNED-SPRINTS.md`
-  → "Önerilen Ek Sprintler" altında.
+  Value Index, Feedback UI) henüz yok; minimal ilk adımı (`27.9 Feedback Review →
+  Rule Suggestion`) Phase 8 planına eklendi (`docs/PLANNED-SPRINTS.md`).
 
 ---
 
