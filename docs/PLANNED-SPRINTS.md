@@ -12,9 +12,11 @@ Tamamlanan işler için `SPRINT-PR-LOG.md`, faz bazlı mimari kararlar için
 >   read-only/EXPLAIN, connection registry ile).
 > Yani 25.8/25.9 "iskele", 29.x "gerçek implementasyon"dur; tekrar değildir.
 
-> **Not (v2 feedback loop):** Mimari `v2` katmanı (Value Index, Trace Mining,
-> Pending Rules, QueryIntentClassifier) bu plana **dahil edilmemiştir**; durumu
-> ayrıca ele alınacaktır. Bkz. `docs/architecture/v2-feedback-loop.md`.
+> **Not (v2 feedback loop — ERTELENDİ):** Mimari `v2` katmanı (Value Index,
+> Trace Mining, Pending Rules, QueryIntentClassifier) bu plana dahil değildir
+> çünkü **bilinçli olarak ertelenmiştir** (2026-06-18): v3 execution-accuracy
+> hattı önceliklendirildi. İptal değil — v3 stabilleştikten sonra tekrar ele
+> alınacaktır. Bkz. `docs/architecture/v2-feedback-loop.md`.
 
 ## Faz → Sürüm (v) Eşlemesi
 Bu fazlar `docs/architecture/` sürüm hattına şöyle düşer:

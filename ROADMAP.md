@@ -27,21 +27,23 @@ değerlendirme iskelesini kuruyor — ancak v2 (feedback loop) atlanmış durumd
 | Faz | Tema | Durum | Not |
 |-----|------|-------|-----|
 | **v1** | Production Baseline | 🟢 Kapandı | 2026-06-05'te "release ready" ilan edildi (#81); `v1.0.0` tag'i `9907cd3`'e atıldı (2026-06-18). RC kanıtının ölü commit'i `5ce60ae` ile düzeltildi (metrikler UNVERIFIED). Kalan iz: `CandidateScorer`/`BoundedGraphPruner` kodda farklı isimde/eksik. |
-| **v2** | Feedback Loop | 🔴 Başlamadı | Trace Mining, Pending Rules, LLM Suggestion, **Value Index**, QueryIntentClassifier, Feedback UI — hiçbiri kodda yok. |
+| **v2** | Feedback Loop | ⏸️ Ertelendi | Trace Mining, Pending Rules, LLM Suggestion, **Value Index**, QueryIntentClassifier, Feedback UI — hiçbiri kodda yok. **Bilinçli olarak ertelendi** (2026-06-18): execution-accuracy (v3) hattı önceliklendirildi. Tekrar ele alınacak; bkz. `docs/architecture/v2-feedback-loop.md`. |
 | **v3** | GraphRAG / PPR | 🟡 Sıra dışı başladı | Yalnızca execution-accuracy değerlendirme altyapısı kuruldu (`connection_abstraction`, `multi_database_execution`, execution orchestrator). **PostgreSQL adapter STUB** (`NOT_IMPLEMENTED`). PPR, column-level pruning, execution-guided repair, multi-candidate **yok**. *(Plan: Phase 9–10)* |
 | **v4** | Enterprise | ⚪ Başlamadı | Multi-tenant, RBAC, PII redaction, governance — yok. *(Plan: Phase 7–8 + Phase 14'ün güvenlik kısmı)* |
 | **v5** | Productization | ⚪ Başlamadı | Public API, production UI, deploy/ops — yok. *(Plan: Phase 11–13)* |
 | **v6** | SaaS & Desktop | ⚪ Başlamadı | Org/workspace, billing, metering, desktop packaging — yok. *(Plan: Phase 14–15)* |
 
-### ⚠️ Dikkat edilmesi gereken sıralama riski
-Son ~6 sprint (20–25) v3'e ait değerlendirme/execution iskelesini kurarken,
-**v2'nin tüm feedback-loop çıktıları atlandı** ve v1 resmî olarak kapatılmadı
-(tag yok, RC kanıtı kırık). Önerilen düzeltme sırası:
-1. v1'i resmen kapat: `v1.0.0` tag'i + RC kanıtını gerçek commit'e bağla.
-2. PostgreSQL adapter stub'ını gerçek (read-only) implementasyona çevir — v3
-   harness'ı bağlamadan önce.
-3. v2 feedback-loop'a (özellikle Value Index) geri dön ya da bilinçli olarak
-   ertelendiğini buraya yaz.
+### Sıralama kararı (güncel)
+Son ~6 sprint (20–25) v3'e ait değerlendirme/execution iskelesini kurarken
+**v2'nin tüm feedback-loop çıktıları atlandı**. Bu durum bilinçli bir karara
+bağlandı:
+1. ✅ **v1 resmen kapatıldı**: `v1.0.0` tag'i atıldı + RC kanıtı `5ce60ae` ile
+   düzeltildi (2026-06-18).
+2. ⏭️ **v3 hattı önceliklendirildi**: PostgreSQL adapter stub'ını gerçek
+   (read-only) implementasyona çevirmek ve execution-accuracy harness'ını
+   bağlamak (Phase 9–10).
+3. ⏸️ **v2 (feedback-loop / Value Index) ertelendi**: v3 execution hattı
+   stabilleşene kadar beklemeye alındı. İptal değil, ertelendi.
 
 ---
 
