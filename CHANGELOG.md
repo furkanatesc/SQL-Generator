@@ -2,10 +2,10 @@
 
 Bu projedeki tüm önemli değişiklikler bu dosyada belgelenir.
 
-Format [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) temel alınır;
-sürümleme mantığı `docs/architecture/` altındaki v1–v4 olgunlaşma fazlarına göre
-düzenlenmiştir. Geçici çözümler ve teknik borç için `docs/TECH-DEBT.md`, ileriye
-dönük plan için `ROADMAP.md` dosyalarına bakın.
+Format [Keep a Changelog](https://keepachangelog.com/tr/1.0.0/) temel alınır.
+Tamamlanan işlerin sprint/PR detayı için `docs/SPRINT-PR-LOG.md`, geçici
+çözümler için `docs/TECH-DEBT.md`, ileriye dönük plan için `ROADMAP.md` ve
+`docs/PLANNED-SPRINTS.md` dosyalarına bakın.
 
 > ℹ️ **Sürüm etiketi notu:** v1.0.0 `9907cd3` (#81) commit'ine annotated git
 > tag olarak **uygulandı** (2026-06-18). Geçmiş kayıt: RC doğrulama dokümanında
@@ -16,7 +16,7 @@ dönük plan için `ROADMAP.md` dosyalarına bakın.
 
 ---
 
-## [Unreleased] — Sprint 20–25 · v2/v3 hattı (2026-06-05 → günümüz)
+## [Unreleased] — Sprint 20–25 · retrieval / prompting / execution hattı (2026-06-05 → günümüz)
 
 v1 baseline'ı sonrası retrieval, prompting ve execution-accuracy altyapısının
 sözleşme (contract) odaklı geliştirilmesi. Bu fazdaki çıktıların çoğu hâlâ
@@ -46,8 +46,9 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
 - **PostgreSQL adapter yalnızca stub'dur** (`backend/app/evaluation/postgres_adapter.py`):
   her çağrıya `NOT_IMPLEMENTED` döner ve capability sözleşmesi canlı/driver/network
   execution'ı aktif olarak yasaklar. Gerçek execution henüz yoktur.
-- v2 mimari planındaki feedback-loop çıktıları (Trace Mining, Pending Rules,
-  Value Index, Feedback UI) henüz başlamadı.
+- Feedback-loop / öğrenen sistem çıktıları (Trace Mining, Pending Rules,
+  Value Index, Feedback UI) planda yok; aday olarak `docs/PLANNED-SPRINTS.md`
+  → "Önerilen Ek Sprintler" altında.
 
 ---
 
@@ -55,7 +56,7 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
 
 Patlamayan, debug edilebilen ve ölçülebilen ilk production baseline'ı.
 Hedef "çok akıllı sistem" değil; her kararı izlenebilir güvenli sistemdi
-(bkz. `docs/architecture/v1-production-plan.md`).
+(eski tasarım notu: `docs/archive/v1-production-plan.md`).
 
 ### Added
 - **Release hazırlığı** (Sprint 16–19): production runbook ve smoke gate, V1

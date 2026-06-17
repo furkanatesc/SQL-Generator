@@ -1,8 +1,8 @@
 # Planlanan Sprintler (Phase 7–15 · Sprint 25.8 → 34.7)
 
 Bu dosya **ileriye dönük sprint planıdır** — henüz yapılmamış işler.
-Tamamlanan işler için `SPRINT-PR-LOG.md`, faz bazlı mimari kararlar için
-`docs/architecture/`, üst düzey durum için `ROADMAP.md`.
+Tamamlanan işler için `SPRINT-PR-LOG.md`, üst düzey durum için `ROADMAP.md`.
+Plan **Phase → Sprint → PR** ekseninde ilerler (sürüm/`v` etiketi kullanılmaz).
 
 > **Çakışma netleştirmesi (Postgres/Oracle adapter):** Adapter işi iki seviyede
 > planlıdır ve rolleri **bilinçli olarak ayrılmıştır**:
@@ -12,29 +12,10 @@ Tamamlanan işler için `SPRINT-PR-LOG.md`, faz bazlı mimari kararlar için
 >   read-only/EXPLAIN, connection registry ile).
 > Yani 25.8/25.9 "iskele", 29.x "gerçek implementasyon"dur; tekrar değildir.
 
-> **Not (v2 feedback loop — ERTELENDİ):** Mimari `v2` katmanı (Value Index,
-> Trace Mining, Pending Rules, QueryIntentClassifier) bu plana dahil değildir
-> çünkü **bilinçli olarak ertelenmiştir** (2026-06-18): v3 execution-accuracy
-> hattı önceliklendirildi. İptal değil — v3 stabilleştikten sonra tekrar ele
-> alınacaktır. Bkz. `docs/architecture/v2-feedback-loop.md`.
-
-## Faz → Sürüm (v) Eşlemesi
-Bu fazlar `docs/architecture/` sürüm hattına şöyle düşer:
-
-| Phase | Tema | Sürüm |
-|---|---|---|
-| Phase 9 — Large Schema Scale | 28.x | **v3** ([v3-graphrag-ppr](architecture/v3-graphrag-ppr.md)) |
-| Phase 10 — Real DB Adapters | 29.x | **v3** (enabler) |
-| Phase 7 — Security & Governance | 26.x | **v4** ([v4-enterprise](architecture/v4-enterprise.md)) |
-| Phase 8 — Observability | 27.x | **v4** |
-| Phase 11 — API Productization | 30.x | **v5** ([v5-productization](architecture/v5-productization.md)) |
-| Phase 12 — UI/UX Production | 31.x | **v5** |
-| Phase 13 — Deployment/Ops | 32.x | **v5** |
-| Phase 14 — SaaS / Multi-Tenant | 33.x | **v4→v6** ([v6-saas-desktop](architecture/v6-saas-desktop.md)) |
-| Phase 15 — Desktop | 34.x | **v6** |
-
-> Yani bu plan v3+v4'ü tamamlar, ardından **yeni** v5 (productization) ve
-> v6 (saas/desktop) sürümlerine taşar.
+> **Feedback / öğrenen sistem notu:** `27.3 User Feedback Capture` feedback'i
+> *toplar* ama planda bunu *tüketen* bir adım yok. "Öğrenen sistem" (value index,
+> trace mining, rule promotion) şu an planda yok; aşağıdaki "Önerilen Ek
+> Sprintler" bölümünde aday olarak değerlendiriliyor.
 
 ---
 
@@ -212,3 +193,53 @@ hazırlamak.
 | 34.5 | macOS Signing / Notarization |
 | 34.6 | Windows Installer |
 | 34.7 | Auto Update |
+
+---
+
+## Önerilen Ek Sprintler (review bekliyor)
+
+Bunlar planda **gözden kaçmış olabileceğini düşündüğüm** boşluklar. Henüz onaylı
+değil — kabul edersen ilgili faza taşırız, istemezsen sileriz. Her biri mevcut
+bir faza eklenecek şekilde önerilmiştir.
+
+### 🔴 En kritik: Sürekli Değerlendirme (Continuous Eval)
+Sprint 21–25'te **büyük bir eval/regression harness** kuruldu; ama Phase 7–15'te
+bu altyapıyı **kullanan/sürdüren tek bir adım yok**. Yeni adapter, policy ve API
+eklendikçe doğruluk sessizce gerileyebilir.
+| Öneri | Hangi faza | Neden |
+|---|---|---|
+| **Per-release Accuracy Regression Gate** | Phase 8 (27.x) | Her faz çıkışında golden/execution eval gate; doğruluk düşüşünü yakalar |
+| **Adapter Conformance Eval** | Phase 10 (29.x) | PG/Oracle/MySQL/MSSQL aynı paylaşılan sözleşme testinden geçsin; adapter sapması önlenir |
+| **Policy / Security Eval** | Phase 7 (26.x) | Permission/PII/read-only kurallarının gerçekten enforce edildiğini doğrulayan testler |
+
+### Güvenlik boşlukları (→ Phase 7)
+| Öneri | Neden |
+|---|---|
+| **26.8 Prompt-Injection / NL Abuse Defense** | Query Risk Classifier üretilen SQL'i sınıflar; ama kullanıcının doğal dil girdisiyle LLM'i kandırıp (jailbreak/exfiltration) güvensiz SQL ürettirmesine karşı savunma yok |
+| **26.9 Result-Set Privacy & Limits** | 26.4/26.5 *şema/kolon* PII'sini kapsar; ama dönen **satır verisindeki** PII, satır/boyut tavanı ve export kısıtı yok |
+| **26.10 Connection Credential Vault (server-side)** | Phase 13 secrets = app sırları, Phase 15 vault = desktop. Sunucu tarafında gerçek DB bağlantı kimliklerinin şifreli saklanması/rotasyonu eksik |
+
+### Maliyet & Dayanıklılık (→ Phase 8/13)
+| Öneri | Neden |
+|---|---|
+| **27.8 Cost & LLM Usage Telemetry** | Per-request/per-tenant token + LLM maliyet ölçümü — Phase 14 "Usage Metering / Billing"i besler |
+| **32.10 LLM Provider Resilience & Failover** | NIM ~40 RPM rate-limit (kendi tasarım dokümanında geçiyor); backoff + model/provider failover olmadan production'da kırılgan |
+
+### Performans (→ Phase 9)
+| Öneri | Neden |
+|---|---|
+| **28.8 Embedding / RAG Re-Index Pipeline** | Şema değişince (28.7 incremental sync) Qdrant embedding + business-rule RAG yeniden indekslenmeli; 28.6 cache invalidation bunu kapsamıyor |
+| **28.9 Semantic / Result Cache** | Anlamca eşdeğer sorgu için doğrulanmış SQL'i pipeline'ı atlayarak döndürme — büyük maliyet/latency kazancı (eski backlog'da vardı, düşmüş) |
+
+### Ürün boşlukları (→ Phase 11/12/13)
+| Öneri | Neden |
+|---|---|
+| **30.8 Authentication (AuthN)** | Phase 14 RBAC = *yetkilendirme*; ama login/SSO/API-key/session = *kimlik doğrulama* hiç yok. AuthN olmadan RBAC eksik |
+| **31.8 Connection Onboarding / Schema Import UX** | UI'da explorer/composer var ama "veritabanı bağla / şema içe aktar" akışı yok |
+| **32.11 CI/CD Release Pipeline + Staging** | Phase 13 docker-compose'u var ama otomatik build/test/deploy ve staging ortamı yok |
+| **32.12 API Load / Concurrency Testing** | 28.0 benchmark sadece şema; SaaS multi-tenant öncesi API yük/eşzamanlılık testi gerekli |
+
+### Feedback'i tüketme (öğrenen sistem tohumu)
+| Öneri | Neden |
+|---|---|
+| **27.9 Feedback Review → Rule Suggestion** | `27.3 User Feedback Capture` feedback'i *toplar* ama tüketen yok. En azından manuel onaylı "feedback → kural önerisi" akışı, "öğrenen sistem" fikrinin minimal ilk adımıdır |
