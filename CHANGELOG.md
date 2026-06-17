@@ -7,12 +7,12 @@ sürümleme mantığı `docs/architecture/` altındaki v1–v4 olgunlaşma fazla
 düzenlenmiştir. Geçici çözümler ve teknik borç için `docs/TECH-DEBT.md`, ileriye
 dönük plan için `ROADMAP.md` dosyalarına bakın.
 
-> ⚠️ **Sürüm etiketi notu:** v1.0.0 "release readiness" 2026-06-05'te ilan
-> edildi (#81), ancak git'te henüz `v1.0.0` tag'i **uygulanmadı**. Ayrıca
-> `docs/product-v1-rc-verification.md` içinde atıf yapılan doğrulama commit'i
-> `2f9e7e6` repoda **bulunmuyor**; oradaki "%96.5 accuracy / 500 query" gibi
-> metrikler bu yüzden doğrulanamıyor. Bu kayıtlar gerçek bir CI çalışmasıyla
-> yeniden bağlanmalıdır.
+> ℹ️ **Sürüm etiketi notu:** v1.0.0 `9907cd3` (#81) commit'ine annotated git
+> tag olarak **uygulandı** (2026-06-18). Geçmiş kayıt: RC doğrulama dokümanında
+> atıf yapılan eski `2f9e7e6` commit'i repoda yoktu; gerçek RC kanıt commit'i
+> `5ce60ae` (#80) ile düzeltildi ve oradaki "%96.5 accuracy / 500 query" gibi
+> metrikler **UNVERIFIED** olarak işaretlendi (gerçek bir CI çalışmasıyla
+> yeniden bağlanmalıdır).
 
 ---
 

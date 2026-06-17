@@ -24,7 +24,7 @@ değerlendirme iskelesini kuruyor — ancak v2 (feedback loop) atlanmış durumd
 
 | Faz | Tema | Durum | Not |
 |-----|------|-------|-----|
-| **v1** | Production Baseline | 🟢 Büyük oranda tamam | 2026-06-05'te "release ready" ilan edildi (#81). ⚠️ `v1.0.0` tag'i atılmadı; RC kanıtı ölü commit `2f9e7e6`'ya bağlı; isimli çıktılardan `CandidateScorer`/`BoundedGraphPruner` kodda farklı isimde/eksik. |
+| **v1** | Production Baseline | 🟢 Kapandı | 2026-06-05'te "release ready" ilan edildi (#81); `v1.0.0` tag'i `9907cd3`'e atıldı (2026-06-18). RC kanıtının ölü commit'i `5ce60ae` ile düzeltildi (metrikler UNVERIFIED). Kalan iz: `CandidateScorer`/`BoundedGraphPruner` kodda farklı isimde/eksik. |
 | **v2** | Feedback Loop | 🔴 Başlamadı | Trace Mining, Pending Rules, LLM Suggestion, **Value Index**, QueryIntentClassifier, Feedback UI — hiçbiri kodda yok. |
 | **v3** | GraphRAG / PPR | 🟡 Sıra dışı başladı | Yalnızca execution-accuracy değerlendirme altyapısı kuruldu (`connection_abstraction`, `multi_database_execution`, execution orchestrator). **PostgreSQL adapter STUB** (`NOT_IMPLEMENTED`). PPR, column-level pruning, execution-guided repair, multi-candidate **yok**. |
 | **v4** | Enterprise | ⚪ Başlamadı | Multi-tenant, RBAC, PII redaction, governance — yok. |

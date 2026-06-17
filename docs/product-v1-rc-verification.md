@@ -5,8 +5,8 @@
 > evidence commit is `5ce60ae` (#80). The quantitative metrics below
 > (e.g. "96.5% accuracy / 500 queries", "CI run 217", "docker build 42s") were
 > never reproducibly tied to a real CI run and must be treated as **UNVERIFIED**
-> until regenerated against a real pipeline. The `v1.0.0` git tag has not been
-> applied. See `CHANGELOG.md`.
+> until regenerated against a real pipeline. The `v1.0.0` git tag was applied to
+> `9907cd3` (#81) on 2026-06-18. See `CHANGELOG.md`.
 
 This document serves as the audit log for the Product V1 Release Candidate gates.
 
