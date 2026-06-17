@@ -7,6 +7,8 @@ kararlar `docs/architecture/` altındadır ve kanonik kaynaktır:
 - [`docs/architecture/v2-feedback-loop.md`](docs/architecture/v2-feedback-loop.md) — Feedback ile Öğrenen Sistem
 - [`docs/architecture/v3-graphrag-ppr.md`](docs/architecture/v3-graphrag-ppr.md) — GraphRAG / PPR / Dynamic Subgraph
 - [`docs/architecture/v4-enterprise.md`](docs/architecture/v4-enterprise.md) — Enterprise-Grade Platform
+- [`docs/architecture/v5-productization.md`](docs/architecture/v5-productization.md) — Productization (API / UI / Deployment)
+- [`docs/architecture/v6-saas-desktop.md`](docs/architecture/v6-saas-desktop.md) — SaaS & Desktop Readiness
 
 Tamamlanan işler için `CHANGELOG.md` ve `docs/SPRINT-PR-LOG.md`, ileriye dönük
 detaylı sprint planı için `docs/PLANNED-SPRINTS.md` (Phase 7–15 · Sprint
@@ -26,8 +28,10 @@ değerlendirme iskelesini kuruyor — ancak v2 (feedback loop) atlanmış durumd
 |-----|------|-------|-----|
 | **v1** | Production Baseline | 🟢 Kapandı | 2026-06-05'te "release ready" ilan edildi (#81); `v1.0.0` tag'i `9907cd3`'e atıldı (2026-06-18). RC kanıtının ölü commit'i `5ce60ae` ile düzeltildi (metrikler UNVERIFIED). Kalan iz: `CandidateScorer`/`BoundedGraphPruner` kodda farklı isimde/eksik. |
 | **v2** | Feedback Loop | 🔴 Başlamadı | Trace Mining, Pending Rules, LLM Suggestion, **Value Index**, QueryIntentClassifier, Feedback UI — hiçbiri kodda yok. |
-| **v3** | GraphRAG / PPR | 🟡 Sıra dışı başladı | Yalnızca execution-accuracy değerlendirme altyapısı kuruldu (`connection_abstraction`, `multi_database_execution`, execution orchestrator). **PostgreSQL adapter STUB** (`NOT_IMPLEMENTED`). PPR, column-level pruning, execution-guided repair, multi-candidate **yok**. |
-| **v4** | Enterprise | ⚪ Başlamadı | Multi-tenant, RBAC, PII redaction, governance — yok. |
+| **v3** | GraphRAG / PPR | 🟡 Sıra dışı başladı | Yalnızca execution-accuracy değerlendirme altyapısı kuruldu (`connection_abstraction`, `multi_database_execution`, execution orchestrator). **PostgreSQL adapter STUB** (`NOT_IMPLEMENTED`). PPR, column-level pruning, execution-guided repair, multi-candidate **yok**. *(Plan: Phase 9–10)* |
+| **v4** | Enterprise | ⚪ Başlamadı | Multi-tenant, RBAC, PII redaction, governance — yok. *(Plan: Phase 7–8 + Phase 14'ün güvenlik kısmı)* |
+| **v5** | Productization | ⚪ Başlamadı | Public API, production UI, deploy/ops — yok. *(Plan: Phase 11–13)* |
+| **v6** | SaaS & Desktop | ⚪ Başlamadı | Org/workspace, billing, metering, desktop packaging — yok. *(Plan: Phase 14–15)* |
 
 ### ⚠️ Dikkat edilmesi gereken sıralama riski
 Son ~6 sprint (20–25) v3'e ait değerlendirme/execution iskelesini kurarken,

@@ -16,6 +16,24 @@ Tamamlanan işler için `SPRINT-PR-LOG.md`, faz bazlı mimari kararlar için
 > Pending Rules, QueryIntentClassifier) bu plana **dahil edilmemiştir**; durumu
 > ayrıca ele alınacaktır. Bkz. `docs/architecture/v2-feedback-loop.md`.
 
+## Faz → Sürüm (v) Eşlemesi
+Bu fazlar `docs/architecture/` sürüm hattına şöyle düşer:
+
+| Phase | Tema | Sürüm |
+|---|---|---|
+| Phase 9 — Large Schema Scale | 28.x | **v3** ([v3-graphrag-ppr](architecture/v3-graphrag-ppr.md)) |
+| Phase 10 — Real DB Adapters | 29.x | **v3** (enabler) |
+| Phase 7 — Security & Governance | 26.x | **v4** ([v4-enterprise](architecture/v4-enterprise.md)) |
+| Phase 8 — Observability | 27.x | **v4** |
+| Phase 11 — API Productization | 30.x | **v5** ([v5-productization](architecture/v5-productization.md)) |
+| Phase 12 — UI/UX Production | 31.x | **v5** |
+| Phase 13 — Deployment/Ops | 32.x | **v5** |
+| Phase 14 — SaaS / Multi-Tenant | 33.x | **v4→v6** ([v6-saas-desktop](architecture/v6-saas-desktop.md)) |
+| Phase 15 — Desktop | 34.x | **v6** |
+
+> Yani bu plan v3+v4'ü tamamlar, ardından **yeni** v5 (productization) ve
+> v6 (saas/desktop) sürümlerine taşar.
+
 ---
 
 ## Sprint 25 — Kalan adımlar (Multi-DB / Adapter Stubs)
