@@ -48,7 +48,17 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   edilmiş hatalar, lazy driver import. live/remote/production capability'leri
   hard-False; hiçbir bağlantı orchestrator'a wire edilmediğinden default davranış
   inert kalır. Integration testleri Docker yoksa safe-skip; CI'a `postgres:16`
-  servisi eklendi (commit `405f910`).
+  servisi eklendi (#125).
+- **Oracle adapter contract stub** (Sprint 25.9): Oracle adapter'ın *gerçek
+  implementasyonu yok*; yalnızca ileride uyacağı sözleşme kilitlendi.
+  `SQLOracleAdapterCapability` tüm execution flag'lerini (`live`/`driver`/
+  `network`/`read_only`/`local_docker`/`remote`/`production`/`oracle`) `False`'a
+  zorlar; contract dataclass'ları immutable; adapter deterministik biçimde geçersiz
+  girdide `REJECTED`, diğer her durumda `NOT_IMPLEMENTED` döner; result yalnızca
+  `sql_sha256` taşır (ham SQL / connection ref / DSN / credential sızdırmaz).
+  cx_Oracle / oracledb / SQLAlchemy / JDBC / socket / DSN-TNS-wallet / env-secret
+  kullanımı yasaktır ve testlerle kilitlidir. Bununla **Phase 6 (adapter stub'ları)
+  kapanır**.
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
@@ -56,6 +66,9 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   açıldı; live/remote/production capability'leri hâlâ hard-False'tur ve hiçbir
   bağlantı orchestrator'a wire edilmediği için varsayılan davranış `NOT_IMPLEMENTED`
   olarak inert kalır. Production-grade gerçek execution Phase 10 (29.1)'de.
+- **Oracle adapter henüz hiçbir sorgu çalıştırmaz** (`backend/app/evaluation/oracle_adapter.py`):
+  Sprint 25.9 yalnızca sözleşme stub'ıdır; gerçek Oracle execution (driver, DSN/TNS,
+  wallet, read-only/EXPLAIN) Phase 10'da (29.3 adapter, 29.4 Docker/test harness).
 - Feedback-loop / öğrenen sistem çıktıları (Trace Mining, Pending Rules,
   Value Index, Feedback UI) henüz yok; minimal ilk adımı (`27.9 Feedback Review →
   Rule Suggestion`) Phase 8 planına eklendi (`docs/PLANNED-SPRINTS.md`).

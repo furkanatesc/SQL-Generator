@@ -114,6 +114,17 @@ from .postgres_adapter import (
     default_local_docker_capability,
     validate_read_only_select,
 )
+from .oracle_adapter import (
+    SQL_ORACLE_ADAPTER_CONTRACT_VERSION,
+    SQLOracleAdapterContractError,
+    SQLOracleAdapterStatus,
+    SQLOracleAdapterCapability,
+    SQLOracleAdapterConfig,
+    SQLOracleAdapterExecutionRequest,
+    SQLOracleAdapterExecutionResult,
+    SQLOracleAdapterContract,
+    default_oracle_stub_capability,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -210,5 +221,14 @@ __all__ = [
     "SQLPostgresAdapterContract",
     "default_local_docker_capability",
     "validate_read_only_select",
+    "SQL_ORACLE_ADAPTER_CONTRACT_VERSION",
+    "SQLOracleAdapterContractError",
+    "SQLOracleAdapterStatus",
+    "SQLOracleAdapterCapability",
+    "SQLOracleAdapterConfig",
+    "SQLOracleAdapterExecutionRequest",
+    "SQLOracleAdapterExecutionResult",
+    "SQLOracleAdapterContract",
+    "default_oracle_stub_capability",
 ]
 
