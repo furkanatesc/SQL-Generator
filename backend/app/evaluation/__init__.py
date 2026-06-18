@@ -106,10 +106,13 @@ from .postgres_adapter import (
     SQLPostgresAdapterContractError,
     SQLPostgresAdapterStatus,
     SQLPostgresAdapterCapability,
+    SQLPostgresLocalDockerConnection,
     SQLPostgresAdapterConfig,
     SQLPostgresAdapterExecutionRequest,
     SQLPostgresAdapterExecutionResult,
     SQLPostgresAdapterContract,
+    default_local_docker_capability,
+    validate_read_only_select,
 )
 
 __all__ = [
@@ -200,9 +203,12 @@ __all__ = [
     "SQLPostgresAdapterContractError",
     "SQLPostgresAdapterStatus",
     "SQLPostgresAdapterCapability",
+    "SQLPostgresLocalDockerConnection",
     "SQLPostgresAdapterConfig",
     "SQLPostgresAdapterExecutionRequest",
     "SQLPostgresAdapterExecutionResult",
     "SQLPostgresAdapterContract",
+    "default_local_docker_capability",
+    "validate_read_only_select",
 ]
 

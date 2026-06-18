@@ -21,6 +21,22 @@ jobs:
       run:
         working-directory: backend
 
+    # Local Docker PostgreSQL for Sprint 25.8 read-only adapter integration tests.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sqlgen
+          POSTGRES_PASSWORD: sqlgen
+          POSTGRES_DB: sqlgen_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sqlgen"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,6 +56,11 @@ jobs:
       - name: Run tests
         env:
           NL2SQL_DEBUG_ENDPOINTS_ENABLED: "true"
+          POSTGRES_TEST_HOST: localhost
+          POSTGRES_TEST_PORT: "5432"
+          POSTGRES_TEST_DB: sqlgen_test
+          POSTGRES_TEST_USER: sqlgen
+          POSTGRES_TEST_PASSWORD: sqlgen
         run: |
           pytest -q
 

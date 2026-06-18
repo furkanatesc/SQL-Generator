@@ -9,11 +9,36 @@ from app.evaluation.postgres_adapter import (
     SQLPostgresAdapterContractError,
     SQLPostgresAdapterStatus,
     SQLPostgresAdapterCapability,
+    SQLPostgresLocalDockerConnection,
     SQLPostgresAdapterConfig,
     SQLPostgresAdapterExecutionRequest,
     SQLPostgresAdapterExecutionResult,
     SQLPostgresAdapterContract,
+    default_local_docker_capability,
+    validate_read_only_select,
 )
+
+EXPECTED_RESULT_KEYS = {
+    "version", "case_id", "status", "sql_sha256",
+    "rows", "row_count", "truncated", "error", "warnings", "duration_ms",
+}
+
+
+def _local_connection():
+    return SQLPostgresLocalDockerConnection(
+        host="localhost", port=5432, dbname="sqlgen_test",
+        user="sqlgen", password="sqlgen",
+    )
+
+
+def _request(sql, *, case_id="c1", connection_ref=None):
+    return SQLPostgresAdapterExecutionRequest(
+        case_id=case_id,
+        sql=sql,
+        dialect="postgresql",
+        config=SQLPostgresAdapterConfig(),
+        connection_ref=connection_ref,
+    )
 
 
 def test_postgres_adapter_contract_version_is_stable():
@@ -21,103 +46,162 @@ def test_postgres_adapter_contract_version_is_stable():
 
 
 def test_postgres_adapter_capability_is_immutable():
-    cap = SQLPostgresAdapterCapability(
-        version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
-        dialect="postgresql",
-        supports_live_execution=False,
-        supports_driver_execution=False,
-        supports_network_execution=False,
-        supports_read_only_queries=False
-    )
+    cap = default_local_docker_capability()
     with pytest.raises((FrozenInstanceError, AttributeError)):
         cap.version = "new_version"  # type: ignore
 
 
-def test_postgres_adapter_capability_disables_live_execution():
-    cap = SQLPostgresAdapterCapability(
+def test_postgres_adapter_capability_supports_local_docker_read_only_only():
+    cap = default_local_docker_capability()
+    # Enabled: local-docker, driver, read-only, (local) network execution.
+    assert cap.supports_local_docker_execution is True
+    assert cap.supports_driver_execution is True
+    assert cap.supports_read_only_queries is True
+    assert cap.supports_network_execution is True
+    # Forbidden: production / remote / live execution stay disabled.
+    assert cap.supports_production_execution is False
+    assert cap.supports_remote_execution is False
+    assert cap.supports_live_execution is False
+
+
+@pytest.mark.parametrize("field_name", [
+    "supports_live_execution",
+    "supports_remote_execution",
+    "supports_production_execution",
+])
+def test_postgres_adapter_capability_rejects_unsafe_flag_true(field_name):
+    kwargs = dict(
         version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
         dialect="postgresql",
         supports_live_execution=False,
-        supports_driver_execution=False,
-        supports_network_execution=False,
-        supports_read_only_queries=False
+        supports_driver_execution=True,
+        supports_network_execution=True,
+        supports_read_only_queries=True,
+        supports_local_docker_execution=True,
+        supports_remote_execution=False,
+        supports_production_execution=False,
     )
-    assert cap.supports_live_execution is False
-    assert cap.supports_driver_execution is False
-    assert cap.supports_network_execution is False
-    assert cap.supports_read_only_queries is False
+    kwargs[field_name] = True
+    with pytest.raises(SQLPostgresAdapterContractError):
+        SQLPostgresAdapterCapability(**kwargs)
 
 
-def test_postgres_adapter_execute_returns_not_implemented_without_driver():
-    config = SQLPostgresAdapterConfig(
-        timeout_seconds=5.0,
-        max_rows=500,
-        execution_mode="read_only"
-    )
-    request = SQLPostgresAdapterExecutionRequest(
-        case_id="case-100",
-        sql="SELECT * FROM my_table",
+@pytest.mark.parametrize("field_name", [
+    "supports_local_docker_execution",
+    "supports_driver_execution",
+    "supports_read_only_queries",
+])
+def test_postgres_adapter_capability_requires_local_docker_flag_true(field_name):
+    kwargs = dict(
+        version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
         dialect="postgresql",
-        config=config,
-        connection_ref="pg-conn-ref"
+        supports_live_execution=False,
+        supports_driver_execution=True,
+        supports_network_execution=True,
+        supports_read_only_queries=True,
+        supports_local_docker_execution=True,
+        supports_remote_execution=False,
+        supports_production_execution=False,
     )
-    adapter = SQLPostgresAdapterContract()
-    result = adapter.execute(request)
-    
-    assert isinstance(result, SQLPostgresAdapterExecutionResult)
+    kwargs[field_name] = False
+    with pytest.raises(SQLPostgresAdapterContractError):
+        SQLPostgresAdapterCapability(**kwargs)
+
+
+def test_postgres_adapter_rejects_remote_connection_config():
+    with pytest.raises(SQLPostgresAdapterContractError, match="local Docker hosts"):
+        SQLPostgresLocalDockerConnection(
+            host="db.prod.internal", port=5432, dbname="app",
+            user="app", password="secret",
+        )
+
+
+def test_postgres_adapter_rejects_production_environment():
+    with pytest.raises(SQLPostgresAdapterContractError, match="local_docker"):
+        SQLPostgresLocalDockerConnection(
+            host="localhost", port=5432, dbname="app",
+            user="app", password="secret", environment="production",
+        )
+
+
+def test_postgres_adapter_without_connection_is_inert():
+    adapter = SQLPostgresAdapterContract()  # no connection wired
+    result = adapter.execute(_request("SELECT 1", case_id="case-100"))
     assert result.status == SQLPostgresAdapterStatus.NOT_IMPLEMENTED
-    assert result.version == SQL_POSTGRES_ADAPTER_CONTRACT_VERSION
-    assert result.case_id == "case-100"
-    
-    expected_hash = hashlib.sha256("SELECT * FROM my_table".encode("utf-8")).hexdigest()
-    assert result.sql_sha256 == expected_hash
-    assert "not implemented" in result.error.lower()
+    assert result.sql_sha256 == hashlib.sha256(b"SELECT 1").hexdigest()
+    assert result.rows == ()
 
 
-def test_postgres_adapter_rejects_without_network_or_secret_resolution(monkeypatch):
-    # Intercept socket creation to ensure no network calls are made
-    def mock_socket(*args, **kwargs):
-        raise RuntimeError("Network socket usage is forbidden in this contract stub")
-    monkeypatch.setattr(socket, "socket", mock_socket)
-
-    # Intercept os.environ to ensure no env-var secret loading
-    def mock_environ_get(*args, **kwargs):
-        raise RuntimeError("Environment secret loading is forbidden in this contract stub")
-    monkeypatch.setattr("os.environ.get", mock_environ_get)
-
-    config = SQLPostgresAdapterConfig()
-    request = SQLPostgresAdapterExecutionRequest(
-        case_id="c1",
-        sql="SELECT 1",
-        dialect="postgresql",
-        config=config
-    )
-    adapter = SQLPostgresAdapterContract()
-    
-    # Execute should run successfully (meaning it doesn't trigger our blocked socket/environ methods)
-    result = adapter.execute(request)
-    assert result.status == SQLPostgresAdapterStatus.NOT_IMPLEMENTED
+@pytest.mark.parametrize("sql", [
+    "INSERT INTO users (id) VALUES (1)",
+    "UPDATE users SET name = 'x'",
+    "DELETE FROM users",
+])
+def test_postgres_adapter_rejects_insert_update_delete(sql):
+    adapter = SQLPostgresAdapterContract(connection=_local_connection())
+    result = adapter.execute(_request(sql))
+    assert result.status == SQLPostgresAdapterStatus.REJECTED
+    assert result.rows == ()
 
 
-def test_postgres_adapter_result_does_not_leak_connection_ref_or_secret():
-    secret_conn = "postgres://user:password123@host:5432/dbname"
-    config = SQLPostgresAdapterConfig()
-    request = SQLPostgresAdapterExecutionRequest(
-        case_id="c1",
-        sql="SELECT * FROM secret_table",
-        dialect="postgresql",
-        config=config,
-        connection_ref=secret_conn
-    )
-    adapter = SQLPostgresAdapterContract()
-    result = adapter.execute(request)
-    
+@pytest.mark.parametrize("sql", [
+    "DROP TABLE users",
+    "ALTER TABLE users ADD COLUMN x int",
+    "CREATE TABLE x (id int)",
+    "TRUNCATE users",
+    "COPY users TO '/tmp/x'",
+    "CALL some_proc()",
+])
+def test_postgres_adapter_rejects_ddl_queries(sql):
+    adapter = SQLPostgresAdapterContract(connection=_local_connection())
+    result = adapter.execute(_request(sql))
+    assert result.status == SQLPostgresAdapterStatus.REJECTED
+
+
+def test_postgres_adapter_rejects_multi_statement_query():
+    adapter = SQLPostgresAdapterContract(connection=_local_connection())
+    result = adapter.execute(_request("SELECT * FROM users; DROP TABLE users;"))
+    assert result.status == SQLPostgresAdapterStatus.REJECTED
+    assert "single" in (result.error or "").lower()
+
+
+def test_validate_read_only_select_allows_plain_select():
+    assert validate_read_only_select("SELECT id, name FROM users") is None
+    assert validate_read_only_select("  select 1  ") is None
+    assert validate_read_only_select("SELECT 1;") is None  # single trailing semicolon ok
+
+
+def test_postgres_adapter_rejection_path_opens_no_socket(monkeypatch):
+    def _forbidden_socket(*args, **kwargs):
+        raise RuntimeError("network access is forbidden on the rejection path")
+    monkeypatch.setattr(socket, "socket", _forbidden_socket)
+
+    adapter = SQLPostgresAdapterContract(connection=_local_connection())
+    result = adapter.execute(_request("DELETE FROM users"))
+    assert result.status == SQLPostgresAdapterStatus.REJECTED
+
+
+def test_postgres_adapter_returns_deterministic_result_shape():
+    adapter = SQLPostgresAdapterContract(connection=_local_connection())
+    result = adapter.execute(_request("UPDATE users SET x = 1"))  # rejected, no DB needed
     serialized = result.to_dict()
-    serialized_str = json.dumps(serialized)
-    
-    # Assert connection_ref string or credentials never leak to the trace dictionary
+    assert set(serialized.keys()) == EXPECTED_RESULT_KEYS
+    assert serialized["status"] == "rejected"
+    assert serialized["rows"] == []
+    assert serialized["row_count"] == 0
+    assert serialized["truncated"] is False
+    # to_dict must be JSON-serializable
+    json.dumps(serialized)
+
+
+def test_postgres_adapter_does_not_leak_connection_ref_or_credentials():
+    secret_conn = "postgres://user:password123@host:5432/dbname"
+    adapter = SQLPostgresAdapterContract(connection=_local_connection())
+    result = adapter.execute(_request("DROP TABLE secret", connection_ref=secret_conn))
+    serialized_str = json.dumps(result.to_dict())
     assert secret_conn not in serialized_str
     assert "password123" not in serialized_str
+    assert "sqlgen" not in serialized_str  # the connection user/password must not leak either
 
 
 def test_postgres_adapter_import_does_not_load_db_drivers():
@@ -126,7 +210,7 @@ def test_postgres_adapter_import_does_not_load_db_drivers():
     import sys
     import app.evaluation
     eval_dir = os.path.dirname(app.evaluation.__file__)
-    
+
     code = (
         "import sys\n"
         f"sys.path.insert(0, {repr(eval_dir)})\n"
@@ -140,7 +224,7 @@ def test_postgres_adapter_import_does_not_load_db_drivers():
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        check=True
+        check=True,
     )
     assert "FORBIDDEN" not in res.stdout, f"Importing postgres_adapter loaded forbidden driver: {res.stdout}"
 
@@ -151,7 +235,7 @@ def test_postgres_adapter_import_does_not_load_socket_or_network_clients():
     import sys
     import app.evaluation
     eval_dir = os.path.dirname(app.evaluation.__file__)
-    
+
     code = (
         "import sys\n"
         f"sys.path.insert(0, {repr(eval_dir)})\n"
@@ -165,59 +249,16 @@ def test_postgres_adapter_import_does_not_load_socket_or_network_clients():
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        check=True
+        check=True,
     )
     assert "FORBIDDEN" not in res.stdout, f"Importing postgres_adapter loaded network client: {res.stdout}"
-
-
-def test_postgres_adapter_capability_rejects_live_execution_true():
-    with pytest.raises(SQLPostgresAdapterContractError, match="cannot support live execution"):
-        SQLPostgresAdapterCapability(
-            version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
-            dialect="postgresql",
-            supports_live_execution=True,
-            supports_driver_execution=False,
-            supports_network_execution=False,
-            supports_read_only_queries=False,
-        )
-
-
-def test_postgres_adapter_capability_rejects_driver_execution_true():
-    with pytest.raises(SQLPostgresAdapterContractError, match="cannot support driver execution"):
-        SQLPostgresAdapterCapability(
-            version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
-            dialect="postgresql",
-            supports_live_execution=False,
-            supports_driver_execution=True,
-            supports_network_execution=False,
-            supports_read_only_queries=False,
-        )
-
-
-def test_postgres_adapter_capability_rejects_network_execution_true():
-    with pytest.raises(SQLPostgresAdapterContractError, match="cannot support network execution"):
-        SQLPostgresAdapterCapability(
-            version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
-            dialect="postgresql",
-            supports_live_execution=False,
-            supports_driver_execution=False,
-            supports_network_execution=True,
-            supports_read_only_queries=False,
-        )
-
-
-def test_postgres_adapter_capability_rejects_read_only_queries_true():
-    with pytest.raises(SQLPostgresAdapterContractError, match="cannot support read-only query execution yet"):
-        SQLPostgresAdapterCapability(
-            version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
-            dialect="postgresql",
-            supports_live_execution=False,
-            supports_driver_execution=False,
-            supports_network_execution=False,
-            supports_read_only_queries=True,
-        )
 
 
 def test_postgres_adapter_contract_rejects_unsafe_custom_capability():
     with pytest.raises(SQLPostgresAdapterContractError, match="capability must be a SQLPostgresAdapterCapability"):
         SQLPostgresAdapterContract(capability="not-a-capability-obj")  # type: ignore
+
+
+def test_postgres_adapter_contract_rejects_invalid_connection_object():
+    with pytest.raises(SQLPostgresAdapterContractError, match="connection must be a SQLPostgresLocalDockerConnection"):
+        SQLPostgresAdapterContract(connection="not-a-connection")  # type: ignore
