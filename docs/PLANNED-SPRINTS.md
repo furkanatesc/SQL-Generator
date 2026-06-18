@@ -38,10 +38,10 @@ Plan **Phase → Sprint → PR** ekseninde ilerler (sürüm/`v` etiketi kullanı
 enforcement, query risk classification, sensitive table/column policy ve audit
 governance.
 
-| Sprint | İş |
-|---|---|
-| 26.0 | SQL Permission Policy Contract |
-| 26.1 | Tenant / Workspace Boundary Contract |
+| Sprint | İş | Durum |
+|---|---|---|
+| 26.0 | SQL Permission Policy Contract | ✅ Tamam · *default-deny karar sözleşmesi; enforcement değil* |
+| 26.1 | Tenant / Workspace Boundary Contract | ⏳ Sıradaki |
 | 26.2 | Read-Only Enforcement Hardening |
 | 26.3 | Query Risk Classifier |
 | 26.4 | Sensitive Table / Column Policy |
