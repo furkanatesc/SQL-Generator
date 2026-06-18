@@ -17,9 +17,9 @@ Bu dosya yol haritasının **tek giriş noktasıdır**. Eksen: **Phase → Sprin
 
 | Durum | Kapsam | Detay |
 |---|---|---|
-| ✅ **Tamamlandı** | Sprint 0 → **25.7** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). `docs/SPRINT-PR-LOG.md` |
-| ▶️ **Sıradaki** | **Sprint 25.8** | PostgreSQL Read-Only Adapter — *yalnızca local Docker* (stub'ı gerçeğe yaklaştırma) |
-| 🗓️ **Planlanan** | **Phase 7 → 15** (Sprint 25.8 → 34.7) | `docs/PLANNED-SPRINTS.md` |
+| ✅ **Tamamlandı** | Sprint 0 → **25.9** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). 25.8 PostgreSQL Read-Only Adapter (*yalnızca local Docker*, #125) ve 25.9 Oracle Adapter Contract **Stub** tamam — **Phase 6 (adapter stub'ları) kapandı**. `docs/SPRINT-PR-LOG.md` |
+| ▶️ **Sıradaki** | **Phase 7 · Sprint 26.0** | SQL Permission Policy Contract — güvenlik/governance katmanına geçiş (`docs/PLANNED-SPRINTS.md`) |
+| 🗓️ **Planlanan** | **Phase 7 → 15** (Sprint 26.0 → 34.7) | `docs/PLANNED-SPRINTS.md` |
 
 ### Planlanan fazlar (durum)
 | Phase | Tema | Sprint aralığı | Durum |

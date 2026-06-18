@@ -41,11 +41,34 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   sözleşmesi, eval gate aggregator, regression dashboard sözleşmesi, çoklu
   veritabanı execution sözleşmesi, connection abstraction katmanı,
   connection-aware execution planner ve orchestrator (#110–#121).
+- **PostgreSQL read-only adapter — local Docker** (Sprint 25.8): 25.7 contract
+  stub'ı, *yalnızca local Docker'a* karşı gerçek read-only `SELECT` çalıştırabilen
+  kontrollü bir adapter'a dönüştürüldü — SELECT-only/tek-statement gate, read-only
+  transaction + `statement_timeout`, `max_rows` truncation, credential-safe sanitize
+  edilmiş hatalar, lazy driver import. live/remote/production capability'leri
+  hard-False; hiçbir bağlantı orchestrator'a wire edilmediğinden default davranış
+  inert kalır. Integration testleri Docker yoksa safe-skip; CI'a `postgres:16`
+  servisi eklendi (#125).
+- **Oracle adapter contract stub** (Sprint 25.9): Oracle adapter'ın *gerçek
+  implementasyonu yok*; yalnızca ileride uyacağı sözleşme kilitlendi.
+  `SQLOracleAdapterCapability` tüm execution flag'lerini (`live`/`driver`/
+  `network`/`read_only`/`local_docker`/`remote`/`production`/`oracle`) `False`'a
+  zorlar; contract dataclass'ları immutable; adapter deterministik biçimde geçersiz
+  girdide `REJECTED`, diğer her durumda `NOT_IMPLEMENTED` döner; result yalnızca
+  `sql_sha256` taşır (ham SQL / connection ref / DSN / credential sızdırmaz).
+  cx_Oracle / oracledb / SQLAlchemy / JDBC / socket / DSN-TNS-wallet / env-secret
+  kullanımı yasaktır ve testlerle kilitlidir. Bununla **Phase 6 (adapter stub'ları)
+  kapanır**.
 
 ### Known limitations
-- **PostgreSQL adapter yalnızca stub'dur** (`backend/app/evaluation/postgres_adapter.py`):
-  her çağrıya `NOT_IMPLEMENTED` döner ve capability sözleşmesi canlı/driver/network
-  execution'ı aktif olarak yasaklar. Gerçek execution henüz yoktur.
+- **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
+  Sprint 25.8 ile read-only `SELECT` execution **yalnızca local Docker** ortamında
+  açıldı; live/remote/production capability'leri hâlâ hard-False'tur ve hiçbir
+  bağlantı orchestrator'a wire edilmediği için varsayılan davranış `NOT_IMPLEMENTED`
+  olarak inert kalır. Production-grade gerçek execution Phase 10 (29.1)'de.
+- **Oracle adapter henüz hiçbir sorgu çalıştırmaz** (`backend/app/evaluation/oracle_adapter.py`):
+  Sprint 25.9 yalnızca sözleşme stub'ıdır; gerçek Oracle execution (driver, DSN/TNS,
+  wallet, read-only/EXPLAIN) Phase 10'da (29.3 adapter, 29.4 Docker/test harness).
 - Feedback-loop / öğrenen sistem çıktıları (Trace Mining, Pending Rules,
   Value Index, Feedback UI) henüz yok; minimal ilk adımı (`27.9 Feedback Review →
   Rule Suggestion`) Phase 8 planına eklendi (`docs/PLANNED-SPRINTS.md`).

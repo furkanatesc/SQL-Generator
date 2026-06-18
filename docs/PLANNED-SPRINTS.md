@@ -24,8 +24,12 @@ Plan **Phase → Sprint → PR** ekseninde ilerler (sürüm/`v` etiketi kullanı
 |---|---|---|
 | 25.6 | Execution Trace / Audit Contract | ✅ Tamam (#121) |
 | 25.7 | PostgreSQL Adapter Contract **Stub** | ✅ Tamam (`NOT_IMPLEMENTED`) |
-| 25.8 | PostgreSQL Read-Only Adapter — **Local Docker Only** | ⏳ Planlı · *stub seviyesi; gerçek execution Phase 10/29.1'de* |
-| 25.9 | Oracle Adapter Contract **Stub** | ⏳ Planlı · *stub; gerçek adapter 29.3'te* |
+| 25.8 | PostgreSQL Read-Only Adapter — **Local Docker Only** | ✅ Tamam (#125) · *yalnızca local Docker read-only SELECT; production execution Phase 10/29.1'de* |
+| 25.9 | Oracle Adapter Contract **Stub** | ✅ Tamam · *tüm execution flag'leri False; gerçek adapter 29.3, Docker/test harness 29.4'te* |
+
+> ✅ **Phase 6 (Multi-DB / Adapter Stubs) kapandı.** Sıradaki ana faz:
+> **Phase 7 — Security & Governance** (26.0 SQL Permission Policy Contract). Adapter
+> geliştirmeye Phase 10'a (29.x) kadar dönülmüyor.
 
 ---
 
