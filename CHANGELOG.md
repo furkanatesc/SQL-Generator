@@ -41,11 +41,21 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   sözleşmesi, eval gate aggregator, regression dashboard sözleşmesi, çoklu
   veritabanı execution sözleşmesi, connection abstraction katmanı,
   connection-aware execution planner ve orchestrator (#110–#121).
+- **PostgreSQL read-only adapter — local Docker** (Sprint 25.8): 25.7 contract
+  stub'ı, *yalnızca local Docker'a* karşı gerçek read-only `SELECT` çalıştırabilen
+  kontrollü bir adapter'a dönüştürüldü — SELECT-only/tek-statement gate, read-only
+  transaction + `statement_timeout`, `max_rows` truncation, credential-safe sanitize
+  edilmiş hatalar, lazy driver import. live/remote/production capability'leri
+  hard-False; hiçbir bağlantı orchestrator'a wire edilmediğinden default davranış
+  inert kalır. Integration testleri Docker yoksa safe-skip; CI'a `postgres:16`
+  servisi eklendi (commit `405f910`).
 
 ### Known limitations
-- **PostgreSQL adapter yalnızca stub'dur** (`backend/app/evaluation/postgres_adapter.py`):
-  her çağrıya `NOT_IMPLEMENTED` döner ve capability sözleşmesi canlı/driver/network
-  execution'ı aktif olarak yasaklar. Gerçek execution henüz yoktur.
+- **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
+  Sprint 25.8 ile read-only `SELECT` execution **yalnızca local Docker** ortamında
+  açıldı; live/remote/production capability'leri hâlâ hard-False'tur ve hiçbir
+  bağlantı orchestrator'a wire edilmediği için varsayılan davranış `NOT_IMPLEMENTED`
+  olarak inert kalır. Production-grade gerçek execution Phase 10 (29.1)'de.
 - Feedback-loop / öğrenen sistem çıktıları (Trace Mining, Pending Rules,
   Value Index, Feedback UI) henüz yok; minimal ilk adımı (`27.9 Feedback Review →
   Rule Suggestion`) Phase 8 planına eklendi (`docs/PLANNED-SPRINTS.md`).

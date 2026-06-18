@@ -24,8 +24,8 @@ Plan **Phase → Sprint → PR** ekseninde ilerler (sürüm/`v` etiketi kullanı
 |---|---|---|
 | 25.6 | Execution Trace / Audit Contract | ✅ Tamam (#121) |
 | 25.7 | PostgreSQL Adapter Contract **Stub** | ✅ Tamam (`NOT_IMPLEMENTED`) |
-| 25.8 | PostgreSQL Read-Only Adapter — **Local Docker Only** | ⏳ Planlı · *stub seviyesi; gerçek execution Phase 10/29.1'de* |
-| 25.9 | Oracle Adapter Contract **Stub** | ⏳ Planlı · *stub; gerçek adapter 29.3'te* |
+| 25.8 | PostgreSQL Read-Only Adapter — **Local Docker Only** | ✅ Tamam (`405f910`) · *yalnızca local Docker read-only SELECT; production execution Phase 10/29.1'de* |
+| 25.9 | Oracle Adapter Contract **Stub** | ⏳ Sıradaki · *stub; gerçek adapter 29.3'te* |
 
 ---
 

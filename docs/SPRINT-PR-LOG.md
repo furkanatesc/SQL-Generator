@@ -204,3 +204,4 @@ sprint ve PR bazında listeler. `main` branch git geçmişinden üretilmiştir
 | #120 | Execution outcome failure analytics entegrasyonu (25.5) |
 | #121 | Execution trace / audit sözleşme entegrasyonu (25.6) |
 | (25.7) | **PostgreSQL adapter contract STUB** + strict False capability testleri — ⚠️ `NOT_IMPLEMENTED`, gerçek execution yok |
+| (25.8) | **PostgreSQL Read-Only Adapter — yalnızca local Docker** — 25.7 stub'ı, local Docker'a karşı gerçek read-only SELECT çalıştıran kontrollü adapter'a dönüştürüldü (SELECT-only/tek-statement gate, read-only tx + `statement_timeout`, `max_rows` truncation, credential-safe hatalar, lazy driver import). live/remote/production capability'leri hard-False; bağlantı wire edilmediğinden orchestrator default'u inert (`NOT_IMPLEMENTED`). CI'da `postgres:16` servisi. Commit `405f910` *(PR pending)* |

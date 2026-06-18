@@ -1,7 +1,0 @@
-Production engineer refleksi şu:
-
-Önce boundary çiz.
-Sonra fake ile contract test et.
-Sonra gerçek adapter yaz.
-Sonra endpoint bağla.
-Sonra observability ekle.
