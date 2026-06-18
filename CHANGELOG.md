@@ -59,6 +59,16 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   cx_Oracle / oracledb / SQLAlchemy / JDBC / socket / DSN-TNS-wallet / env-secret
   kullanımı yasaktır ve testlerle kilitlidir. Bununla **Phase 6 (adapter stub'ları)
   kapanır**.
+- **SQL Permission Policy Contract** (Sprint 26.0 · Phase 7 başlangıcı):
+  backend'in ilk güvenlik/governance sözleşmesi (`backend/app/security/`). Bir SQL
+  çalışmadan önce "bu action izinli mi / deny mi / approval mı, neden?" sorusuna
+  deterministik cevap veren `SQLPermissionPolicyContract.evaluate()` →
+  `ALLOW` / `DENY` / `REQUIRES_APPROVAL` + audit reason code. **Fail-closed**:
+  bilinmeyen action/resource, eksik subject/resource, konfigüre edilmemiş policy →
+  hep `DENY` (belirsizlikte asla allow yok). Immutable request/result, deny-overrides
+  rule precedence, JSON-safe deterministic `to_dict()`. Result hiçbir secret/raw SQL/
+  connection string/PII taşımaz (`context` sonuca aktarılmaz). Enforcement engine,
+  tenant boundary, RBAC ve AuthN bu sprintte **yok** (26.1–26.11).
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
