@@ -304,3 +304,25 @@ def test_postgres_adapter_uses_shared_read_only_enforcement_contract():
         # When rejected, the adapter surfaces the shared contract's reason verbatim.
         if not allowed_by_shared:
             assert adapter_reason == shared.reason
+
+
+def test_postgres_and_oracle_adapters_agree_on_read_only_gate():
+    # Closes the cross-adapter divergence: both adapters now delegate to the same
+    # shared contract, so they must agree on every input (incl. WITH/CTE, which the
+    # old per-adapter copies disagreed on).
+    from app.evaluation import postgres_adapter, oracle_adapter
+
+    cases = [
+        "SELECT 1",
+        "WITH c AS (SELECT 1) SELECT * FROM c",   # previously: PG reject, Oracle reject; now both allow
+        "SELECT comment FROM t",                   # keyword-named column
+        "INSERT INTO t VALUES (1)",
+        "DROP TABLE t",
+        "CALL p()",
+        "SELECT 1; DROP TABLE t",
+        "",
+    ]
+    for sql in cases:
+        pg = postgres_adapter.validate_read_only_select(sql)
+        ora = oracle_adapter.validate_read_only_select(sql)
+        assert (pg is None) == (ora is None), f"adapters diverge on: {sql!r} (pg={pg!r}, oracle={ora!r})"

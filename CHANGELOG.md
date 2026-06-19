@@ -102,8 +102,9 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   (string katmanı):** fonksiyonla ifade edilen yazma (`SELECT setval(...)`,
   `SELECT lo_export(...)`) write verb'ü içermediğinden ALLOW olur; bunun savunması
   adapter'ın DB-seviyesi read-only session'ıdır (gerçek allowlist/parser 26.3+).
-  PostgreSQL adapter'ın `validate_read_only_select` gate'i artık bu ortak contract'a
-  **delege** eder. Risk classifier (26.3), sensitive/PII policy, audit, approval,
+  **PostgreSQL ve Oracle** adapter'larının `validate_read_only_select` gate'i artık
+  bu ortak contract'a **delege** eder (cross-adapter divergence kapandı; iki adapter
+  aynı SQL'de aynı kararı verir, testle kilitli). Risk classifier (26.3), sensitive/PII policy, audit, approval,
   yeni adapter, gerçek production execution, API/UI ve tenant/RBAC/AuthN bu sprintte **yok**.
 
 ### Known limitations
