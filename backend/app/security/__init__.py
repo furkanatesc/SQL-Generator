@@ -29,6 +29,15 @@ from .sql_read_only_enforcement import (
     SQLReadOnlyEnforcementResult,
     SQLReadOnlyEnforcementContract,
 )
+from .sql_query_risk_classifier import (
+    SQL_QUERY_RISK_CLASSIFIER_CONTRACT_VERSION,
+    SQLQueryRiskClassifierContractError,
+    SQLQueryRiskLevel,
+    SQLQueryRiskSignal,
+    SQLQueryRiskRequest,
+    SQLQueryRiskResult,
+    SQLQueryRiskClassifier,
+)
 
 __all__ = [
     "SQL_PERMISSION_POLICY_CONTRACT_VERSION",
@@ -56,4 +65,11 @@ __all__ = [
     "SQLReadOnlyEnforcementRequest",
     "SQLReadOnlyEnforcementResult",
     "SQLReadOnlyEnforcementContract",
+    "SQL_QUERY_RISK_CLASSIFIER_CONTRACT_VERSION",
+    "SQLQueryRiskClassifierContractError",
+    "SQLQueryRiskLevel",
+    "SQLQueryRiskSignal",
+    "SQLQueryRiskRequest",
+    "SQLQueryRiskResult",
+    "SQLQueryRiskClassifier",
 ]
