@@ -21,8 +21,9 @@ procedure, transaction-control, or data-movement statement may pass "maybe it's
 safe".
 
 Before classifying, the SQL is lexed into code / string-literal / quoted-identifier
-/ comment regions (``_sanitize``): comments are removed and string literals and
-double-quoted identifiers are masked. Only *executable code* is then scanned. This
+/ comment regions (the shared ``app.security._sql_text`` helper): comments are
+removed and string literals and double-quoted identifiers are masked. Only
+*executable code* is then scanned. This
 means a forbidden word that appears only as data (``SELECT 'please DROP it'``) or
 as a quoted identifier (``SELECT * FROM "merge"``) is NOT a false positive, while a
 ``;`` or write verb in real executable position is still caught — including the
@@ -51,12 +52,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional
 
-SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION = "sql_read_only_enforcement_contract_v1"
+from app.security._sql_text import leading_keyword as _leading_keyword
+from app.security._sql_text import to_executable_core as _to_executable_core
 
-# Number of leading-keyword characters echoed for audit. Deliberately the leading
-# SQL keyword only (e.g. SELECT / WITH / DROP) — never query content — so no
-# string literal, value, or PII can leak through the result.
-_PREFIX_MAX_LEN = 32
+SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION = "sql_read_only_enforcement_contract_v1"
 
 
 class SQLReadOnlyEnforcementContractError(ValueError):
@@ -131,67 +130,6 @@ _ANYWHERE_KEYWORD_RE = re.compile(r"\b(" + "|".join(_ANYWHERE_KEYWORDS) + r")\b"
 # feeds a SELECT. A data-modifying CTE (e.g. WITH x AS (DELETE ...)) is still
 # caught: its DML verb is an "anywhere" keyword scanned across the statement.
 _READ_ONLY_START_RE = re.compile(r"(?is)^\s*(SELECT|WITH)\b")
-_LEADING_TOKEN_RE = re.compile(r"^\s*([A-Za-z_]+)")
-_WHITESPACE_RE = re.compile(r"\s+")
-
-
-def _sanitize(sql: str) -> str:
-    """Return executable code only: comments removed, string literals and
-    double-quoted identifiers replaced by a single-space placeholder.
-
-    A small dialect-generic lexer. Single quotes (``'``) delimit string literals,
-    double quotes (``"``) delimit identifiers; a doubled quote (``''`` / ``""``)
-    is an embedded quote, not a terminator (ANSI / standard_conforming_strings).
-    ``--`` runs to end of line, ``/* ... */`` is a (non-nested) block comment.
-
-    Errs toward safety: an unterminated literal/comment is masked to end of input
-    (its tail cannot be executable code anyway), and a non-nested ``*/`` scan that
-    closes "early" only leaves MORE text as code — conservative, never a bypass.
-    """
-    out = []
-    i, n = 0, len(sql)
-    while i < n:
-        c = sql[i]
-        nxt = sql[i + 1] if i + 1 < n else ""
-        if c == "'" or c == '"':
-            quote = c
-            i += 1
-            while i < n:
-                if sql[i] == quote:
-                    if i + 1 < n and sql[i + 1] == quote:  # doubled = escaped quote
-                        i += 2
-                        continue
-                    i += 1
-                    break
-                i += 1
-            out.append(" ")
-        elif c == "-" and nxt == "-":
-            i += 2
-            while i < n and sql[i] not in "\r\n":
-                i += 1
-            out.append(" ")
-        elif c == "/" and nxt == "*":
-            i += 2
-            while i < n and not (sql[i] == "*" and i + 1 < n and sql[i + 1] == "/"):
-                i += 1
-            i += 2  # consume the closing */ (no-op past end if unterminated)
-            out.append(" ")
-        else:
-            out.append(c)
-            i += 1
-    return "".join(out)
-
-
-def _normalize(sql: str) -> str:
-    """Collapse all whitespace runs to single spaces and strip. Deterministic."""
-    return _WHITESPACE_RE.sub(" ", sql).strip()
-
-
-def _leading_keyword(normalized_core: str) -> Optional[str]:
-    match = _LEADING_TOKEN_RE.match(normalized_core)
-    if not match:
-        return None
-    return match.group(1).upper()[:_PREFIX_MAX_LEN]
 
 
 @dataclass(frozen=True)
@@ -308,10 +246,9 @@ class SQLReadOnlyEnforcementContract:
             return self._deny(SQLReadOnlyReasonCode.EMPTY_SQL,
                               "SQL is empty.", sql_hash, None, dialect)
 
-        # Strip comments and mask literals/identifiers, then normalize whitespace.
-        # Everything below operates on executable code only.
-        sanitized = _normalize(_sanitize(sql))
-        core = sanitized[:-1].strip() if sanitized.endswith(";") else sanitized
+        # Strip comments, mask literals/identifiers, normalize, drop one trailing
+        # semicolon. Everything below operates on executable code only.
+        core = _to_executable_core(sql)
         prefix = _leading_keyword(core)
 
         # 3. Single statement only (one optional trailing semicolon already removed).
