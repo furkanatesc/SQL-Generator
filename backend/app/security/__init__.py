@@ -10,6 +10,16 @@ from .sql_permission_policy import (
     SQLPermissionPolicyResult,
     SQLPermissionPolicyContract,
 )
+from .tenant_workspace_boundary import (
+    TENANT_WORKSPACE_BOUNDARY_CONTRACT_VERSION,
+    TenantWorkspaceBoundaryContractError,
+    TenantWorkspaceBoundaryDecision,
+    TenantWorkspaceBoundaryReasonCode,
+    TenantWorkspaceBoundary,
+    TenantWorkspaceBoundaryRequest,
+    TenantWorkspaceBoundaryResult,
+    TenantWorkspaceBoundaryContract,
+)
 
 __all__ = [
     "SQL_PERMISSION_POLICY_CONTRACT_VERSION",
@@ -22,4 +32,12 @@ __all__ = [
     "SQLPermissionPolicyRequest",
     "SQLPermissionPolicyResult",
     "SQLPermissionPolicyContract",
+    "TENANT_WORKSPACE_BOUNDARY_CONTRACT_VERSION",
+    "TenantWorkspaceBoundaryContractError",
+    "TenantWorkspaceBoundaryDecision",
+    "TenantWorkspaceBoundaryReasonCode",
+    "TenantWorkspaceBoundary",
+    "TenantWorkspaceBoundaryRequest",
+    "TenantWorkspaceBoundaryResult",
+    "TenantWorkspaceBoundaryContract",
 ]
