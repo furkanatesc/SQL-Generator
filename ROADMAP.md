@@ -17,14 +17,14 @@ Bu dosya yol haritasının **tek giriş noktasıdır**. Eksen: **Phase → Sprin
 
 | Durum | Kapsam | Detay |
 |---|---|---|
-| ✅ **Tamamlandı** | Sprint 0 → **26.0** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) kapandı; **Phase 7 başladı** — 26.0 SQL Permission Policy Contract (default-deny güvenlik karar sözleşmesi) tamam. `docs/SPRINT-PR-LOG.md` |
-| ▶️ **Sıradaki** | **Phase 7 · Sprint 26.1** | Tenant / Workspace Boundary Contract (`docs/PLANNED-SPRINTS.md`) |
-| 🗓️ **Planlanan** | **Phase 7 → 15** (Sprint 26.1 → 34.7) | `docs/PLANNED-SPRINTS.md` |
+| ✅ **Tamamlandı** | Sprint 0 → **26.1** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) kapandı; **Phase 7 devam ediyor** — 26.0 SQL Permission Policy Contract + 26.1 Tenant/Workspace Boundary Contract tamam. `docs/SPRINT-PR-LOG.md` |
+| ▶️ **Sıradaki** | **Phase 7 · Sprint 26.2** | Read-Only Enforcement Hardening (`docs/PLANNED-SPRINTS.md`) |
+| 🗓️ **Planlanan** | **Phase 7 → 15** (Sprint 26.2 → 34.7) | `docs/PLANNED-SPRINTS.md` |
 
 ### Planlanan fazlar (durum)
 | Phase | Tema | Sprint aralığı | Durum |
 |---|---|---|---|
-| 7 | Security & Governance | 26.x | ▶️ Devam ediyor *(26.0 tamam)* |
+| 7 | Security & Governance | 26.x | ▶️ Devam ediyor *(26.0–26.1 tamam)* |
 | 8 | Observability & Debuggability | 27.x | 🗓️ Planlı |
 | 9 | Large Schema Production Scale | 28.x | 🗓️ Planlı |
 | 10 | Real Database Adapter Layer | 29.x | 🗓️ Planlı *(25.8/25.9 stub'larının gerçeği)* |
