@@ -89,16 +89,22 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   enforce()` → `ALLOW` / `DENY` + audit reason code (`read_only_select`,
   `empty_sql`, `multi_statement`, `non_select_statement`, `forbidden_keyword`,
   `unsafe_procedure`, `unsafe_data_movement`, `invalid_sql_type`). **Fail-closed**:
-  tek-statement SELECT (veya read-only `WITH … SELECT`) dışında her şey DENY;
-  write/DDL/procedure/transaction-control/data-movement keyword'leri (string
-  literal içinde bile, konservatif) reddedilir; `SELECT … INTO` / `MERGE` / `COPY`
-  data-movement, `CALL`/`EXEC`/`EXECUTE` procedure olarak ayrı kodlanır. Result
-  **ham SQL taşımaz** — yalnızca `sql_sha256` + leading keyword (`normalized_prefix`),
-  JSON-safe `to_dict()`. PostgreSQL adapter'ın `validate_read_only_select` gate'i
-  artık bu ortak contract'a **delege** eder (forbidden keyword listesi tek yerde;
-  mevcut rejection davranışı korunur, yalnızca sıkılaşır — yeni execution path açılmaz).
-  Risk classifier (26.3), sensitive/PII policy, audit, approval, yeni adapter,
-  gerçek production execution, API/UI ve tenant/RBAC/AuthN bu sprintte **yok**.
+  tek-statement SELECT (veya read-only `WITH … SELECT`) dışında her şey DENY.
+  Sınıflandırmadan önce SQL **lex edilir** (`_sanitize`): yorumlar sökülür, string
+  literal'ler ve çift-tırnaklı identifier'lar maskelenir — sadece *çalıştırılabilir
+  kod* taranır. Böylece `SELECT comment FROM t` (kolon adı), `SELECT * FROM "merge"`
+  (tırnaklı identifier) ve `SELECT '… DROP …'` (literal) artık yanlış reddedilmez;
+  buna karşılık gerçek konumdaki `;` / write verb'ü (klasik `'' ; DROP TABLE t; --`
+  injection kuyruğu dâhil) hâlâ yakalanır. `SELECT … INTO` ve CTE içi
+  `INSERT/UPDATE/DELETE` her yerde taranır; DDL/`COPY`/`MERGE`/procedure yalnızca
+  statement-başı verb olarak. Result **ham SQL taşımaz** — yalnızca `sql_sha256` +
+  leading keyword (`normalized_prefix`), JSON-safe `to_dict()`. **Bilinen sınır
+  (string katmanı):** fonksiyonla ifade edilen yazma (`SELECT setval(...)`,
+  `SELECT lo_export(...)`) write verb'ü içermediğinden ALLOW olur; bunun savunması
+  adapter'ın DB-seviyesi read-only session'ıdır (gerçek allowlist/parser 26.3+).
+  PostgreSQL adapter'ın `validate_read_only_select` gate'i artık bu ortak contract'a
+  **delege** eder. Risk classifier (26.3), sensitive/PII policy, audit, approval,
+  yeni adapter, gerçek production execution, API/UI ve tenant/RBAC/AuthN bu sprintte **yok**.
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):

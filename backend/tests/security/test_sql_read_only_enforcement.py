@@ -185,6 +185,56 @@ def test_read_only_enforcement_result_does_not_leak_raw_sql():
     assert result.normalized_prefix == "SELECT"
 
 
+@pytest.mark.parametrize("sql", [
+    "/* leading hint */ SELECT 1",
+    "-- a note\nSELECT id FROM users",
+    "  /* x */\n  -- y\n  SELECT 1",
+    "SELECT 1 -- trailing comment",
+    "SELECT id FROM users /* inline */ WHERE id = 1",
+])
+def test_read_only_enforcement_allows_select_with_comments(sql):
+    # Fix #4: comments are stripped before classification, so a leading/inline
+    # comment no longer turns a valid read-only SELECT into a NON_SELECT deny.
+    result = _enforce(sql)
+    assert result.decision == SQLReadOnlyDecision.ALLOW, result.reason
+    assert result.reason_code == SQLReadOnlyReasonCode.READ_ONLY_SELECT
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT comment FROM tickets",            # bare column named like a keyword
+    "SELECT t.begin, t.lock FROM t",          # more keyword-named columns
+    'SELECT * FROM "merge"',                  # quoted identifier equal to a keyword
+    'SELECT "lock", "copy" FROM "analyze"',   # quoted identifiers
+    "SELECT note FROM t WHERE note = 'ship into the drop zone'",  # keywords inside a literal
+    "SELECT ';' AS semi",                     # semicolon inside a literal is not a separator
+])
+def test_read_only_enforcement_allows_keywords_in_literals_and_identifiers(sql):
+    # Fix #5: forbidden keywords are matched only in executable code, not inside
+    # string literals or quoted identifiers, and non-leading-only keywords no
+    # longer reject ordinary column/table names.
+    result = _enforce(sql)
+    assert result.decision == SQLReadOnlyDecision.ALLOW, result.reason
+    assert result.reason_code == SQLReadOnlyReasonCode.READ_ONLY_SELECT
+
+
+@pytest.mark.parametrize("sql,reason_code", [
+    # A real (executable) write must still be denied after sanitization.
+    ("WITH x AS (DELETE FROM t RETURNING id) SELECT * FROM x", SQLReadOnlyReasonCode.FORBIDDEN_KEYWORD),
+    ("WITH x AS (UPDATE t SET a = 1 RETURNING id) SELECT * FROM x", SQLReadOnlyReasonCode.FORBIDDEN_KEYWORD),
+    ("WITH x AS (INSERT INTO t VALUES (1) RETURNING id) SELECT * FROM x", SQLReadOnlyReasonCode.FORBIDDEN_KEYWORD),
+    ("SELECT * FROM t FOR UPDATE", SQLReadOnlyReasonCode.FORBIDDEN_KEYWORD),
+    # Balanced-quote injection tail: the ; and DROP land in code position.
+    ("SELECT * FROM t WHERE name = '' ; DROP TABLE t; --", SQLReadOnlyReasonCode.MULTI_STATEMENT),
+    # A real trailing comment that hides a second statement is still caught.
+    ("SELECT 1; DELETE FROM t", SQLReadOnlyReasonCode.MULTI_STATEMENT),
+])
+def test_read_only_enforcement_still_denies_executable_writes(sql, reason_code):
+    # Sanitization must not open a bypass: real writes in executable position stay denied.
+    result = _enforce(sql)
+    assert result.decision == SQLReadOnlyDecision.DENY, result.reason
+    assert result.reason_code == reason_code
+
+
 def test_read_only_enforcement_sql_sha256_is_a_real_digest():
     import hashlib
     sql = "SELECT 1"

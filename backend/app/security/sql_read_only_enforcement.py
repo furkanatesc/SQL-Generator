@@ -16,10 +16,26 @@ distinct contracts:
   write / DDL / procedure / data-movement risk?*
 
 Core security principle — **fail closed**: if the SQL is not provably a single
-read-only ``SELECT``, it is denied. No write, DDL, procedure, transaction-control,
-or data-movement statement may pass "maybe it's safe". The classifier is
-intentionally conservative: forbidden keywords are matched even inside string
-literals, so ``SELECT 'DROP'`` is rejected — acceptable for a safety gate.
+read-only ``SELECT`` (or ``WITH ... SELECT``), it is denied. No write, DDL,
+procedure, transaction-control, or data-movement statement may pass "maybe it's
+safe".
+
+Before classifying, the SQL is lexed into code / string-literal / quoted-identifier
+/ comment regions (``_sanitize``): comments are removed and string literals and
+double-quoted identifiers are masked. Only *executable code* is then scanned. This
+means a forbidden word that appears only as data (``SELECT 'please DROP it'``) or
+as a quoted identifier (``SELECT * FROM "merge"``) is NOT a false positive, while a
+``;`` or write verb in real executable position is still caught — including the
+classic ``... '' ; DROP TABLE t; --`` injection tail, whose quotes balance and
+leave the ``;``/``DROP`` in code position.
+
+KNOWN LIMITATION (string layer): a write expressed as a *function call*
+(``SELECT setval(...)``, ``SELECT lo_export(...)``, a CTE calling a writing
+function) starts with SELECT and contains no write *verb*, so this string-level
+gate classifies it ALLOW. Catching those requires an allowlist of safe functions
+or a real parser (later sprint); the live execution path's DB-enforced read-only
+session (``default_transaction_read_only=on`` in the PostgreSQL adapter) is the
+backstop for that class. Treat this contract as the first, not the only, layer.
 
 Out of scope (later sprints): query risk classifier (26.3), sensitive
 table/column policy (26.4), PII/PHI detection (26.5), audit persistence (26.6),
@@ -66,40 +82,104 @@ class SQLReadOnlyReasonCode(str, Enum):
     INVALID_SQL_TYPE = "invalid_sql_type"
 
 
-# Keyword categories. The union is a strict superset of the keywords the
-# PostgreSQL adapter (Sprint 25.8) previously rejected, so centralizing here never
-# loosens an existing rejection — it only tightens.
+# --- Keyword taxonomy -------------------------------------------------------
 #
-# UNSAFE_PROCEDURE: runs stored code / dynamic SQL.
+# Two classes of dangerous keyword, distinguished by WHERE they can appear in a
+# statement that nonetheless begins with SELECT/WITH:
+#
+# * "anywhere" keywords can write from a NON-leading executable position without a
+#   statement separator — DML inside a data-modifying CTE
+#   (``WITH x AS (DELETE ... RETURNING ...) SELECT ...``) and ``SELECT ... INTO``.
+#   These MUST be scanned across the whole (sanitized) statement.
+# * "leading-only" keywords (DDL, privilege, maintenance, transaction control,
+#   procedures, COPY, MERGE) are only meaningful as a statement's leading verb. A
+#   leading occurrence is caught here (for a precise reason code); a non-leading
+#   occurrence is either a separate statement (caught by the multi-statement
+#   check) or a plain identifier — which, after sanitization, we deliberately do
+#   NOT reject (e.g. a column literally named ``comment`` or ``lock``).
+#
+# Scanning only executable code (comments/literals/quoted-identifiers stripped)
+# keeps this fail-closed for real writes while not rejecting ordinary reads.
+
 _PROCEDURE_KEYWORDS = ("CALL", "EXECUTE", "EXEC")
-# UNSAFE_DATA_MOVEMENT: moves or creates data, incl. SELECT ... INTO and MERGE/COPY.
-_DATA_MOVEMENT_KEYWORDS = ("COPY", "MERGE", "INTO")
-# FORBIDDEN_KEYWORD: DML, DDL, privilege, maintenance, and transaction control.
-_FORBIDDEN_KEYWORDS = (
-    "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE",
-    "GRANT", "REVOKE", "COMMENT", "REINDEX", "VACUUM", "REFRESH", "ANALYZE",
-    "BEGIN", "DECLARE", "COMMIT", "ROLLBACK", "SAVEPOINT", "LOCK",
+_DML_KEYWORDS = ("INSERT", "UPDATE", "DELETE")
+_DDL_TXN_KEYWORDS = (
+    "DROP", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE", "COMMENT",
+    "REINDEX", "VACUUM", "REFRESH", "ANALYZE", "BEGIN", "COMMIT", "ROLLBACK",
+    "SAVEPOINT", "DECLARE", "LOCK",
 )
+# COPY/MERGE move data but only ever lead a statement, so they live here.
+_LEADING_DATA_MOVEMENT_KEYWORDS = ("COPY", "MERGE")
 
 _KEYWORD_CATEGORY: Dict[str, SQLReadOnlyReasonCode] = {}
 for _kw in _PROCEDURE_KEYWORDS:
     _KEYWORD_CATEGORY[_kw] = SQLReadOnlyReasonCode.UNSAFE_PROCEDURE
-for _kw in _DATA_MOVEMENT_KEYWORDS:
-    _KEYWORD_CATEGORY[_kw] = SQLReadOnlyReasonCode.UNSAFE_DATA_MOVEMENT
-for _kw in _FORBIDDEN_KEYWORDS:
+for _kw in _DML_KEYWORDS:
     _KEYWORD_CATEGORY[_kw] = SQLReadOnlyReasonCode.FORBIDDEN_KEYWORD
+for _kw in _DDL_TXN_KEYWORDS:
+    _KEYWORD_CATEGORY[_kw] = SQLReadOnlyReasonCode.FORBIDDEN_KEYWORD
+for _kw in _LEADING_DATA_MOVEMENT_KEYWORDS:
+    _KEYWORD_CATEGORY[_kw] = SQLReadOnlyReasonCode.UNSAFE_DATA_MOVEMENT
+# INTO (SELECT ... INTO) is data movement and can appear non-leading.
+_KEYWORD_CATEGORY["INTO"] = SQLReadOnlyReasonCode.UNSAFE_DATA_MOVEMENT
 
-# Longer alternatives first so EXECUTE wins over EXEC (word boundaries make this
-# robust regardless, but keep it explicit and deterministic).
-_ALL_KEYWORDS = tuple(sorted(_KEYWORD_CATEGORY, key=len, reverse=True))
-_KEYWORD_RE = re.compile(r"\b(" + "|".join(_ALL_KEYWORDS) + r")\b", re.IGNORECASE)
+# Keywords scanned across the whole statement (non-leading executable writes).
+_ANYWHERE_KEYWORDS = _DML_KEYWORDS + ("INTO",)
+_ANYWHERE_KEYWORD_RE = re.compile(r"\b(" + "|".join(_ANYWHERE_KEYWORDS) + r")\b", re.IGNORECASE)
 
 # A read-only statement must begin with SELECT or a WITH (CTE) that ultimately
-# feeds a SELECT. A data-modifying CTE (e.g. WITH x AS (DELETE ...)) still trips
-# the forbidden-keyword scan, so allowing a leading WITH adds no write risk.
+# feeds a SELECT. A data-modifying CTE (e.g. WITH x AS (DELETE ...)) is still
+# caught: its DML verb is an "anywhere" keyword scanned across the statement.
 _READ_ONLY_START_RE = re.compile(r"(?is)^\s*(SELECT|WITH)\b")
 _LEADING_TOKEN_RE = re.compile(r"^\s*([A-Za-z_]+)")
 _WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _sanitize(sql: str) -> str:
+    """Return executable code only: comments removed, string literals and
+    double-quoted identifiers replaced by a single-space placeholder.
+
+    A small dialect-generic lexer. Single quotes (``'``) delimit string literals,
+    double quotes (``"``) delimit identifiers; a doubled quote (``''`` / ``""``)
+    is an embedded quote, not a terminator (ANSI / standard_conforming_strings).
+    ``--`` runs to end of line, ``/* ... */`` is a (non-nested) block comment.
+
+    Errs toward safety: an unterminated literal/comment is masked to end of input
+    (its tail cannot be executable code anyway), and a non-nested ``*/`` scan that
+    closes "early" only leaves MORE text as code — conservative, never a bypass.
+    """
+    out = []
+    i, n = 0, len(sql)
+    while i < n:
+        c = sql[i]
+        nxt = sql[i + 1] if i + 1 < n else ""
+        if c == "'" or c == '"':
+            quote = c
+            i += 1
+            while i < n:
+                if sql[i] == quote:
+                    if i + 1 < n and sql[i + 1] == quote:  # doubled = escaped quote
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                i += 1
+            out.append(" ")
+        elif c == "-" and nxt == "-":
+            i += 2
+            while i < n and sql[i] not in "\r\n":
+                i += 1
+            out.append(" ")
+        elif c == "/" and nxt == "*":
+            i += 2
+            while i < n and not (sql[i] == "*" and i + 1 < n and sql[i + 1] == "/"):
+                i += 1
+            i += 2  # consume the closing */ (no-op past end if unterminated)
+            out.append(" ")
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
 
 
 def _normalize(sql: str) -> str:
@@ -195,20 +275,18 @@ class SQLReadOnlyEnforcementContract:
 
     1. Non-string SQL            -> DENY / INVALID_SQL_TYPE
     2. Empty / whitespace SQL    -> DENY / EMPTY_SQL
+       (then comments are stripped and string literals / quoted identifiers are
+        masked; steps 3-6 operate on executable code only)
     3. More than one statement   -> DENY / MULTI_STATEMENT
-    4. Procedure keyword (CALL/EXEC/EXECUTE)        -> DENY / UNSAFE_PROCEDURE
-       Data-movement keyword (COPY/MERGE/INTO)      -> DENY / UNSAFE_DATA_MOVEMENT
-       DML/DDL/txn keyword                          -> DENY / FORBIDDEN_KEYWORD
-       (first matching keyword by position decides the reason code)
-    5. Does not start SELECT/WITH -> DENY / NON_SELECT_STATEMENT
-    6. Otherwise                 -> ALLOW / READ_ONLY_SELECT
+    4. Leading verb is a write/DDL/procedure/data-movement keyword
+                                 -> DENY / FORBIDDEN_KEYWORD | UNSAFE_PROCEDURE | UNSAFE_DATA_MOVEMENT
+    5. A non-leading executable write keyword (DML in a CTE, ``... INTO``)
+                                 -> DENY / FORBIDDEN_KEYWORD | UNSAFE_DATA_MOVEMENT
+    6. Does not start SELECT/WITH -> DENY / NON_SELECT_STATEMENT
+    7. Otherwise                 -> ALLOW / READ_ONLY_SELECT
 
-    The keyword scan runs *before* the SELECT-start check (step 4 before step 5)
-    so a write/DDL/procedure/data-movement statement gets its precise reason code
-    (e.g. ``CALL p()`` -> UNSAFE_PROCEDURE, ``DROP ...`` -> FORBIDDEN_KEYWORD)
-    instead of a generic NON_SELECT. NON_SELECT_STATEMENT is then reserved for
-    other non-write reads (EXPLAIN / SHOW / VALUES / ...). A single trailing
-    semicolon is tolerated; any other ``;`` is multi-statement.
+    A single trailing semicolon is tolerated; any other ``;`` (in code position)
+    is multi-statement.
     """
 
     def enforce(self, request: SQLReadOnlyEnforcementRequest) -> SQLReadOnlyEnforcementResult:
@@ -230,8 +308,10 @@ class SQLReadOnlyEnforcementContract:
             return self._deny(SQLReadOnlyReasonCode.EMPTY_SQL,
                               "SQL is empty.", sql_hash, None, dialect)
 
-        normalized = _normalize(sql)
-        core = normalized[:-1].strip() if normalized.endswith(";") else normalized
+        # Strip comments and mask literals/identifiers, then normalize whitespace.
+        # Everything below operates on executable code only.
+        sanitized = _normalize(_sanitize(sql))
+        core = sanitized[:-1].strip() if sanitized.endswith(";") else sanitized
         prefix = _leading_keyword(core)
 
         # 3. Single statement only (one optional trailing semicolon already removed).
@@ -240,22 +320,27 @@ class SQLReadOnlyEnforcementContract:
                               "Multiple SQL statements are not allowed; only a single SELECT is permitted.",
                               sql_hash, prefix, dialect)
 
-        # 4. No forbidden / procedure / data-movement keyword anywhere (matched even
-        #    inside string literals — conservative on purpose).
-        match = _KEYWORD_RE.search(core)
+        # 4. A dangerous leading verb (DDL / procedure / COPY / MERGE / DML / INTO).
+        if prefix is not None and prefix in _KEYWORD_CATEGORY:
+            reason_code = _KEYWORD_CATEGORY[prefix]
+            return self._deny(reason_code, self._keyword_reason(reason_code, prefix),
+                              sql_hash, prefix, dialect)
+
+        # 5. A non-leading executable write (DML in a CTE, or SELECT ... INTO).
+        match = _ANYWHERE_KEYWORD_RE.search(core)
         if match:
             keyword = match.group(1).upper()
             reason_code = _KEYWORD_CATEGORY[keyword]
-            reason = self._keyword_reason(reason_code, keyword)
-            return self._deny(reason_code, reason, sql_hash, prefix, dialect)
+            return self._deny(reason_code, self._keyword_reason(reason_code, keyword),
+                              sql_hash, prefix, dialect)
 
-        # 5. Must begin with SELECT or WITH (other keyword-free non-selects land here).
+        # 6. Must begin with SELECT or WITH (other keyword-free non-selects land here).
         if not _READ_ONLY_START_RE.match(core):
             return self._deny(SQLReadOnlyReasonCode.NON_SELECT_STATEMENT,
                               "Only read-only SELECT (or WITH ... SELECT) queries are allowed.",
                               sql_hash, prefix, dialect)
 
-        # 6. A single read-only SELECT.
+        # 7. A single read-only SELECT.
         return SQLReadOnlyEnforcementResult(
             version=SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
             decision=SQLReadOnlyDecision.ALLOW,
