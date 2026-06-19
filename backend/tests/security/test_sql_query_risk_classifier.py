@@ -110,6 +110,63 @@ def test_query_risk_critical_for_empty_or_non_string_or_non_read(sql):
     assert result.signals == (SQLQueryRiskSignal.INVALID_OR_UNPARSEABLE,)
 
 
+@pytest.mark.parametrize("sql", [
+    "SELECT pg_read_file('/etc/passwd')",
+    "SELECT pg_read_binary_file('x')",
+    "SELECT pg_ls_dir('/')",
+    "SELECT query_to_xml('select 1', true, false, '')",
+    "SELECT dblink_connect('x')",
+    "SELECT txid_current()",
+    "SELECT pg_export_snapshot()",
+    "SELECT pg_catalog.pg_read_file('/etc/passwd')",  # schema-qualified
+])
+def test_query_risk_critical_for_file_and_admin_read_functions(sql):
+    # Review #1: filesystem / arbitrary-SQL / introspection functions must be on
+    # the side-effecting denylist (a SELECT reading /etc/passwd is not LOW).
+    result = _classify(sql)
+    assert result.risk_level == SQLQueryRiskLevel.CRITICAL
+    assert SQLQueryRiskSignal.SIDE_EFFECTING_FUNCTION in result.signals
+
+
+@pytest.mark.parametrize("sql", [
+    "WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x",  # write hidden behind a CTE
+    "SELECT * INTO archived FROM users",                   # SELECT ... INTO is a write
+    "SELECT 1; DELETE FROM t",                             # multi-statement write tail
+])
+def test_query_risk_critical_for_write_disguised_as_read(sql):
+    # Review #3: a statement that merely *starts* with SELECT/WITH but is not
+    # actually read-only is graded critical (composition with the 26.2 contract),
+    # not slipped through the leading-keyword check as a benign read.
+    result = _classify(sql)
+    assert result.risk_level == SQLQueryRiskLevel.CRITICAL
+    assert result.signals == (SQLQueryRiskSignal.INVALID_OR_UNPARSEABLE,)
+
+
+@pytest.mark.parametrize("sql", ["SELECT top FROM big_table", "SELECT id AS limit FROM big_table"])
+def test_query_risk_keyword_named_column_does_not_hide_no_row_limit(sql):
+    # Review #5: a column/alias literally named 'top'/'limit' must NOT be mistaken
+    # for an actual row-limit clause.
+    result = _classify(sql)
+    assert SQLQueryRiskSignal.NO_ROW_LIMIT in result.signals
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT id FROM t WHERE id = 1 LIMIT 5",
+    "SELECT id FROM t WHERE id = 1 FETCH FIRST 10 ROWS ONLY",
+    "SELECT TOP 10 id FROM t WHERE id = 1",
+])
+def test_query_risk_real_row_limit_clause_is_recognized(sql):
+    # The tightened row-limit regex must still recognize genuine clauses.
+    result = _classify(sql)
+    assert SQLQueryRiskSignal.NO_ROW_LIMIT not in result.signals
+
+
+def test_query_risk_select_star_in_non_leading_position():
+    # Review #6: a bare '*' later in the select list still counts as select-star.
+    result = _classify("SELECT a, * FROM big_table")
+    assert SQLQueryRiskSignal.SELECT_STAR in result.signals
+
+
 def test_query_risk_non_string_has_no_hash_or_prefix():
     result = _classify(123)
     assert result.sql_sha256 is None

@@ -120,9 +120,16 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   **kompozisyon**: 26.2'nin bilinen sınırı olan fonksiyonla yazma
   (`SELECT setval(...)` / `lo_export` / `pg_terminate_backend` / `dblink` /
   `pg_sleep` …) artık `side_effecting_function` → `CRITICAL` olarak **görünür**
-  kılınır (engellenmez). Heuristic'ler ortak `_sql_text` sanitize'ı üzerinde çalışır
-  (literal/yorum içindeki keyword/fonksiyon sinyal tetiklemez). Result **ham SQL
-  taşımaz** — `sql_sha256` + leading keyword; JSON-safe `to_dict()`. **Refactor:**
+  kılınır (engellenmez) — denylist dosya-okuma/keyfi-SQL/introspection ailelerini de
+  kapsar (`pg_read_file`, `pg_ls_*`, `query_to_xml`, `dblink*`, `txid_*`, snapshot).
+  Read gate sadece leading keyword'e bakmaz: CTE ardına gizlenen write / `SELECT …
+  INTO` / multi-statement, 26.2 read-only contract'ıyla **kompozisyon** sayesinde
+  `invalid_or_unparseable` → CRITICAL olur. Heuristic'ler ortak `_sql_text` sanitize'ı
+  üzerinde çalışır (literal/yorum içindeki keyword/fonksiyon sinyal tetiklemez).
+  Result **ham SQL taşımaz** — `sql_sha256` + leading keyword; JSON-safe `to_dict()`.
+  **Bilinen sınır:** parser olmadığından nesting-kör — subquery içi `WHERE`/`LIMIT`
+  dış-scan sinyallerini bastırabilir, comma-join cartesian kuralı kırılgandır
+  (gerçek çözüm parser/`pg_proc` → sonraki sprint). **Refactor:**
   26.2 ve 26.3 ortak `app/security/_sql_text.py` (sanitize/normalize/leading-keyword)
   helper'ına bağlandı (read-only davranışı değişmedi, testle doğrulandı). **Bilinen
   sınır:** `side_effecting_function` küratörlü/eksiksiz-olmayan bir *denylist*'tir;

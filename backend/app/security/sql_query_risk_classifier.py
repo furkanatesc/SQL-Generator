@@ -33,10 +33,20 @@ tenant/RBAC/AuthN. Heuristics are deterministic regex over the shared
 ``_sql_text`` sanitizer (comments/literals stripped), so a keyword or function
 name inside a string literal is never a false signal. This module performs no I/O.
 
-KNOWN LIMITATION: ``SIDE_EFFECTING_FUNCTION`` uses a curated, non-exhaustive
-*denylist* of known dangerous functions; an unlisted writing function is not
-flagged. A sound solution needs an allowlist of safe functions or catalog
-metadata (``pg_proc.provolatile``) — a later sprint.
+KNOWN LIMITATIONS (regex heuristics, no parser — a sound fix needs a real parser
+or catalog metadata, a later sprint):
+
+* ``SIDE_EFFECTING_FUNCTION`` is a curated, non-exhaustive *denylist*; an unlisted
+  writing function is not flagged. An allowlist of safe functions or
+  ``pg_proc.provolatile`` would be sound.
+* The classifier is **nesting-blind**: ``has_where`` / ``has_row_limit`` and the
+  cartesian check are evaluated over the whole flattened statement, so a ``WHERE``
+  or ``LIMIT`` inside a subquery/CTE suppresses the corresponding outer-scan signal
+  (under-classification), and the comma-join cartesian rule (which fires only when
+  there is no ``WHERE`` *anywhere*) can both over-fire on a small intentional cross
+  join and go silent on a true cross product that happens to carry any ``WHERE``.
+  Writes disguised as reads ARE caught (via the read-only contract composition);
+  the cost-shape heuristics above remain best-effort until a parser lands.
 """
 
 import hashlib
@@ -47,6 +57,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.security._sql_text import leading_keyword as _leading_keyword
 from app.security._sql_text import to_executable_core as _to_executable_core
+from app.security.sql_read_only_enforcement import (
+    SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
+    SQLReadOnlyDecision,
+    SQLReadOnlyEnforcementContract,
+    SQLReadOnlyEnforcementRequest,
+)
+
+# Reused to answer "is this actually a read?" — so a write/DDL/procedure/
+# multi-statement disguised as a read (e.g. WITH x AS (...) INSERT INTO t SELECT ...)
+# is graded CRITICAL instead of slipping through the leading-keyword check as a read.
+_READ_ONLY_ENFORCER = SQLReadOnlyEnforcementContract()
 
 SQL_QUERY_RISK_CLASSIFIER_CONTRACT_VERSION = "sql_query_risk_classifier_contract_v1"
 
@@ -108,7 +129,6 @@ _SIGNAL_ORDER: Dict[SQLQueryRiskSignal, int] = {sig: i for i, sig in enumerate(S
 _SIDE_EFFECTING_FUNCTIONS = (
     "setval", "nextval",
     "lo_export", "lo_import", "lo_unlink", "lo_put", "lo_creat", "lo_create",
-    "dblink", "dblink_exec",
     "pg_sleep", "pg_sleep_for", "pg_sleep_until",
     "pg_terminate_backend", "pg_cancel_backend",
     "pg_reload_conf", "pg_rotate_logfile",
@@ -120,19 +140,41 @@ _SIDE_EFFECTING_FUNCTIONS = (
     "pg_logical_emit_message",
     "pg_advisory_lock", "pg_advisory_xact_lock", "pg_advisory_unlock",
     "pg_stat_statements_reset", "pg_stat_reset",
+    # Filesystem / catalog reads, arbitrary-SQL, snapshot & xact introspection.
+    "pg_stat_file", "pg_relation_filepath", "pg_relation_filenode",
+    "txid_current", "txid_current_snapshot",
+    "pg_export_snapshot", "pg_current_xact_id", "pg_current_xact_id_if_assigned",
 )
-# Longest first so a prefix can't shadow a longer name (word boundaries make this
-# robust anyway), then require an opening parenthesis (a call, not an identifier).
+# Function-name *families* where every member writes, reads server files, lists
+# directories, or runs remote/arbitrary SQL — matched by prefix so we don't have to
+# enumerate every variant. (No safe function shares these prefixes.)
+_SIDE_EFFECTING_FAMILIES = (
+    r"dblink\w*",        # dblink, dblink_exec, dblink_connect, dblink_send_query, ...
+    r"pg_read_\w+",      # pg_read_file, pg_read_binary_file, pg_read_server_files
+    r"pg_ls_\w+",        # pg_ls_dir, pg_ls_logdir, pg_ls_waldir, pg_ls_tmpdir, ...
+    r"query_to_xml\w*",  # query_to_xml(...) executes an arbitrary SQL string
+    r"cursor_to_xml\w*",
+)
+# Longest exact name first (word boundaries make this robust anyway), then the
+# family patterns; require an opening parenthesis (a call, not an identifier).
 _SIDE_EFFECTING_RE = re.compile(
-    r"\b(" + "|".join(sorted(_SIDE_EFFECTING_FUNCTIONS, key=len, reverse=True)) + r")\s*\(",
+    r"\b(?:"
+    + "|".join(sorted(_SIDE_EFFECTING_FUNCTIONS, key=len, reverse=True) + list(_SIDE_EFFECTING_FAMILIES))
+    + r")\s*\(",
     re.IGNORECASE,
 )
 
 _READ_QUERY_START_RE = re.compile(r"(?is)^\s*(SELECT|WITH)\b")
-_SELECT_STAR_RE = re.compile(r"(?i)(\bSELECT\s+(?:DISTINCT\s+|ALL\s+)?\*|\b\w+\.\*)")
+# SELECT * / SELECT DISTINCT * / a non-leading ", *" in the select list / t.* form.
+_SELECT_STAR_RE = re.compile(r"(?i)(\bSELECT\s+(?:DISTINCT\s+|ALL\s+)?\*|,\s*\*|\b\w+\.\*)")
 _FROM_RE = re.compile(r"(?i)\bFROM\b")
 _WHERE_RE = re.compile(r"(?i)\bWHERE\b")
-_ROW_LIMIT_RE = re.compile(r"(?i)\b(LIMIT|FETCH|TOP|ROWNUM)\b")
+# Require the keyword in row-limit *clause position* (followed by a count / ALL /
+# bind param / FIRST|NEXT) so a column or alias literally named "top"/"limit" does
+# not falsely look like a row cap.
+_ROW_LIMIT_RE = re.compile(
+    r"(?i)(\bLIMIT\s+(\d|ALL\b|[:$?])|\bFETCH\s+(FIRST|NEXT)\b|\bTOP\s*[\d(]|\bROWNUM\b)"
+)
 _JOIN_RE = re.compile(r"(?i)\bJOIN\b")
 _CROSS_JOIN_RE = re.compile(r"(?i)\bCROSS\s+JOIN\b")
 # Top-level clause keywords that end the FROM clause.
@@ -269,6 +311,20 @@ class SQLQueryRiskClassifier:
         if not core or not _READ_QUERY_START_RE.match(core):
             return self._result([SQLQueryRiskSignal.INVALID_OR_UNPARSEABLE], sql_hash, prefix, dialect,
                                 reason="SQL is empty or not a recognizable read query (treated as critical).")
+
+        # It *starts* like a read, but is it actually one? Reuse the read-only
+        # enforcement contract (26.2) so a write/DDL/procedure/multi-statement
+        # hidden behind a leading SELECT/WITH (e.g. WITH x AS (...) INSERT INTO ...,
+        # SELECT ... INTO ..., or "SELECT 1; DELETE ...") is graded critical rather
+        # than slipping through the leading-keyword check as a benign read.
+        read_only = _READ_ONLY_ENFORCER.enforce(
+            SQLReadOnlyEnforcementRequest(
+                version=SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION, sql=sql, dialect=dialect)
+        )
+        if read_only.decision == SQLReadOnlyDecision.DENY:
+            return self._result([SQLQueryRiskSignal.INVALID_OR_UNPARSEABLE], sql_hash, prefix, dialect,
+                                reason="SQL is not a read-only query (write/DDL/procedure/multi-statement "
+                                       "detected); treated as critical.")
 
         signals: List[SQLQueryRiskSignal] = []
 
