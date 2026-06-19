@@ -41,8 +41,8 @@ governance.
 | Sprint | İş | Durum |
 |---|---|---|
 | 26.0 | SQL Permission Policy Contract | ✅ Tamam · *default-deny karar sözleşmesi; enforcement değil* |
-| 26.1 | Tenant / Workspace Boundary Contract | ⏳ Sıradaki |
-| 26.2 | Read-Only Enforcement Hardening |
+| 26.1 | Tenant / Workspace Boundary Contract | ✅ Tamam · *fail-closed tenant/workspace isolation contract; enforcement/persistence değil* |
+| 26.2 | Read-Only Enforcement Hardening | ⏳ Sıradaki |
 | 26.3 | Query Risk Classifier |
 | 26.4 | Sensitive Table / Column Policy |
 | 26.5 | PII / PHI Detection Contract |

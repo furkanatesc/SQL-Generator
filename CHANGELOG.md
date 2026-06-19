@@ -69,6 +69,18 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   rule precedence, JSON-safe deterministic `to_dict()`. Result hiçbir secret/raw SQL/
   connection string/PII taşımaz (`context` sonuca aktarılmaz). Enforcement engine,
   tenant boundary, RBAC ve AuthN bu sprintte **yok** (26.1–26.11).
+- **Tenant / Workspace Boundary Contract** (Sprint 26.1 · Phase 7):
+  `backend/app/security/tenant_workspace_boundary.py`. 26.0 "action izinli mi?"
+  sorusunu cevaplarken, 26.1 daha kaba olan "bu karar hangi tenant/workspace
+  sınırı içinde geçerli?" boyutunu ekler — cross-tenant leakage'a karşı.
+  `TenantWorkspaceBoundaryContract.validate()` → `ALLOW` / `DENY` + audit reason
+  code. **Fail-closed**: eksik tenant, eksik workspace, tenant mismatch, workspace
+  mismatch → hep `DENY` (sınır belirsizse allow yok). Tenant kontrolü workspace'ten
+  önce gelir (workspace id'leri tenant'lar arası çakışsa bile cross-tenant geçiş yok).
+  Immutable request/result, JSON-safe deterministic `to_dict()`; request'te
+  `context` alanı yok, deny'de tenant/workspace echo edilmez (secret/raw SQL/PII
+  taşımaz). RBAC/AuthN/AuthZ, persistence, API/UI ve 26.0 ile composition bu
+  sprintte **yok**.
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
