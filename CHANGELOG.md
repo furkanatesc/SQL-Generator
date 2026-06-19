@@ -106,6 +106,29 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   bu ortak contract'a **delege** eder (cross-adapter divergence kapandı; iki adapter
   aynı SQL'de aynı kararı verir, testle kilitli). Risk classifier (26.3), sensitive/PII policy, audit, approval,
   yeni adapter, gerçek production execution, API/UI ve tenant/RBAC/AuthN bu sprintte **yok**.
+- **Query Risk Classifier** (Sprint 26.3 · Phase 7):
+  `backend/app/security/sql_query_risk_classifier.py`. Bir SQL sorgusunun *statik*
+  (çalıştırmadan) risk seviyesini deterministik sınıflar — **gate değil, sinyal
+  üreticisidir** (allow/deny vermez; downstream 26.7 approval / 26.9 limit / audit
+  tüketir). `SQLQueryRiskClassifier.classify()` → `risk_level`
+  `LOW`/`MEDIUM`/`HIGH`/`CRITICAL` + tetiklenen `signals` (deterministik sıralı,
+  deduped): `select_star`, `no_where_filter`, `no_row_limit`, `cartesian_join`,
+  `high_join_count`, `side_effecting_function`, `unbounded_result`,
+  `invalid_or_unparseable`. **Belirsizlikte yukarı yuvarlar** (fail-closed'un risk
+  hâli): boş / non-string / comment-only / non-read → `CRITICAL`. `risk_level` =
+  tetiklenen sinyallerin **max** severity'si; hiç yoksa `LOW`. 26.2 ile
+  **kompozisyon**: 26.2'nin bilinen sınırı olan fonksiyonla yazma
+  (`SELECT setval(...)` / `lo_export` / `pg_terminate_backend` / `dblink` /
+  `pg_sleep` …) artık `side_effecting_function` → `CRITICAL` olarak **görünür**
+  kılınır (engellenmez). Heuristic'ler ortak `_sql_text` sanitize'ı üzerinde çalışır
+  (literal/yorum içindeki keyword/fonksiyon sinyal tetiklemez). Result **ham SQL
+  taşımaz** — `sql_sha256` + leading keyword; JSON-safe `to_dict()`. **Refactor:**
+  26.2 ve 26.3 ortak `app/security/_sql_text.py` (sanitize/normalize/leading-keyword)
+  helper'ına bağlandı (read-only davranışı değişmedi, testle doğrulandı). **Bilinen
+  sınır:** `side_effecting_function` küratörlü/eksiksiz-olmayan bir *denylist*'tir;
+  listede olmayan yazan fonksiyon işaretlenmez (gerçek çözüm allowlist / `pg_proc`
+  metadata → sonraki sprint). Gerçek parser/EXPLAIN, execution, sensitive/PII
+  policy, audit, approval, API/UI, tenant/RBAC/AuthN bu sprintte **yok**.
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
