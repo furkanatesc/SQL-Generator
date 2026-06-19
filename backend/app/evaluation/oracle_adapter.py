@@ -30,15 +30,19 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
+from app.security.sql_read_only_enforcement import (
+    SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
+    SQLReadOnlyDecision,
+    SQLReadOnlyEnforcementContract,
+    SQLReadOnlyEnforcementRequest,
+)
+
 SQL_ORACLE_ADAPTER_CONTRACT_VERSION = "sql_oracle_adapter_contract_v1"
 
-# Keywords that mutate data/schema, run procedures, or move data. Rejected (whole-word).
-_FORBIDDEN_KEYWORDS = (
-    "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE",
-    "MERGE", "CALL", "GRANT", "REVOKE", "COMMENT", "BEGIN", "DECLARE",
-    "EXECUTE", "INTO",
-)
-_FORBIDDEN_RE = re.compile(r"\b(" + "|".join(_FORBIDDEN_KEYWORDS) + r")\b", re.IGNORECASE)
+# Sprint 26.2: like the PostgreSQL adapter, the read-only SELECT gate delegates to
+# the shared, centrally-tested enforcement contract (app.security) so all adapters
+# enforce identical read-only rules. The keyword/SELECT-only logic lives in one place.
+_READ_ONLY_ENFORCER = SQLReadOnlyEnforcementContract()
 
 _JSON_SAFE_TYPES = (type(None), bool, int, float, str)
 
@@ -225,28 +229,27 @@ class SQLOracleAdapterExecutionResult:
 
 def validate_read_only_select(sql: str) -> Optional[str]:
     """Return a rejection reason, or ``None`` if ``sql`` is an allowed single
-    read-only ``SELECT`` statement.
+    read-only query.
 
-    Deterministic and intentionally conservative — this locks the rejection
-    contract the real Oracle adapter (29.3) will reuse. A single trailing
-    semicolon is allowed; any other ``;`` is treated as multi-statement; the
-    statement must begin with ``SELECT``; no forbidden (write/DDL/PL-SQL)
-    keyword may appear. Forbidden keywords are matched even inside string
-    literals, so a query selecting the literal ``'DROP'`` is conservatively
-    rejected — acceptable for a read-only safety gate.
+    Thin wrapper over the shared Sprint 26.2 read-only enforcement contract
+    (``app.security.sql_read_only_enforcement``); kept for the adapter's
+    ``Optional[str]`` reason convention and to lock the rejection contract the real
+    Oracle adapter (29.3) will reuse. Behavior is the shared, centrally-tested
+    classifier: single trailing ``;`` allowed, any other ``;`` is multi-statement,
+    the statement must begin with ``SELECT`` (or a read-only ``WITH ... SELECT``),
+    and no write/DDL/PL-SQL/data-movement keyword may appear in executable code
+    (comments and string/identifier literals are stripped before scanning).
     """
-    if not isinstance(sql, str) or not sql.strip():
-        return "SQL cannot be empty"
-    stripped = sql.strip()
-    core = stripped[:-1].strip() if stripped.endswith(";") else stripped
-    if ";" in core:
-        return "Multiple SQL statements are not allowed; only a single SELECT is permitted"
-    if not re.match(r"(?is)^\s*SELECT\b", core):
-        return "Only SELECT queries are allowed"
-    match = _FORBIDDEN_RE.search(core)
-    if match:
-        return f"Forbidden keyword '{match.group(1).upper()}' is not allowed in read-only execution"
-    return None
+    result = _READ_ONLY_ENFORCER.enforce(
+        SQLReadOnlyEnforcementRequest(
+            version=SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
+            sql=sql,
+            dialect="oracle",
+        )
+    )
+    if result.decision == SQLReadOnlyDecision.ALLOW:
+        return None
+    return result.reason
 
 
 class SQLOracleAdapterContract:

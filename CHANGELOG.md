@@ -81,6 +81,31 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   `context` alanı yok, deny'de tenant/workspace echo edilmez (secret/raw SQL/PII
   taşımaz). RBAC/AuthN/AuthZ, persistence, API/UI ve 26.0 ile composition bu
   sprintte **yok**.
+- **Read-Only Enforcement Hardening** (Sprint 26.2 · Phase 7):
+  `backend/app/security/sql_read_only_enforcement.py`. "Bu SQL gerçekten read-only
+  mi?" sorusunu dağınık string check'lerden çıkarıp tek, deterministik,
+  contract-first enforcement katmanına bağlar (güvenlik üçgeninin SQL ayağı:
+  permission policy / tenant boundary / read-only). `SQLReadOnlyEnforcementContract.
+  enforce()` → `ALLOW` / `DENY` + audit reason code (`read_only_select`,
+  `empty_sql`, `multi_statement`, `non_select_statement`, `forbidden_keyword`,
+  `unsafe_procedure`, `unsafe_data_movement`, `invalid_sql_type`). **Fail-closed**:
+  tek-statement SELECT (veya read-only `WITH … SELECT`) dışında her şey DENY.
+  Sınıflandırmadan önce SQL **lex edilir** (`_sanitize`): yorumlar sökülür, string
+  literal'ler ve çift-tırnaklı identifier'lar maskelenir — sadece *çalıştırılabilir
+  kod* taranır. Böylece `SELECT comment FROM t` (kolon adı), `SELECT * FROM "merge"`
+  (tırnaklı identifier) ve `SELECT '… DROP …'` (literal) artık yanlış reddedilmez;
+  buna karşılık gerçek konumdaki `;` / write verb'ü (klasik `'' ; DROP TABLE t; --`
+  injection kuyruğu dâhil) hâlâ yakalanır. `SELECT … INTO` ve CTE içi
+  `INSERT/UPDATE/DELETE` her yerde taranır; DDL/`COPY`/`MERGE`/procedure yalnızca
+  statement-başı verb olarak. Result **ham SQL taşımaz** — yalnızca `sql_sha256` +
+  leading keyword (`normalized_prefix`), JSON-safe `to_dict()`. **Bilinen sınır
+  (string katmanı):** fonksiyonla ifade edilen yazma (`SELECT setval(...)`,
+  `SELECT lo_export(...)`) write verb'ü içermediğinden ALLOW olur; bunun savunması
+  adapter'ın DB-seviyesi read-only session'ıdır (gerçek allowlist/parser 26.3+).
+  **PostgreSQL ve Oracle** adapter'larının `validate_read_only_select` gate'i artık
+  bu ortak contract'a **delege** eder (cross-adapter divergence kapandı; iki adapter
+  aynı SQL'de aynı kararı verir, testle kilitli). Risk classifier (26.3), sensitive/PII policy, audit, approval,
+  yeni adapter, gerçek production execution, API/UI ve tenant/RBAC/AuthN bu sprintte **yok**.
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
