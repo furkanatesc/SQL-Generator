@@ -47,13 +47,8 @@ catalog metadata, a later sprint):
   projection would have excluded) — an intentional bias to higher protection.
 """
 
-import hashlib
-import re
-from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
-
-from app.security._sql_text import to_executable_core as _to_executable_core
+from typing import Dict
 
 SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION = "sql_sensitive_data_policy_contract_v1"
 
