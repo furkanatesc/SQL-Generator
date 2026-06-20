@@ -45,6 +45,9 @@ catalog metadata, a later sprint):
   additional comma-joined tables in a ``FROM`` list may be under-captured.
 * The ``SELECT *`` fail-closed rule can over-match (flag a sensitive column a real
   projection would have excluded) — an intentional bias to higher protection.
+* ``_QUALIFIED_COL_RE`` over-captures ``schema.table`` tokens from the FROM clause
+  as column-like strings; harmless because it only matches if a COLUMN rule literally
+  equals such a token, and it errs toward more matching (fail-closed direction).
 """
 
 import hashlib
@@ -406,7 +409,7 @@ class SQLSensitiveDataPolicyContract:
             key=lambda lvl: _LEVEL_ORDER[lvl])
 
         # De-duplicate matches and order by level desc, then type, then id.
-        seen: Set[tuple] = set()
+        seen: Set[Tuple[Any, ...]] = set()
         unique: List[SQLSensitiveDataMatch] = []
         for r in matched_rules:
             key = (r.resource_type, r.resource_id, r.sensitivity_level, r.action, r.policy_id)
