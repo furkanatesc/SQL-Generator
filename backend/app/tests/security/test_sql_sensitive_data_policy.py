@@ -1,3 +1,4 @@
+import json
 import pytest
 from dataclasses import FrozenInstanceError
 
@@ -10,6 +11,8 @@ from app.security.sql_sensitive_data_policy import (
     SQLSensitiveDataReasonCode,
     SQLSensitiveDataEvaluatedVia,
     SQLSensitiveDataRule,
+    SQLSensitiveDataMatch,
+    SQLSensitiveDataPolicyResult,
     _LEVEL_ORDER,
     _DECISION_RESTRICTIVENESS,
     _normalize_id,
@@ -102,3 +105,71 @@ def test_rule_rejects_unqualified_column():
 def test_rule_rejects_blank_policy_id():
     with pytest.raises(SQLSensitiveDataPolicyContractError):
         _table_rule(policy_id="  ")
+
+
+def _match():
+    return SQLSensitiveDataMatch(
+        resource_type=SQLSensitiveResourceType.COLUMN, resource_id="users.ssn",
+        sensitivity_level=SQLSensitivityLevel.RESTRICTED,
+        action=SQLSensitiveDataDecision.DENY, policy_id="pci")
+
+
+def _result(**kw):
+    base = dict(
+        version=SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
+        decision=SQLSensitiveDataDecision.DENY,
+        sensitivity_level=SQLSensitivityLevel.RESTRICTED,
+        matched=(_match(),),
+        reason_code=SQLSensitiveDataReasonCode.SENSITIVE_MATCH_DENY,
+        reason="matched",
+        sql_sha256="a" * 64,
+        evaluated_via=SQLSensitiveDataEvaluatedVia.EXPLICIT_REFERENCES,
+        dialect="generic",
+    )
+    base.update(kw)
+    return SQLSensitiveDataPolicyResult(**base)
+
+
+def test_match_to_dict_is_json_safe():
+    d = _match().to_dict()
+    assert json.loads(json.dumps(d)) == d
+    assert d["resource_id"] == "users.ssn"
+    assert d["sensitivity_level"] == "restricted"
+    assert d["action"] == "deny"
+
+
+def test_result_to_dict_is_json_safe_and_secret_free():
+    d = _result().to_dict()
+    s = json.dumps(d)
+    assert json.loads(s) == d
+    assert d["decision"] == "deny"
+    assert d["sensitivity_level"] == "restricted"
+    assert d["evaluated_via"] == "explicit_references"
+    assert d["matched"][0]["resource_id"] == "users.ssn"
+    # secret-free: no raw-SQL key anywhere
+    assert "sql" not in d
+    assert "raw_sql" not in d
+
+
+def test_result_is_frozen():
+    with pytest.raises(FrozenInstanceError):
+        _result().decision = SQLSensitiveDataDecision.ALLOW
+
+
+def test_result_rejects_bad_version():
+    with pytest.raises(SQLSensitiveDataPolicyContractError):
+        _result(version="nope")
+
+
+def test_result_rejects_bad_sha256():
+    with pytest.raises(SQLSensitiveDataPolicyContractError):
+        _result(sql_sha256="XYZ")
+
+
+def test_result_allows_none_sha256():
+    assert _result(sql_sha256=None).sql_sha256 is None
+
+
+def test_result_rejects_non_match_in_matched():
+    with pytest.raises(SQLSensitiveDataPolicyContractError):
+        _result(matched=("not-a-match",))
