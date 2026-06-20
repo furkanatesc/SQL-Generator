@@ -47,10 +47,13 @@ catalog metadata, a later sprint):
   projection would have excluded) — an intentional bias to higher protection.
 """
 
+import hashlib
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+
+from app.security._sql_text import to_executable_core as _to_executable_core
 
 SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION = "sql_sensitive_data_policy_contract_v1"
 
@@ -299,3 +302,135 @@ class SQLSensitiveDataPolicyRequest:
             raise SQLSensitiveDataPolicyContractError(f"Invalid request version: {self.version}")
         if not isinstance(self.dialect, str) or not self.dialect.strip():
             raise SQLSensitiveDataPolicyContractError("dialect must be a non-empty string")
+
+
+class SQLSensitiveDataPolicyContract:
+    """Deterministic, static sensitive table/column policy gate.
+
+    Stateless w.r.t. requests: the decision is a pure function of (request, rules).
+    It enforces only declared-sensitive resources; a table not in ``rules`` is never
+    treated as sensitive. The decision is the MOST restrictive matched action; the
+    reported level is the MAX matched level. Unusable input fails closed (DENY).
+    """
+
+    def __init__(self, rules: Sequence[SQLSensitiveDataRule] = ()):
+        for rule in rules:
+            if not isinstance(rule, SQLSensitiveDataRule):
+                raise SQLSensitiveDataPolicyContractError("each rule must be a SQLSensitiveDataRule")
+        self._rules: Tuple[SQLSensitiveDataRule, ...] = tuple(rules)
+
+    def evaluate(self, request: SQLSensitiveDataPolicyRequest) -> SQLSensitiveDataPolicyResult:
+        if not isinstance(request, SQLSensitiveDataPolicyRequest):
+            raise SQLSensitiveDataPolicyContractError("request must be a SQLSensitiveDataPolicyRequest")
+
+        sql = request.sql
+        dialect = request.dialect
+        sql_hash = (
+            hashlib.sha256(sql.encode("utf-8")).hexdigest()
+            if isinstance(sql, str) and sql else None
+        )
+
+        tables, columns, star_all, star_tables, via = self._resolve_refs(request)
+
+        if via == SQLSensitiveDataEvaluatedVia.NONE:
+            return self._result(
+                SQLSensitiveDataDecision.DENY, SQLSensitivityLevel.PUBLIC, (),
+                SQLSensitiveDataReasonCode.UNUSABLE_INPUT, sql_hash, via, dialect,
+                reason="No usable references and no usable SQL; cannot confirm "
+                       "absence of sensitive access (treated as deny).")
+
+        matched_rules = self._match(tables, columns, star_all, star_tables)
+        return self._aggregate(matched_rules, sql_hash, via, dialect)
+
+    def _resolve_refs(self, request: SQLSensitiveDataPolicyRequest):
+        """Return (tables, columns, star_all, star_tables, evaluated_via).
+
+        Explicit references win (sound); else extract from SQL (best-effort); else
+        NONE. Star expansion only applies on the extraction path.
+        """
+        if request.referenced_tables is not None or request.referenced_columns is not None:
+            tables = self._normalize_set(request.referenced_tables)
+            columns = self._normalize_set(request.referenced_columns)
+            return tables, columns, False, set(), SQLSensitiveDataEvaluatedVia.EXPLICIT_REFERENCES
+
+        sql = request.sql
+        if isinstance(sql, str) and sql.strip():
+            core = _to_executable_core(sql)
+            if core:
+                return (
+                    _extract_tables(core),
+                    _extract_columns(core),
+                    _has_unqualified_star(core),
+                    _star_qualifiers(core),
+                    SQLSensitiveDataEvaluatedVia.SQL_EXTRACTION,
+                )
+
+        return set(), set(), False, set(), SQLSensitiveDataEvaluatedVia.NONE
+
+    @staticmethod
+    def _normalize_set(values: Optional[Sequence[str]]) -> Set[str]:
+        if not values:
+            return set()
+        return {_normalize_id(v) for v in values if isinstance(v, str) and v.strip()}
+
+    def _match(self, tables: Set[str], columns: Set[str],
+               star_all: bool, star_tables: Set[str]) -> List[SQLSensitiveDataRule]:
+        matched: List[SQLSensitiveDataRule] = []
+        for rule in self._rules:
+            if rule.resource_type == SQLSensitiveResourceType.TABLE:
+                if rule.resource_id in tables:
+                    matched.append(rule)
+            else:  # COLUMN
+                if rule.resource_id in columns:
+                    matched.append(rule)
+                elif star_all and rule.table in tables:
+                    matched.append(rule)
+                elif rule.table in star_tables:
+                    matched.append(rule)
+        return matched
+
+    def _aggregate(self, matched_rules: List[SQLSensitiveDataRule],
+                   sql_hash: Optional[str], via: SQLSensitiveDataEvaluatedVia,
+                   dialect: str) -> SQLSensitiveDataPolicyResult:
+        if not matched_rules:
+            return self._result(
+                SQLSensitiveDataDecision.ALLOW, SQLSensitivityLevel.PUBLIC, (),
+                SQLSensitiveDataReasonCode.NO_SENSITIVE_MATCH, sql_hash, via, dialect,
+                reason="Query references no declared-sensitive table or column.")
+
+        decision = max(
+            (r.action for r in matched_rules),
+            key=lambda a: _DECISION_RESTRICTIVENESS[a])
+        level = max(
+            (r.sensitivity_level for r in matched_rules),
+            key=lambda lvl: _LEVEL_ORDER[lvl])
+
+        # De-duplicate matches and order by level desc, then type, then id.
+        seen: Set[tuple] = set()
+        unique: List[SQLSensitiveDataMatch] = []
+        for r in matched_rules:
+            key = (r.resource_type, r.resource_id, r.sensitivity_level, r.action, r.policy_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(SQLSensitiveDataMatch(
+                resource_type=r.resource_type, resource_id=r.resource_id,
+                sensitivity_level=r.sensitivity_level, action=r.action, policy_id=r.policy_id))
+        unique.sort(key=lambda m: (
+            -_LEVEL_ORDER[m.sensitivity_level], m.resource_type.value, m.resource_id))
+
+        reason_code = _DECISION_TO_REASON[decision]
+        reason = (f"Query touches {len(unique)} declared-sensitive resource(s); "
+                  f"max level {level.value}, decision {decision.value}.")
+        return self._result(decision, level, tuple(unique), reason_code, sql_hash, via, dialect, reason=reason)
+
+    def _result(self, decision: SQLSensitiveDataDecision, level: SQLSensitivityLevel,
+                matched: Tuple[SQLSensitiveDataMatch, ...],
+                reason_code: SQLSensitiveDataReasonCode, sql_sha256: Optional[str],
+                via: SQLSensitiveDataEvaluatedVia, dialect: str,
+                reason: str) -> SQLSensitiveDataPolicyResult:
+        return SQLSensitiveDataPolicyResult(
+            version=SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
+            decision=decision, sensitivity_level=level, matched=matched,
+            reason_code=reason_code, reason=reason, sql_sha256=sql_sha256,
+            evaluated_via=via, dialect=dialect)

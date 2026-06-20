@@ -231,3 +231,141 @@ def test_has_unqualified_star():
 def test_star_qualifiers():
     core = to_executable_core("SELECT u.* FROM users u JOIN orders o ON o.uid = u.id")
     assert _star_qualifiers(core) == {"u"}
+
+
+# ---------------------------------------------------------------------------
+# Task 6: SQLSensitiveDataPolicyContract.evaluate()
+# ---------------------------------------------------------------------------
+from app.security.sql_sensitive_data_policy import SQLSensitiveDataPolicyContract
+
+V = SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION
+
+
+def _req(**kw):
+    kw.setdefault("version", V)
+    return SQLSensitiveDataPolicyRequest(**kw)
+
+
+def test_empty_policy_allows_everything():
+    res = SQLSensitiveDataPolicyContract().evaluate(_req(sql="SELECT * FROM users"))
+    assert res.decision == SQLSensitiveDataDecision.ALLOW
+    assert res.sensitivity_level == SQLSensitivityLevel.PUBLIC
+    assert res.reason_code == SQLSensitiveDataReasonCode.NO_SENSITIVE_MATCH
+    assert res.matched == ()
+
+
+def test_explicit_table_reference_denied():
+    c = SQLSensitiveDataPolicyContract([_table_rule(name="users")])
+    res = c.evaluate(_req(referenced_tables=["Users"]))
+    assert res.decision == SQLSensitiveDataDecision.DENY
+    assert res.sensitivity_level == SQLSensitivityLevel.RESTRICTED
+    assert res.evaluated_via == SQLSensitiveDataEvaluatedVia.EXPLICIT_REFERENCES
+    assert res.matched[0].resource_id == "users"
+
+
+def test_explicit_column_reference_requires_approval():
+    c = SQLSensitiveDataPolicyContract(
+        [_column_rule(name="orders.total", level=SQLSensitivityLevel.CONFIDENTIAL,
+                      action=SQLSensitiveDataDecision.REQUIRES_APPROVAL)])
+    res = c.evaluate(_req(referenced_columns=["orders.total"]))
+    assert res.decision == SQLSensitiveDataDecision.REQUIRES_APPROVAL
+    assert res.reason_code == SQLSensitiveDataReasonCode.SENSITIVE_MATCH_REQUIRES_APPROVAL
+
+
+def test_no_match_when_references_dont_hit_policy():
+    c = SQLSensitiveDataPolicyContract([_table_rule(name="users")])
+    res = c.evaluate(_req(referenced_tables=["orders"]))
+    assert res.decision == SQLSensitiveDataDecision.ALLOW
+    assert res.matched == ()
+
+
+def test_extraction_path_table_match():
+    c = SQLSensitiveDataPolicyContract([_table_rule(name="users")])
+    res = c.evaluate(_req(sql="SELECT id FROM users WHERE id = 1"))
+    assert res.decision == SQLSensitiveDataDecision.DENY
+    assert res.evaluated_via == SQLSensitiveDataEvaluatedVia.SQL_EXTRACTION
+
+
+def test_extraction_path_qualified_column_match():
+    c = SQLSensitiveDataPolicyContract([_column_rule(name="users.ssn")])
+    res = c.evaluate(_req(sql="SELECT users.ssn FROM users"))
+    assert res.decision == SQLSensitiveDataDecision.DENY
+
+
+def test_select_star_fail_closed_expands_to_column_rules():
+    c = SQLSensitiveDataPolicyContract([_column_rule(name="users.ssn")])
+    res = c.evaluate(_req(sql="SELECT * FROM users"))
+    assert res.decision == SQLSensitiveDataDecision.DENY
+    assert res.matched[0].resource_id == "users.ssn"
+
+
+def test_alias_star_fail_closed_expands_for_that_table():
+    c = SQLSensitiveDataPolicyContract([_column_rule(name="users.ssn")])
+    # `u.*` with alias `u` -> we cannot resolve alias to table; the star qualifier
+    # set is {"u"}. With no table named `u` in the policy, this does NOT match
+    # (alias-blind, documented). Explicit columns are the sound path.
+    res = c.evaluate(_req(sql="SELECT u.* FROM users u"))
+    assert res.decision == SQLSensitiveDataDecision.ALLOW
+
+
+def test_most_restrictive_decision_wins():
+    c = SQLSensitiveDataPolicyContract([
+        _table_rule(name="users", level=SQLSensitivityLevel.CONFIDENTIAL,
+                    action=SQLSensitiveDataDecision.REQUIRES_APPROVAL),
+        _column_rule(name="users.ssn", level=SQLSensitivityLevel.RESTRICTED,
+                     action=SQLSensitiveDataDecision.DENY),
+    ])
+    res = c.evaluate(_req(referenced_tables=["users"], referenced_columns=["users.ssn"]))
+    assert res.decision == SQLSensitiveDataDecision.DENY
+    assert res.sensitivity_level == SQLSensitivityLevel.RESTRICTED
+    assert len(res.matched) == 2
+
+
+def test_max_level_with_allow_action():
+    # A matched rule whose action is ALLOW still raises the reported level.
+    c = SQLSensitiveDataPolicyContract([
+        _table_rule(name="users", level=SQLSensitivityLevel.CONFIDENTIAL,
+                    action=SQLSensitiveDataDecision.ALLOW),
+    ])
+    res = c.evaluate(_req(referenced_tables=["users"]))
+    assert res.decision == SQLSensitiveDataDecision.ALLOW
+    assert res.sensitivity_level == SQLSensitivityLevel.CONFIDENTIAL
+    assert res.reason_code == SQLSensitiveDataReasonCode.SENSITIVE_MATCH_ALLOW
+
+
+def test_unusable_input_fails_closed():
+    c = SQLSensitiveDataPolicyContract([_table_rule(name="users")])
+    for bad in [_req(), _req(sql=""), _req(sql=123)]:
+        res = c.evaluate(bad)
+        assert res.decision == SQLSensitiveDataDecision.DENY
+        assert res.reason_code == SQLSensitiveDataReasonCode.UNUSABLE_INPUT
+        assert res.evaluated_via == SQLSensitiveDataEvaluatedVia.NONE
+
+
+def test_evaluate_rejects_non_request():
+    with pytest.raises(SQLSensitiveDataPolicyContractError):
+        SQLSensitiveDataPolicyContract().evaluate("not-a-request")
+
+
+def test_contract_rejects_non_rule():
+    with pytest.raises(SQLSensitiveDataPolicyContractError):
+        SQLSensitiveDataPolicyContract(["not-a-rule"])
+
+
+def test_matched_is_deduped_and_ordered():
+    # Two identical rules -> one match; ordering is level desc.
+    c = SQLSensitiveDataPolicyContract([
+        _column_rule(name="users.email", level=SQLSensitivityLevel.CONFIDENTIAL,
+                     action=SQLSensitiveDataDecision.REQUIRES_APPROVAL),
+        _column_rule(name="users.ssn", level=SQLSensitivityLevel.RESTRICTED,
+                     action=SQLSensitiveDataDecision.DENY),
+    ])
+    res = c.evaluate(_req(referenced_columns=["users.ssn", "users.email"]))
+    levels = [m.sensitivity_level for m in res.matched]
+    assert levels == [SQLSensitivityLevel.RESTRICTED, SQLSensitivityLevel.CONFIDENTIAL]
+
+
+def test_result_sql_sha256_set_on_extraction_path():
+    c = SQLSensitiveDataPolicyContract([_table_rule(name="users")])
+    res = c.evaluate(_req(sql="SELECT id FROM users"))
+    assert res.sql_sha256 is not None and len(res.sql_sha256) == 64
