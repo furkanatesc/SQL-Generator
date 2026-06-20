@@ -44,8 +44,8 @@ governance.
 | 26.1 | Tenant / Workspace Boundary Contract | ✅ Tamam · *fail-closed tenant/workspace isolation contract; enforcement/persistence değil* |
 | 26.2 | Read-Only Enforcement Hardening | ✅ Tamam · *merkezi fail-closed read-only SELECT enforcement contract; postgres adapter gate'i buna delege* |
 | 26.3 | Query Risk Classifier | ✅ Tamam · *statik deterministik risk sınıflandırıcı (LOW→CRITICAL); gate değil, sadece sinyal* |
-| 26.4 | Sensitive Table / Column Policy | ⏳ Sıradaki |
-| 26.5 | PII / PHI Detection Contract |
+| 26.4 | Sensitive Table / Column Policy | ✅ Tamam · *beyan-tabanlı hassas tablo/kolon gate'i (ALLOW/DENY/REQUIRES_APPROVAL) + matched/seviye sinyali; hibrit referans (explicit=sound, SQL extraction=best-effort)* |
+| 26.5 | PII / PHI Detection Contract | ⏳ Sıradaki |
 | 26.6 | Audit Event Contract |
 | 26.7 | Approval Workflow Contract |
 | 26.8 | Prompt-Injection / NL Abuse Defense |
