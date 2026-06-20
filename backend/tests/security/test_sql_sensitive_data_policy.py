@@ -155,6 +155,8 @@ def test_result_to_dict_is_json_safe_and_secret_free():
     # secret-free: no raw-SQL key anywhere
     assert "sql" not in d
     assert "raw_sql" not in d
+    # hash round-trips
+    assert d["sql_sha256"] == "a" * 64
 
 
 def test_result_is_frozen():
@@ -365,10 +367,23 @@ def test_matched_is_deduped_and_ordered():
     assert levels == [SQLSensitivityLevel.RESTRICTED, SQLSensitivityLevel.CONFIDENTIAL]
 
 
+def test_matched_dedups_identical_rules():
+    # Two identical rules (same resource_type, resource_id, sensitivity_level, action, policy_id)
+    # should result in a single de-duplicated match.
+    c = SQLSensitiveDataPolicyContract([
+        _column_rule(name="users.ssn"),
+        _column_rule(name="users.ssn"),
+    ])
+    res = c.evaluate(_req(referenced_columns=["users.ssn"]))
+    assert len(res.matched) == 1
+    assert res.matched[0].resource_id == "users.ssn"
+
+
 def test_result_sql_sha256_set_on_extraction_path():
     c = SQLSensitiveDataPolicyContract([_table_rule(name="users")])
     res = c.evaluate(_req(sql="SELECT id FROM users"))
     assert res.sql_sha256 is not None and len(res.sql_sha256) == 64
+    assert res.evaluated_via == SQLSensitiveDataEvaluatedVia.SQL_EXTRACTION
 
 
 def test_public_symbols_exported_from_package():
