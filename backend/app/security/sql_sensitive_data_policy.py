@@ -47,9 +47,10 @@ catalog metadata, a later sprint):
   projection would have excluded) — an intentional bias to higher protection.
 """
 
+import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION = "sql_sensitive_data_policy_contract_v1"
 
@@ -161,3 +162,83 @@ class SQLSensitiveDataRule:
         if self.resource_type == SQLSensitiveResourceType.COLUMN:
             return self.resource_id.rsplit(".", 1)[0]
         return self.resource_id
+
+
+@dataclass(frozen=True)
+class SQLSensitiveDataMatch:
+    """One matched sensitivity rule, in a stable, typed, JSON-safe audit shape.
+
+    Carries policy-declared resource names (schema metadata the operator declared),
+    never query values — safe to persist in an audit record.
+    """
+    resource_type: SQLSensitiveResourceType
+    resource_id: str
+    sensitivity_level: SQLSensitivityLevel
+    action: SQLSensitiveDataDecision
+    policy_id: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "resource_type": self.resource_type.value,
+            "resource_id": self.resource_id,
+            "sensitivity_level": self.sensitivity_level.value,
+            "action": self.action.value,
+            "policy_id": self.policy_id,
+        }
+
+
+@dataclass(frozen=True)
+class SQLSensitiveDataPolicyResult:
+    """An immutable, audit-grade, secret-free sensitivity decision.
+
+    Carries NO raw SQL: only the decision, the max sensitivity level, the matched
+    rules (deterministic order, de-duplicated), a reason code + human reason, a
+    SHA-256 of the SQL (when given), and how references were obtained.
+    """
+    version: str
+    decision: SQLSensitiveDataDecision
+    sensitivity_level: SQLSensitivityLevel
+    matched: Tuple[SQLSensitiveDataMatch, ...]
+    reason_code: SQLSensitiveDataReasonCode
+    reason: str
+    sql_sha256: Optional[str]
+    evaluated_via: SQLSensitiveDataEvaluatedVia
+    dialect: str
+
+    def __post_init__(self):
+        if self.version != SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION:
+            raise SQLSensitiveDataPolicyContractError(f"Invalid result version: {self.version}")
+        if not isinstance(self.decision, SQLSensitiveDataDecision):
+            raise SQLSensitiveDataPolicyContractError("decision must be a SQLSensitiveDataDecision")
+        if not isinstance(self.sensitivity_level, SQLSensitivityLevel):
+            raise SQLSensitiveDataPolicyContractError("sensitivity_level must be a SQLSensitivityLevel")
+        if not isinstance(self.matched, tuple):
+            raise SQLSensitiveDataPolicyContractError("matched must be a tuple")
+        for m in self.matched:
+            if not isinstance(m, SQLSensitiveDataMatch):
+                raise SQLSensitiveDataPolicyContractError("each matched entry must be a SQLSensitiveDataMatch")
+        if not isinstance(self.reason_code, SQLSensitiveDataReasonCode):
+            raise SQLSensitiveDataPolicyContractError("reason_code must be a SQLSensitiveDataReasonCode")
+        if not isinstance(self.reason, str) or not self.reason.strip():
+            raise SQLSensitiveDataPolicyContractError("reason must be a non-empty string")
+        if self.sql_sha256 is not None and (
+            not isinstance(self.sql_sha256, str) or not re.fullmatch(r"[a-f0-9]{64}", self.sql_sha256)
+        ):
+            raise SQLSensitiveDataPolicyContractError("sql_sha256 must be a lowercase SHA-256 hex digest or None")
+        if not isinstance(self.evaluated_via, SQLSensitiveDataEvaluatedVia):
+            raise SQLSensitiveDataPolicyContractError("evaluated_via must be a SQLSensitiveDataEvaluatedVia")
+        if not isinstance(self.dialect, str) or not self.dialect.strip():
+            raise SQLSensitiveDataPolicyContractError("dialect must be a non-empty string")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "version": self.version,
+            "decision": self.decision.value,
+            "sensitivity_level": self.sensitivity_level.value,
+            "matched": [m.to_dict() for m in self.matched],
+            "reason_code": self.reason_code.value,
+            "reason": self.reason,
+            "sql_sha256": self.sql_sha256,
+            "evaluated_via": self.evaluated_via.value,
+            "dialect": self.dialect,
+        }
