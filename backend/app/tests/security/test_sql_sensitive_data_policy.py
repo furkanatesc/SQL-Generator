@@ -13,6 +13,7 @@ from app.security.sql_sensitive_data_policy import (
     SQLSensitiveDataRule,
     SQLSensitiveDataMatch,
     SQLSensitiveDataPolicyResult,
+    SQLSensitiveDataPolicyRequest,
     _LEVEL_ORDER,
     _DECISION_RESTRICTIVENESS,
     _normalize_id,
@@ -173,3 +174,28 @@ def test_result_allows_none_sha256():
 def test_result_rejects_non_match_in_matched():
     with pytest.raises(SQLSensitiveDataPolicyContractError):
         _result(matched=("not-a-match",))
+
+
+def test_request_defaults():
+    req = SQLSensitiveDataPolicyRequest(version=SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION)
+    assert req.sql is None
+    assert req.referenced_tables is None
+    assert req.referenced_columns is None
+    assert req.dialect == "generic"
+
+
+def test_request_rejects_bad_version():
+    with pytest.raises(SQLSensitiveDataPolicyContractError):
+        SQLSensitiveDataPolicyRequest(version="nope")
+
+
+def test_request_rejects_empty_dialect():
+    with pytest.raises(SQLSensitiveDataPolicyContractError):
+        SQLSensitiveDataPolicyRequest(
+            version=SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION, dialect="  ")
+
+
+def test_request_is_frozen():
+    req = SQLSensitiveDataPolicyRequest(version=SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION)
+    with pytest.raises(FrozenInstanceError):
+        req.sql = "SELECT 1"

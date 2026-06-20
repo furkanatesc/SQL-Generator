@@ -50,7 +50,7 @@ catalog metadata, a later sprint):
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION = "sql_sensitive_data_policy_contract_v1"
 
@@ -242,3 +242,26 @@ class SQLSensitiveDataPolicyResult:
             "evaluated_via": self.evaluated_via.value,
             "dialect": self.dialect,
         }
+
+
+@dataclass(frozen=True)
+class SQLSensitiveDataPolicyRequest:
+    """An immutable sensitivity-policy request.
+
+    Reference source is hybrid: if ``referenced_tables``/``referenced_columns`` are
+    provided they are used as-is (sound); otherwise references are extracted from
+    ``sql`` (best-effort). ``sql`` is typed ``str`` but intentionally NOT
+    type-checked here, so a non-string yields a deterministic fail-closed result
+    from ``evaluate()`` (bias to DENY) rather than raising at construction.
+    """
+    version: str
+    sql: Optional[str] = None
+    referenced_tables: Optional[Sequence[str]] = None
+    referenced_columns: Optional[Sequence[str]] = None
+    dialect: str = "generic"
+
+    def __post_init__(self):
+        if self.version != SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION:
+            raise SQLSensitiveDataPolicyContractError(f"Invalid request version: {self.version}")
+        if not isinstance(self.dialect, str) or not self.dialect.strip():
+            raise SQLSensitiveDataPolicyContractError("dialect must be a non-empty string")
