@@ -17,7 +17,12 @@ from app.security.sql_sensitive_data_policy import (
     _LEVEL_ORDER,
     _DECISION_RESTRICTIVENESS,
     _normalize_id,
+    _extract_tables,
+    _extract_columns,
+    _has_unqualified_star,
+    _star_qualifiers,
 )
+from app.security._sql_text import to_executable_core
 
 
 def test_contract_version_is_v1():
@@ -199,3 +204,30 @@ def test_request_is_frozen():
     req = SQLSensitiveDataPolicyRequest(version=SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION)
     with pytest.raises(FrozenInstanceError):
         req.sql = "SELECT 1"
+
+
+def test_extract_tables_from_and_join():
+    core = to_executable_core("SELECT a FROM Users u JOIN Orders o ON o.uid = u.id")
+    assert _extract_tables(core) == {"users", "orders"}
+
+
+def test_extract_tables_schema_qualified():
+    core = to_executable_core("SELECT 1 FROM public.users")
+    assert "public.users" in _extract_tables(core)
+
+
+def test_extract_columns_qualified():
+    core = to_executable_core("SELECT u.ssn, o.total FROM users u JOIN orders o ON o.uid = u.id")
+    cols = _extract_columns(core)
+    assert "u.ssn" in cols and "o.total" in cols
+
+
+def test_has_unqualified_star():
+    assert _has_unqualified_star(to_executable_core("SELECT * FROM users"))
+    assert _has_unqualified_star(to_executable_core("SELECT id, * FROM users"))
+    assert not _has_unqualified_star(to_executable_core("SELECT id FROM users"))
+
+
+def test_star_qualifiers():
+    core = to_executable_core("SELECT u.* FROM users u JOIN orders o ON o.uid = u.id")
+    assert _star_qualifiers(core) == {"u"}
