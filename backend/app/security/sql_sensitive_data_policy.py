@@ -50,7 +50,7 @@ catalog metadata, a later sprint):
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Dict, Optional, Sequence, Set, Tuple
 
 SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION = "sql_sensitive_data_policy_contract_v1"
 
@@ -120,6 +120,40 @@ _DECISION_TO_REASON: Dict[SQLSensitiveDataDecision, SQLSensitiveDataReasonCode] 
 def _normalize_id(value: str) -> str:
     """Canonical form for a table/column identifier: stripped and lower-cased."""
     return value.strip().lower()
+
+
+# --- Best-effort SQL reference extraction (fallback only; see KNOWN LIMITATIONS) ---
+
+_IDENT = r"[A-Za-z_][A-Za-z0-9_$]*"
+# Identifier directly after FROM / JOIN (optionally schema-qualified).
+_TABLE_REF_RE = re.compile(r"(?i)\b(?:FROM|JOIN)\s+(" + _IDENT + r"(?:\." + _IDENT + r")*)")
+# A qualified column reference `name.name` (last segment is the column).
+_QUALIFIED_COL_RE = re.compile(r"\b(" + _IDENT + r"(?:\." + _IDENT + r")*\." + _IDENT + r")\b")
+# `<qualifier>.*`
+_STAR_QUALIFIER_RE = re.compile(r"\b(" + _IDENT + r")\.\*")
+# Unqualified `*` in the select list: `SELECT *`, `SELECT DISTINCT *`, `, *`.
+_UNQUALIFIED_STAR_RE = re.compile(r"(?i)(\bSELECT\s+(?:DISTINCT\s+|ALL\s+)?\*|,\s*\*)")
+
+
+def _extract_tables(core: str) -> Set[str]:
+    """Normalized table names captured directly after FROM/JOIN (best-effort)."""
+    return {_normalize_id(m.group(1)) for m in _TABLE_REF_RE.finditer(core)}
+
+
+def _extract_columns(core: str) -> Set[str]:
+    """Normalized qualified `table.column` tokens anywhere in the statement
+    (best-effort; over-captures, which is acceptable for a fail-closed gate)."""
+    return {_normalize_id(m.group(1)) for m in _QUALIFIED_COL_RE.finditer(core)}
+
+
+def _has_unqualified_star(core: str) -> bool:
+    """True if the select list contains an unqualified ``*``."""
+    return bool(_UNQUALIFIED_STAR_RE.search(core))
+
+
+def _star_qualifiers(core: str) -> Set[str]:
+    """Normalized qualifiers ``t`` where ``t.*`` appears."""
+    return {_normalize_id(m.group(1)) for m in _STAR_QUALIFIER_RE.finditer(core)}
 
 
 @dataclass(frozen=True)
