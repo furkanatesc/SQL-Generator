@@ -47,8 +47,9 @@ catalog metadata, a later sprint):
   projection would have excluded) — an intentional bias to higher protection.
 """
 
+from dataclasses import dataclass
 from enum import Enum
-from typing import Dict
+from typing import Dict, Optional
 
 SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION = "sql_sensitive_data_policy_contract_v1"
 
@@ -118,3 +119,45 @@ _DECISION_TO_REASON: Dict[SQLSensitiveDataDecision, SQLSensitiveDataReasonCode] 
 def _normalize_id(value: str) -> str:
     """Canonical form for a table/column identifier: stripped and lower-cased."""
     return value.strip().lower()
+
+
+@dataclass(frozen=True)
+class SQLSensitiveDataRule:
+    """A single, trusted, immutable sensitivity rule.
+
+    Rules are internal policy configuration (not untrusted input): the enum fields
+    MUST be proper enum members. ``resource_id`` is normalized to lowercase; a
+    COLUMN id must be table-qualified (``table.column``). ``sensitivity_level`` and
+    ``action`` are independent — the level is the audit signal, the action is the
+    gate.
+    """
+    resource_type: SQLSensitiveResourceType
+    resource_id: str
+    sensitivity_level: SQLSensitivityLevel
+    action: SQLSensitiveDataDecision
+    policy_id: Optional[str] = None
+
+    def __post_init__(self):
+        if not isinstance(self.resource_type, SQLSensitiveResourceType):
+            raise SQLSensitiveDataPolicyContractError("resource_type must be a SQLSensitiveResourceType")
+        if not isinstance(self.sensitivity_level, SQLSensitivityLevel):
+            raise SQLSensitiveDataPolicyContractError("sensitivity_level must be a SQLSensitivityLevel")
+        if not isinstance(self.action, SQLSensitiveDataDecision):
+            raise SQLSensitiveDataPolicyContractError("action must be a SQLSensitiveDataDecision")
+        if not isinstance(self.resource_id, str) or not self.resource_id.strip():
+            raise SQLSensitiveDataPolicyContractError("resource_id must be a non-empty string")
+        if self.policy_id is not None and (not isinstance(self.policy_id, str) or not self.policy_id.strip()):
+            raise SQLSensitiveDataPolicyContractError("policy_id must be a non-empty string or None")
+        normalized = _normalize_id(self.resource_id)
+        if self.resource_type == SQLSensitiveResourceType.COLUMN and "." not in normalized:
+            raise SQLSensitiveDataPolicyContractError(
+                "COLUMN resource_id must be table-qualified (e.g. 'users.ssn')")
+        object.__setattr__(self, "resource_id", normalized)
+
+    @property
+    def table(self) -> str:
+        """Table portion: everything before the last '.' for a COLUMN id, else the
+        id itself for a TABLE rule."""
+        if self.resource_type == SQLSensitiveResourceType.COLUMN:
+            return self.resource_id.rsplit(".", 1)[0]
+        return self.resource_id
