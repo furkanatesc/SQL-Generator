@@ -369,3 +369,23 @@ def test_result_sql_sha256_set_on_extraction_path():
     c = SQLSensitiveDataPolicyContract([_table_rule(name="users")])
     res = c.evaluate(_req(sql="SELECT id FROM users"))
     assert res.sql_sha256 is not None and len(res.sql_sha256) == 64
+
+
+def test_public_symbols_exported_from_package():
+    import app.security as sec
+    for name in [
+        "SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION",
+        "SQLSensitiveDataPolicyContractError",
+        "SQLSensitivityLevel",
+        "SQLSensitiveDataDecision",
+        "SQLSensitiveResourceType",
+        "SQLSensitiveDataReasonCode",
+        "SQLSensitiveDataEvaluatedVia",
+        "SQLSensitiveDataRule",
+        "SQLSensitiveDataMatch",
+        "SQLSensitiveDataPolicyRequest",
+        "SQLSensitiveDataPolicyResult",
+        "SQLSensitiveDataPolicyContract",
+    ]:
+        assert hasattr(sec, name), name
+        assert name in sec.__all__, name

@@ -38,6 +38,20 @@ from .sql_query_risk_classifier import (
     SQLQueryRiskResult,
     SQLQueryRiskClassifier,
 )
+from .sql_sensitive_data_policy import (
+    SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
+    SQLSensitiveDataPolicyContractError,
+    SQLSensitivityLevel,
+    SQLSensitiveDataDecision,
+    SQLSensitiveResourceType,
+    SQLSensitiveDataReasonCode,
+    SQLSensitiveDataEvaluatedVia,
+    SQLSensitiveDataRule,
+    SQLSensitiveDataMatch,
+    SQLSensitiveDataPolicyRequest,
+    SQLSensitiveDataPolicyResult,
+    SQLSensitiveDataPolicyContract,
+)
 
 __all__ = [
     "SQL_PERMISSION_POLICY_CONTRACT_VERSION",
@@ -72,4 +86,16 @@ __all__ = [
     "SQLQueryRiskRequest",
     "SQLQueryRiskResult",
     "SQLQueryRiskClassifier",
+    "SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION",
+    "SQLSensitiveDataPolicyContractError",
+    "SQLSensitivityLevel",
+    "SQLSensitiveDataDecision",
+    "SQLSensitiveResourceType",
+    "SQLSensitiveDataReasonCode",
+    "SQLSensitiveDataEvaluatedVia",
+    "SQLSensitiveDataRule",
+    "SQLSensitiveDataMatch",
+    "SQLSensitiveDataPolicyRequest",
+    "SQLSensitiveDataPolicyResult",
+    "SQLSensitiveDataPolicyContract",
 ]
