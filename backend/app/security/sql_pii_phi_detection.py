@@ -147,3 +147,27 @@ _CONFIDENCE_ORDER: Dict[SQLPiiPhiConfidence, int] = {
 def _normalize_id(value: str) -> str:
     """Canonical form for a table/column identifier: stripped and lower-cased."""
     return value.strip().lower()
+
+
+@dataclass(frozen=True)
+class SQLPiiPhiDeclaration:
+    """An optional, trusted, immutable operator assertion that a column holds a given
+    PII/PHI category. Trusted config (same stance as 26.4 rules): the category MUST be
+    a real enum member; ``resource_id`` must be a non-empty, table-qualified
+    (``table.column``) string, normalized to lowercase. A declared match is reported
+    at confidence HIGH (an assertion, not a guess). Declarations are optional — an
+    empty set still detects heuristically.
+    """
+    resource_id: str
+    category: SQLPiiPhiCategory
+
+    def __post_init__(self):
+        if not isinstance(self.category, SQLPiiPhiCategory):
+            raise SQLPiiPhiDetectionContractError("category must be a SQLPiiPhiCategory")
+        if not isinstance(self.resource_id, str) or not self.resource_id.strip():
+            raise SQLPiiPhiDetectionContractError("resource_id must be a non-empty string")
+        normalized = _normalize_id(self.resource_id)
+        if "." not in normalized:
+            raise SQLPiiPhiDetectionContractError(
+                "resource_id must be table-qualified (e.g. 'users.ssn')")
+        object.__setattr__(self, "resource_id", normalized)

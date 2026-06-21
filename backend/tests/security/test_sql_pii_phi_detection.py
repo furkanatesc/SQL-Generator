@@ -11,6 +11,7 @@ from app.security.sql_pii_phi_detection import (
     SQLPiiPhiConfidence,
     SQLPiiPhiReasonCode,
     SQLPiiPhiEvaluatedVia,
+    SQLPiiPhiDeclaration,
     _CATEGORY_DATA_CLASS,
     _CONFIDENCE_ORDER,
     _normalize_id,
@@ -49,3 +50,30 @@ def test_confidence_order_is_strictly_increasing():
 
 def test_normalize_id_lowercases_and_strips():
     assert _normalize_id("  Users.SSN ") == "users.ssn"
+
+
+def test_declaration_normalizes_resource_id():
+    d = SQLPiiPhiDeclaration(resource_id="  Users.SSN ", category=SQLPiiPhiCategory.SSN)
+    assert d.resource_id == "users.ssn"
+    assert d.category == SQLPiiPhiCategory.SSN
+
+
+def test_declaration_is_frozen():
+    d = SQLPiiPhiDeclaration(resource_id="users.ssn", category=SQLPiiPhiCategory.SSN)
+    with pytest.raises(FrozenInstanceError):
+        d.category = SQLPiiPhiCategory.EMAIL
+
+
+def test_declaration_rejects_non_enum_category():
+    with pytest.raises(SQLPiiPhiDetectionContractError):
+        SQLPiiPhiDeclaration(resource_id="users.ssn", category="ssn")
+
+
+def test_declaration_rejects_empty_resource_id():
+    with pytest.raises(SQLPiiPhiDetectionContractError):
+        SQLPiiPhiDeclaration(resource_id="   ", category=SQLPiiPhiCategory.SSN)
+
+
+def test_declaration_rejects_unqualified_resource_id():
+    with pytest.raises(SQLPiiPhiDetectionContractError):
+        SQLPiiPhiDeclaration(resource_id="ssn", category=SQLPiiPhiCategory.SSN)
