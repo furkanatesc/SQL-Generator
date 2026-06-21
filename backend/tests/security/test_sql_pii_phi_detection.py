@@ -300,3 +300,135 @@ def test_literal_does_not_flag_non_luhn_digit_run_as_card():
 
 def test_literal_empty_for_benign_sql():
     assert _detect_literal_matches("SELECT id, qty FROM orders WHERE qty > 3") == []
+
+
+# Task 7: SQLPiiPhiDetector
+from app.security.sql_pii_phi_detection import SQLPiiPhiDetector
+
+V = SQL_PII_PHI_DETECTION_CONTRACT_VERSION
+
+
+def _req(**kw):
+    kw.setdefault("version", V)
+    return SQLPiiPhiDetectionRequest(**kw)
+
+
+def test_benign_query_detects_nothing():
+    res = SQLPiiPhiDetector().detect(_req(sql="SELECT id, qty FROM orders WHERE qty > 3"))
+    assert res.detected == ()
+    assert res.categories == ()
+    assert res.has_phi is False
+    assert res.highest_confidence is None
+    assert res.reason_code == SQLPiiPhiReasonCode.NO_PII_PHI_DETECTED
+    assert res.evaluated_via == SQLPiiPhiEvaluatedVia.SQL_TEXT
+
+
+def test_declared_column_detected_high_confidence():
+    det = SQLPiiPhiDetector([
+        SQLPiiPhiDeclaration(resource_id="patients.mrn",
+                             category=SQLPiiPhiCategory.MEDICAL_RECORD_NUMBER)])
+    res = det.detect(_req(referenced_columns=["patients.mrn"]))
+    assert res.evaluated_via == SQLPiiPhiEvaluatedVia.EXPLICIT_REFERENCES
+    m = res.detected[0]
+    assert m.source == SQLPiiPhiDetectionSource.DECLARED
+    assert m.confidence == SQLPiiPhiConfidence.HIGH
+    assert m.category == SQLPiiPhiCategory.MEDICAL_RECORD_NUMBER
+    assert res.has_phi is True
+    assert res.reason_code == SQLPiiPhiReasonCode.PHI_DETECTED
+
+
+def test_identifier_name_layer_via_explicit_refs():
+    res = SQLPiiPhiDetector().detect(_req(referenced_columns=["users.email"]))
+    assert SQLPiiPhiCategory.EMAIL in res.categories
+    src = {m.source for m in res.detected}
+    assert SQLPiiPhiDetectionSource.IDENTIFIER_NAME in src
+    assert res.highest_confidence == SQLPiiPhiConfidence.MEDIUM
+    assert res.reason_code == SQLPiiPhiReasonCode.PII_DETECTED
+
+
+def test_identifier_name_layer_via_sql_extraction():
+    res = SQLPiiPhiDetector().detect(_req(sql="SELECT ssn FROM users"))
+    assert SQLPiiPhiCategory.SSN in res.categories
+    assert res.evaluated_via == SQLPiiPhiEvaluatedVia.SQL_TEXT
+
+
+def test_literal_layer_runs_even_with_explicit_refs():
+    # evaluated_via is EXPLICIT_REFERENCES (identifier view), yet the literal layer
+    # still scans the supplied sql and finds the SSN literal.
+    res = SQLPiiPhiDetector().detect(_req(
+        sql="SELECT 1 FROM t WHERE ssn = '123-45-6789'",
+        referenced_tables=["t"]))
+    assert res.evaluated_via == SQLPiiPhiEvaluatedVia.EXPLICIT_REFERENCES
+    srcs = {(m.category, m.source) for m in res.detected}
+    assert (SQLPiiPhiCategory.SSN, SQLPiiPhiDetectionSource.LITERAL_VALUE) in srcs
+
+
+def test_phi_dominates_reason_code_when_pii_also_present():
+    det = SQLPiiPhiDetector()
+    res = det.detect(_req(referenced_columns=["users.email", "patients.diagnosis"]))
+    assert SQLPiiPhiCategory.EMAIL in res.categories
+    assert SQLPiiPhiCategory.DIAGNOSIS in res.categories
+    assert res.has_phi is True
+    assert res.reason_code == SQLPiiPhiReasonCode.PHI_DETECTED
+
+
+def test_highest_confidence_is_max():
+    # name (MEDIUM) + Luhn card literal (HIGH) -> HIGH.
+    res = SQLPiiPhiDetector().detect(_req(
+        sql="SELECT email FROM users WHERE cc = '4111111111111111'"))
+    assert res.highest_confidence == SQLPiiPhiConfidence.HIGH
+
+
+def test_unusable_input_reports_could_not_evaluate():
+    det = SQLPiiPhiDetector()
+    for bad in [_req(), _req(sql=""), _req(sql=123)]:
+        res = det.detect(bad)
+        assert res.detected == ()
+        assert res.reason_code == SQLPiiPhiReasonCode.UNUSABLE_INPUT
+        assert res.evaluated_via == SQLPiiPhiEvaluatedVia.NONE
+        assert res.has_phi is False
+        assert res.highest_confidence is None
+
+
+def test_explicit_empty_refs_is_not_unusable():
+    # Caller explicitly said "no referenced columns" -> evaluable, just no detections.
+    res = SQLPiiPhiDetector().detect(_req(referenced_columns=[]))
+    assert res.reason_code == SQLPiiPhiReasonCode.NO_PII_PHI_DETECTED
+    assert res.evaluated_via == SQLPiiPhiEvaluatedVia.EXPLICIT_REFERENCES
+
+
+def test_detected_is_deduped_and_deterministically_ordered():
+    res = SQLPiiPhiDetector().detect(_req(referenced_columns=[
+        "users.email", "users.email", "patients.diagnosis"]))
+    # de-dup: the doubled email column collapses to one (category, source, identifier).
+    keys = [(m.category, m.source, m.identifier) for m in res.detected]
+    assert len(keys) == len(set(keys))
+    # order: PHI (diagnosis) before PII (email).
+    assert res.detected[0].data_class == SQLDataClass.PHI
+
+
+def test_detect_rejects_non_request():
+    with pytest.raises(SQLPiiPhiDetectionContractError):
+        SQLPiiPhiDetector().detect("not-a-request")
+
+
+def test_detector_rejects_non_declaration():
+    with pytest.raises(SQLPiiPhiDetectionContractError):
+        SQLPiiPhiDetector(["not-a-declaration"])
+
+
+def test_sql_sha256_set_when_sql_given():
+    res = SQLPiiPhiDetector().detect(_req(sql="SELECT ssn FROM users"))
+    assert res.sql_sha256 is not None and len(res.sql_sha256) == 64
+
+
+def test_to_dict_is_secret_free_for_literals():
+    sql = "SELECT * FROM users WHERE ssn = '123-45-6789' OR cc = '4111111111111111'"
+    res = SQLPiiPhiDetector().detect(_req(sql=sql))
+    d = res.to_dict()
+    s = json.dumps(d)
+    assert "123-45-6789" not in s
+    assert "4111111111111111" not in s
+    # ...but they WERE detected:
+    assert SQLPiiPhiCategory.SSN.value in d["categories"]
+    assert SQLPiiPhiCategory.CREDIT_CARD.value in d["categories"]

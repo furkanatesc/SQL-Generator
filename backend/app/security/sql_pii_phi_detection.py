@@ -379,3 +379,132 @@ def _detect_literal_matches(sql: str) -> List[Tuple[SQLPiiPhiCategory, SQLPiiPhi
     if _PHONE_RE.search(sql):
         out.append((SQLPiiPhiCategory.PHONE, SQLPiiPhiConfidence.LOW))
     return out
+
+
+class SQLPiiPhiDetector:
+    """Deterministic, static PII/PHI detector. Stateless w.r.t. requests: the result
+    is a pure function of (request, declarations). NOT a gate — it emits a signal only.
+
+    Identifiers feed Layer A (declared) + Layer B (name heuristics); the raw sql feeds
+    Layer C (literal heuristics) whenever it is a usable string. ``evaluated_via``
+    describes the identifier view (EXPLICIT_REFERENCES / SQL_TEXT / NONE); literal
+    matches are reported per-match via the LITERAL_VALUE source regardless.
+    """
+
+    def __init__(self, declarations: Sequence[SQLPiiPhiDeclaration] = ()):
+        for d in declarations:
+            if not isinstance(d, SQLPiiPhiDeclaration):
+                raise SQLPiiPhiDetectionContractError("each declaration must be a SQLPiiPhiDeclaration")
+        self._declared: Dict[str, List[SQLPiiPhiCategory]] = {}
+        for d in declarations:
+            self._declared.setdefault(d.resource_id, []).append(d.category)
+
+    def detect(self, request: SQLPiiPhiDetectionRequest) -> SQLPiiPhiDetectionResult:
+        if not isinstance(request, SQLPiiPhiDetectionRequest):
+            raise SQLPiiPhiDetectionContractError("request must be a SQLPiiPhiDetectionRequest")
+
+        sql = request.sql
+        dialect = request.dialect
+        sql_hash = (
+            hashlib.sha256(sql.encode("utf-8")).hexdigest()
+            if isinstance(sql, str) and sql else None
+        )
+
+        identifiers, via = self._resolve_identifiers(request)
+        if via == SQLPiiPhiEvaluatedVia.NONE:
+            return self._result(
+                (), (), False, None, SQLPiiPhiReasonCode.UNUSABLE_INPUT, via, sql_hash, dialect,
+                reason="No usable references and no usable SQL; cannot evaluate "
+                       "PII/PHI presence.")
+
+        matches: List[SQLPiiPhiMatch] = []
+        # Layer A — declared map (sound, HIGH).
+        for ident in identifiers:
+            for category in self._declared.get(ident, ()):
+                matches.append(SQLPiiPhiMatch(
+                    category=category, data_class=_CATEGORY_DATA_CLASS[category],
+                    source=SQLPiiPhiDetectionSource.DECLARED,
+                    confidence=SQLPiiPhiConfidence.HIGH, identifier=ident))
+        # Layer B — identifier-name heuristics (MEDIUM).
+        for category, ident in _detect_name_matches(identifiers):
+            matches.append(SQLPiiPhiMatch(
+                category=category, data_class=_CATEGORY_DATA_CLASS[category],
+                source=SQLPiiPhiDetectionSource.IDENTIFIER_NAME,
+                confidence=SQLPiiPhiConfidence.MEDIUM, identifier=ident))
+        # Layer C — literal-value heuristics over the raw sql (LOW->HIGH).
+        if isinstance(sql, str) and sql.strip():
+            for category, confidence in _detect_literal_matches(sql):
+                matches.append(SQLPiiPhiMatch(
+                    category=category, data_class=_CATEGORY_DATA_CLASS[category],
+                    source=SQLPiiPhiDetectionSource.LITERAL_VALUE,
+                    confidence=confidence, identifier=None))
+
+        return self._aggregate(matches, via, sql_hash, dialect)
+
+    def _resolve_identifiers(self, request: SQLPiiPhiDetectionRequest):
+        """Return (identifiers, evaluated_via). Explicit references win (sound); else
+        extract from sql (best-effort); else NONE. Usability hinges on explicit refs
+        or a non-empty sql string."""
+        if request.referenced_tables is not None or request.referenced_columns is not None:
+            idents = self._normalize_set(request.referenced_tables) | \
+                self._normalize_set(request.referenced_columns)
+            return idents, SQLPiiPhiEvaluatedVia.EXPLICIT_REFERENCES
+        sql = request.sql
+        if isinstance(sql, str) and sql.strip():
+            return _extract_identifiers(_to_executable_core(sql)), SQLPiiPhiEvaluatedVia.SQL_TEXT
+        return set(), SQLPiiPhiEvaluatedVia.NONE
+
+    @staticmethod
+    def _normalize_set(values: Optional[Sequence[str]]) -> Set[str]:
+        if not values:
+            return set()
+        return {_normalize_id(v) for v in values if isinstance(v, str) and v.strip()}
+
+    def _aggregate(self, matches: List[SQLPiiPhiMatch], via: SQLPiiPhiEvaluatedVia,
+                   sql_hash: Optional[str], dialect: str) -> SQLPiiPhiDetectionResult:
+        if not matches:
+            return self._result(
+                (), (), False, None, SQLPiiPhiReasonCode.NO_PII_PHI_DETECTED, via, sql_hash, dialect,
+                reason="No PII/PHI detected in the query's identifiers or literals.")
+
+        # De-duplicate on (category, source, identifier).
+        seen: Set[Tuple[Any, ...]] = set()
+        unique: List[SQLPiiPhiMatch] = []
+        for m in matches:
+            key = (m.category, m.source, m.identifier)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(m)
+        # Order: PHI before PII, then category, then source, then confidence desc, then
+        # identifier (None last via a high sentinel).
+        unique.sort(key=lambda m: (
+            0 if m.data_class == SQLDataClass.PHI else 1,
+            m.category.value,
+            m.source.value,
+            -_CONFIDENCE_ORDER[m.confidence],
+            m.identifier if m.identifier is not None else "~",
+        ))
+
+        categories = tuple(sorted({m.category for m in unique}, key=lambda c: c.value))
+        has_phi = any(m.data_class == SQLDataClass.PHI for m in unique)
+        highest = max((m.confidence for m in unique), key=lambda c: _CONFIDENCE_ORDER[c])
+        reason_code = (SQLPiiPhiReasonCode.PHI_DETECTED if has_phi
+                       else SQLPiiPhiReasonCode.PII_DETECTED)
+        reason = (f"Detected {len(categories)} PII/PHI category(ies) "
+                  f"(has_phi={has_phi}, max confidence {highest.value}).")
+        return self._result(
+            tuple(unique), categories, has_phi, highest, reason_code, via, sql_hash, dialect,
+            reason=reason)
+
+    def _result(self, detected: Tuple[SQLPiiPhiMatch, ...],
+                categories: Tuple[SQLPiiPhiCategory, ...], has_phi: bool,
+                highest_confidence: Optional[SQLPiiPhiConfidence],
+                reason_code: SQLPiiPhiReasonCode, via: SQLPiiPhiEvaluatedVia,
+                sql_sha256: Optional[str], dialect: str,
+                reason: str) -> SQLPiiPhiDetectionResult:
+        return SQLPiiPhiDetectionResult(
+            version=SQL_PII_PHI_DETECTION_CONTRACT_VERSION,
+            detected=detected, categories=categories, has_phi=has_phi,
+            highest_confidence=highest_confidence, reason_code=reason_code, reason=reason,
+            sql_sha256=sql_sha256, evaluated_via=via, dialect=dialect)
