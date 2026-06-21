@@ -432,3 +432,25 @@ def test_to_dict_is_secret_free_for_literals():
     # ...but they WERE detected:
     assert SQLPiiPhiCategory.SSN.value in d["categories"]
     assert SQLPiiPhiCategory.CREDIT_CARD.value in d["categories"]
+
+
+# Task 8: Public exports from app.security.__init__
+def test_public_symbols_exported_from_package():
+    import app.security as sec
+    for name in [
+        "SQL_PII_PHI_DETECTION_CONTRACT_VERSION",
+        "SQLPiiPhiDetectionContractError",
+        "SQLDataClass",
+        "SQLPiiPhiCategory",
+        "SQLPiiPhiDetectionSource",
+        "SQLPiiPhiConfidence",
+        "SQLPiiPhiReasonCode",
+        "SQLPiiPhiEvaluatedVia",
+        "SQLPiiPhiDeclaration",
+        "SQLPiiPhiMatch",
+        "SQLPiiPhiDetectionRequest",
+        "SQLPiiPhiDetectionResult",
+        "SQLPiiPhiDetector",
+    ]:
+        assert hasattr(sec, name), name
+        assert name in sec.__all__, name
