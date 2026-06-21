@@ -205,3 +205,62 @@ def test_request_is_frozen():
     req = SQLPiiPhiDetectionRequest(version=SQL_PII_PHI_DETECTION_CONTRACT_VERSION)
     with pytest.raises(FrozenInstanceError):
         req.sql = "SELECT 1"
+
+
+# Task 5: _extract_identifiers + _detect_name_matches
+from app.security.sql_pii_phi_detection import (
+    _extract_identifiers, _detect_name_matches,
+)
+from app.security._sql_text import to_executable_core
+
+
+def test_extract_identifiers_includes_unqualified_columns():
+    core = to_executable_core("SELECT ssn, email FROM users")
+    ids = _extract_identifiers(core)
+    assert {"ssn", "email", "users"}.issubset(ids)
+
+
+def test_extract_identifiers_includes_qualified_tokens():
+    core = to_executable_core("SELECT u.ssn FROM public.users u")
+    ids = _extract_identifiers(core)
+    assert "u.ssn" in ids
+    assert "public.users" in ids
+
+
+def test_name_matches_detect_email_and_ssn():
+    found = dict(_detect_name_matches({"users.email", "ssn", "orders"}))
+    assert found[SQLPiiPhiCategory.EMAIL] == "users.email"
+    assert found[SQLPiiPhiCategory.SSN] == "ssn"
+    assert SQLPiiPhiCategory.POSTAL_ADDRESS not in found
+
+
+def test_name_matches_detect_phi_categories():
+    cats = {c for c, _ in _detect_name_matches(
+        {"patients.mrn", "visit.diagnosis", "patient"})}
+    assert SQLPiiPhiCategory.MEDICAL_RECORD_NUMBER in cats
+    assert SQLPiiPhiCategory.DIAGNOSIS in cats
+    assert SQLPiiPhiCategory.HEALTH_GENERIC in cats
+
+
+def test_name_matches_each_pii_category_name():
+    samples = {
+        "phone": SQLPiiPhiCategory.PHONE,
+        "card_number": SQLPiiPhiCategory.CREDIT_CARD,
+        "iban": SQLPiiPhiCategory.IBAN,
+        "date_of_birth": SQLPiiPhiCategory.DATE_OF_BIRTH,
+        "last_name": SQLPiiPhiCategory.PERSON_NAME,
+        "street": SQLPiiPhiCategory.POSTAL_ADDRESS,
+    }
+    for ident, expected in samples.items():
+        cats = {c for c, _ in _detect_name_matches({ident})}
+        assert expected in cats, ident
+
+
+def test_name_matches_are_deterministically_ordered():
+    a = _detect_name_matches({"users.ssn", "users.email", "patient"})
+    b = _detect_name_matches({"patient", "users.email", "users.ssn"})
+    assert a == b
+
+
+def test_name_matches_empty_for_benign_identifiers():
+    assert _detect_name_matches({"orders", "id", "total", "qty"}) == []

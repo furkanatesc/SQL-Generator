@@ -285,3 +285,48 @@ class SQLPiiPhiDetectionRequest:
             raise SQLPiiPhiDetectionContractError(f"Invalid request version: {self.version}")
         if not isinstance(self.dialect, str) or not self.dialect.strip():
             raise SQLPiiPhiDetectionContractError("dialect must be a non-empty string")
+
+
+# --- Layer B: identifier extraction + name-pattern detection (best-effort) ---
+
+_IDENT = r"[A-Za-z_][A-Za-z0-9_$]*"
+# Any identifier or dotted token (e.g. `users`, `ssn`, `users.ssn`, `public.users`).
+_ANY_IDENT_RE = re.compile(_IDENT + r"(?:\." + _IDENT + r")*")
+
+# (pattern, category). Patterns match against a normalized (lowercased) identifier;
+# `.` is a non-word char so `\bssn\b` matches the `ssn` segment of `users.ssn`. These
+# are intentionally broad (best-effort, over-detection-biased).
+_NAME_PATTERNS: List[Tuple["re.Pattern[str]", SQLPiiPhiCategory]] = [
+    (re.compile(r"\b(?:ssn|social_security)\b"), SQLPiiPhiCategory.SSN),
+    (re.compile(r"\b(?:e[_-]?mail)\b"), SQLPiiPhiCategory.EMAIL),
+    (re.compile(r"\b(?:phone|mobile|msisdn)\b"), SQLPiiPhiCategory.PHONE),
+    (re.compile(r"\b(?:dob|date_of_birth|birth_date|birthday)\b"), SQLPiiPhiCategory.DATE_OF_BIRTH),
+    (re.compile(r"\biban\b"), SQLPiiPhiCategory.IBAN),
+    (re.compile(r"\b(?:credit_card|card_number|cc_number)\b"), SQLPiiPhiCategory.CREDIT_CARD),
+    (re.compile(r"\b(?:first_name|last_name|full_name|surname)\b"), SQLPiiPhiCategory.PERSON_NAME),
+    (re.compile(r"\b(?:address|street|postcode|zip_code|zipcode)\b"), SQLPiiPhiCategory.POSTAL_ADDRESS),
+    (re.compile(r"\b(?:mrn|medical_record(?:_number)?)\b"), SQLPiiPhiCategory.MEDICAL_RECORD_NUMBER),
+    (re.compile(r"\b(?:diagnosis|icd(?:10|9)?)\b"), SQLPiiPhiCategory.DIAGNOSIS),
+    (re.compile(r"\b(?:patient|disease|treatment|prescription)\b"), SQLPiiPhiCategory.HEALTH_GENERIC),
+]
+
+
+def _extract_identifiers(core: str) -> Set[str]:
+    """Every normalized identifier / dotted token in the executable core.
+
+    Captures unqualified column names (``ssn``) as well as qualified tokens
+    (``users.ssn``). Over-captures SQL keywords (``select``, ``from``); harmless since
+    keywords never match a PII/PHI name pattern.
+    """
+    return {_normalize_id(m.group(0)) for m in _ANY_IDENT_RE.finditer(core)}
+
+
+def _detect_name_matches(identifiers: Set[str]) -> List[Tuple[SQLPiiPhiCategory, str]]:
+    """``(category, identifier)`` pairs where an identifier matches a category name
+    pattern. Deterministically ordered (identifier asc, then pattern order)."""
+    out: List[Tuple[SQLPiiPhiCategory, str]] = []
+    for ident in sorted(identifiers):
+        for pattern, category in _NAME_PATTERNS:
+            if pattern.search(ident):
+                out.append((category, ident))
+    return out
