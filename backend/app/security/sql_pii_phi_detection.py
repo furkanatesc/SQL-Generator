@@ -171,3 +171,92 @@ class SQLPiiPhiDeclaration:
             raise SQLPiiPhiDetectionContractError(
                 "resource_id must be table-qualified (e.g. 'users.ssn')")
         object.__setattr__(self, "resource_id", normalized)
+
+
+@dataclass(frozen=True)
+class SQLPiiPhiMatch:
+    """One PII/PHI detection, in a stable, typed, JSON-safe, secret-free audit shape.
+
+    ``identifier`` is the schema name the operator exposed (a table/column name) for
+    DECLARED / IDENTIFIER_NAME matches, and ``None`` for LITERAL_VALUE matches (which
+    carry no value). Never a query value.
+    """
+    category: SQLPiiPhiCategory
+    data_class: SQLDataClass
+    source: SQLPiiPhiDetectionSource
+    confidence: SQLPiiPhiConfidence
+    identifier: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "category": self.category.value,
+            "data_class": self.data_class.value,
+            "source": self.source.value,
+            "confidence": self.confidence.value,
+            "identifier": self.identifier,
+        }
+
+
+@dataclass(frozen=True)
+class SQLPiiPhiDetectionResult:
+    """An immutable, audit-grade, secret-free PII/PHI detection signal.
+
+    Carries NO raw SQL and NO matched value — only ``sql_sha256`` (when sql given),
+    the detected categories, a ``has_phi`` flag, the max confidence, a reason code +
+    human reason, how identifiers were obtained, and the per-match detail (each a
+    secret-free ``SQLPiiPhiMatch``). NOT a gate: there is no decision field.
+    """
+    version: str
+    detected: Tuple[SQLPiiPhiMatch, ...]
+    categories: Tuple[SQLPiiPhiCategory, ...]
+    has_phi: bool
+    highest_confidence: Optional[SQLPiiPhiConfidence]
+    reason_code: SQLPiiPhiReasonCode
+    reason: str
+    sql_sha256: Optional[str]
+    evaluated_via: SQLPiiPhiEvaluatedVia
+    dialect: str
+
+    def __post_init__(self):
+        if self.version != SQL_PII_PHI_DETECTION_CONTRACT_VERSION:
+            raise SQLPiiPhiDetectionContractError(f"Invalid result version: {self.version}")
+        if not isinstance(self.detected, tuple):
+            raise SQLPiiPhiDetectionContractError("detected must be a tuple")
+        for m in self.detected:
+            if not isinstance(m, SQLPiiPhiMatch):
+                raise SQLPiiPhiDetectionContractError("each detected entry must be a SQLPiiPhiMatch")
+        if not isinstance(self.categories, tuple):
+            raise SQLPiiPhiDetectionContractError("categories must be a tuple")
+        for c in self.categories:
+            if not isinstance(c, SQLPiiPhiCategory):
+                raise SQLPiiPhiDetectionContractError("each category must be a SQLPiiPhiCategory")
+        if not isinstance(self.has_phi, bool):
+            raise SQLPiiPhiDetectionContractError("has_phi must be a bool")
+        if self.highest_confidence is not None and not isinstance(self.highest_confidence, SQLPiiPhiConfidence):
+            raise SQLPiiPhiDetectionContractError("highest_confidence must be a SQLPiiPhiConfidence or None")
+        if not isinstance(self.reason_code, SQLPiiPhiReasonCode):
+            raise SQLPiiPhiDetectionContractError("reason_code must be a SQLPiiPhiReasonCode")
+        if not isinstance(self.reason, str) or not self.reason.strip():
+            raise SQLPiiPhiDetectionContractError("reason must be a non-empty string")
+        if self.sql_sha256 is not None and (
+            not isinstance(self.sql_sha256, str) or not re.fullmatch(r"[a-f0-9]{64}", self.sql_sha256)
+        ):
+            raise SQLPiiPhiDetectionContractError("sql_sha256 must be a lowercase SHA-256 hex digest or None")
+        if not isinstance(self.evaluated_via, SQLPiiPhiEvaluatedVia):
+            raise SQLPiiPhiDetectionContractError("evaluated_via must be a SQLPiiPhiEvaluatedVia")
+        if not isinstance(self.dialect, str) or not self.dialect.strip():
+            raise SQLPiiPhiDetectionContractError("dialect must be a non-empty string")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "version": self.version,
+            "detected": [m.to_dict() for m in self.detected],
+            "categories": [c.value for c in self.categories],
+            "has_phi": self.has_phi,
+            "highest_confidence": self.highest_confidence.value if self.highest_confidence else None,
+            "reason_code": self.reason_code.value,
+            "reason": self.reason,
+            "sql_sha256": self.sql_sha256,
+            "evaluated_via": self.evaluated_via.value,
+            "dialect": self.dialect,
+        }
