@@ -176,3 +176,32 @@ def test_result_rejects_non_match_in_detected():
 def test_result_rejects_non_bool_has_phi():
     with pytest.raises(SQLPiiPhiDetectionContractError):
         _result(has_phi="yes")
+
+
+# Task 4: SQLPiiPhiDetectionRequest
+from app.security.sql_pii_phi_detection import SQLPiiPhiDetectionRequest
+
+
+def test_request_defaults():
+    req = SQLPiiPhiDetectionRequest(version=SQL_PII_PHI_DETECTION_CONTRACT_VERSION)
+    assert req.sql is None
+    assert req.referenced_tables is None
+    assert req.referenced_columns is None
+    assert req.dialect == "generic"
+
+
+def test_request_rejects_bad_version():
+    with pytest.raises(SQLPiiPhiDetectionContractError):
+        SQLPiiPhiDetectionRequest(version="nope")
+
+
+def test_request_rejects_empty_dialect():
+    with pytest.raises(SQLPiiPhiDetectionContractError):
+        SQLPiiPhiDetectionRequest(
+            version=SQL_PII_PHI_DETECTION_CONTRACT_VERSION, dialect="  ")
+
+
+def test_request_is_frozen():
+    req = SQLPiiPhiDetectionRequest(version=SQL_PII_PHI_DETECTION_CONTRACT_VERSION)
+    with pytest.raises(FrozenInstanceError):
+        req.sql = "SELECT 1"

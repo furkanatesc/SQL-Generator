@@ -260,3 +260,28 @@ class SQLPiiPhiDetectionResult:
             "evaluated_via": self.evaluated_via.value,
             "dialect": self.dialect,
         }
+
+
+@dataclass(frozen=True)
+class SQLPiiPhiDetectionRequest:
+    """An immutable PII/PHI detection request.
+
+    Identifier source is hybrid (mirrors 26.4): if ``referenced_tables``/
+    ``referenced_columns`` are provided they are used as-is (sound) for the name +
+    declared layers; otherwise identifiers are extracted from ``sql`` (best-effort).
+    The literal-value layer runs over ``sql`` whenever ``sql`` is a usable string,
+    independently of the identifier source. ``sql`` is typed ``str`` but intentionally
+    NOT type-checked here, so a non-string yields a deterministic fail-closed result
+    from ``detect()`` rather than raising at construction.
+    """
+    version: str
+    sql: Optional[str] = None
+    referenced_tables: Optional[Sequence[str]] = None
+    referenced_columns: Optional[Sequence[str]] = None
+    dialect: str = "generic"
+
+    def __post_init__(self):
+        if self.version != SQL_PII_PHI_DETECTION_CONTRACT_VERSION:
+            raise SQLPiiPhiDetectionContractError(f"Invalid request version: {self.version}")
+        if not isinstance(self.dialect, str) or not self.dialect.strip():
+            raise SQLPiiPhiDetectionContractError("dialect must be a non-empty string")
