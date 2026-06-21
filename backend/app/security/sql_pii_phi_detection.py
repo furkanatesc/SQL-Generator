@@ -1,0 +1,149 @@
+"""Sprint 26.5 — PII / PHI Detection Contract (Phase 7: Security & Governance).
+
+Maturity: MVP / early beta. NOT production-ready. This sprint defines a *static*
+(no execution) contract that **detects** whether a query plausibly involves personal
+data (PII) or protected health information (PHI), reporting *what kind* and *with what
+confidence*. Where 26.0 asks "may this run?", 26.1 "right tenant?", 26.2 "is it
+read-only?", 26.3 "how risky?", and 26.4 "does it touch a declared-sensitive
+resource (and what to do)?", 26.5 asks:
+
+* Does this query plausibly involve PII/PHI, by category, and how confident is that?
+
+It is a **pure signal / detector — NOT a gate.** It returns NO ALLOW/DENY decision
+(that is 26.4 / approval 26.7). Like 26.3 (risk classifier), it emits a typed signal
+that downstream gates and governance consume (26.4 sensitive-data gate, 26.6 audit,
+26.7 approval). Where 26.4 is declaration-based, 26.5 is **heuristic**: it infers
+categories from identifier names and literal value formats *without* requiring any
+operator declaration. A declared category map is supported as an optional, sound
+override; its value is catching PII/PHI the operator never declared.
+
+Three detection layers, each tagged by its source on every match:
+
+* Layer A — declared map (source DECLARED, confidence HIGH): an operator assertion
+  that a referenced column holds a given category. Sound.
+* Layer B — identifier-name heuristics (source IDENTIFIER_NAME, confidence MEDIUM):
+  table/column/identifier *names* matched against per-category name patterns over the
+  literal-free executable core (shared ``_sql_text``).
+* Layer C — SQL literal-value heuristics (source LITERAL_VALUE, confidence LOW->HIGH):
+  value formats (email/SSN/IBAN/phone and Luhn-gated credit cards) scanned over the
+  **raw** SQL string — because leaked PII lives inside string literals, which the
+  ``_sql_text`` sanitizer masks by design.
+
+Core principle — **secret-free**: the result carries NO raw SQL and NO matched value,
+only ``sql_sha256``, categories, and matched identifier *names* (schema metadata the
+operator exposed). Literal matches carry no identifier and no value.
+
+Fail behaviour: unusable input (no references and no usable SQL string) yields a
+deterministic result with reason ``UNUSABLE_INPUT`` and no detections — the detector
+asserts neither presence nor absence (it could not evaluate), rather than a false
+"clean".
+
+Out of scope (later sprints / deliberate): any ALLOW/DENY decision (26.4/26.7), audit
+persistence (26.6), approval orchestration (26.7), prompt-injection defense (26.8),
+result-set/row privacy over *returned data* (26.9 — this sees only SQL, never rows), a
+real SQL parser, alias/schema resolution, catalog metadata, locale-specific national
+IDs beyond the chosen formats, any I/O, DB/adapter execution, API/UI, tenant/RBAC.
+This module performs no I/O.
+
+KNOWN LIMITATIONS (heuristics, no parser; a sound fix needs a parser + catalog/
+data-classification metadata and/or value sampling under execution — a later sprint):
+
+* Heuristic in BOTH directions: name/value patterns under-detect (a ``notes`` column
+  full of PHI; an unlisted national-ID format) AND over-detect (an ``ip_address``
+  column, a non-PII number that passes Luhn by chance, PII-looking text inside a SQL
+  comment). It is a **signal, never proof**, and never a gate.
+* Identifier extraction is alias-blind, nesting-blind, schema-qualification-blind
+  (shares 26.4's limits). **Sound identifier usage = explicit references.**
+* Layer C scans the raw SQL, so its regexes may also match inside comments — an
+  intentional over-detection bias for a signal; no value is ever stored, so no secret
+  leaks regardless.
+* Layer C is locale-limited (US SSN; generic email/IBAN/phone; Luhn cards).
+"""
+
+import hashlib
+import re
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+
+from app.security._sql_text import to_executable_core as _to_executable_core
+
+SQL_PII_PHI_DETECTION_CONTRACT_VERSION = "sql_pii_phi_detection_contract_v1"
+
+
+class SQLPiiPhiDetectionContractError(ValueError):
+    """Raised when PII/PHI detection contract rules are violated."""
+    pass
+
+
+class SQLDataClass(str, Enum):
+    PII = "pii"   # personal data
+    PHI = "phi"   # protected health information (HIPAA-style)
+
+
+class SQLPiiPhiCategory(str, Enum):
+    EMAIL = "email"
+    PHONE = "phone"
+    SSN = "ssn"
+    CREDIT_CARD = "credit_card"
+    IBAN = "iban"
+    DATE_OF_BIRTH = "date_of_birth"
+    PERSON_NAME = "person_name"
+    POSTAL_ADDRESS = "postal_address"
+    MEDICAL_RECORD_NUMBER = "medical_record_number"
+    DIAGNOSIS = "diagnosis"
+    HEALTH_GENERIC = "health_generic"
+
+
+class SQLPiiPhiDetectionSource(str, Enum):
+    DECLARED = "declared"                 # operator-declared map (sound)
+    IDENTIFIER_NAME = "identifier_name"   # name heuristic (best-effort)
+    LITERAL_VALUE = "literal_value"       # value-format heuristic (best-effort)
+
+
+class SQLPiiPhiConfidence(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class SQLPiiPhiReasonCode(str, Enum):
+    NO_PII_PHI_DETECTED = "no_pii_phi_detected"
+    PII_DETECTED = "pii_detected"
+    PHI_DETECTED = "phi_detected"
+    UNUSABLE_INPUT = "unusable_input"
+
+
+class SQLPiiPhiEvaluatedVia(str, Enum):
+    EXPLICIT_REFERENCES = "explicit_references"  # caller-supplied identifier lists (sound view)
+    SQL_TEXT = "sql_text"                        # heuristics over the SQL string
+    NONE = "none"                                # no usable input
+
+
+# Each category's data class (PII vs PHI). The result's has_phi flag is True iff any
+# matched category maps to PHI; PHI dominates the reason code.
+_CATEGORY_DATA_CLASS: Dict[SQLPiiPhiCategory, SQLDataClass] = {
+    SQLPiiPhiCategory.EMAIL: SQLDataClass.PII,
+    SQLPiiPhiCategory.PHONE: SQLDataClass.PII,
+    SQLPiiPhiCategory.SSN: SQLDataClass.PII,
+    SQLPiiPhiCategory.CREDIT_CARD: SQLDataClass.PII,
+    SQLPiiPhiCategory.IBAN: SQLDataClass.PII,
+    SQLPiiPhiCategory.DATE_OF_BIRTH: SQLDataClass.PII,
+    SQLPiiPhiCategory.PERSON_NAME: SQLDataClass.PII,
+    SQLPiiPhiCategory.POSTAL_ADDRESS: SQLDataClass.PII,
+    SQLPiiPhiCategory.MEDICAL_RECORD_NUMBER: SQLDataClass.PHI,
+    SQLPiiPhiCategory.DIAGNOSIS: SQLDataClass.PHI,
+    SQLPiiPhiCategory.HEALTH_GENERIC: SQLDataClass.PHI,
+}
+
+# Confidence ordering (low -> high). The result's highest_confidence is the MAX.
+_CONFIDENCE_ORDER: Dict[SQLPiiPhiConfidence, int] = {
+    SQLPiiPhiConfidence.LOW: 0,
+    SQLPiiPhiConfidence.MEDIUM: 1,
+    SQLPiiPhiConfidence.HIGH: 2,
+}
+
+
+def _normalize_id(value: str) -> str:
+    """Canonical form for a table/column identifier: stripped and lower-cased."""
+    return value.strip().lower()
