@@ -253,7 +253,7 @@ class SQLPiiPhiDetectionResult:
             "detected": [m.to_dict() for m in self.detected],
             "categories": [c.value for c in self.categories],
             "has_phi": self.has_phi,
-            "highest_confidence": self.highest_confidence.value if self.highest_confidence else None,
+            "highest_confidence": self.highest_confidence.value if self.highest_confidence is not None else None,
             "reason_code": self.reason_code.value,
             "reason": self.reason,
             "sql_sha256": self.sql_sha256,
