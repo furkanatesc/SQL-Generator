@@ -52,6 +52,21 @@ from .sql_sensitive_data_policy import (
     SQLSensitiveDataPolicyResult,
     SQLSensitiveDataPolicyContract,
 )
+from .sql_pii_phi_detection import (
+    SQL_PII_PHI_DETECTION_CONTRACT_VERSION,
+    SQLPiiPhiDetectionContractError,
+    SQLDataClass,
+    SQLPiiPhiCategory,
+    SQLPiiPhiDetectionSource,
+    SQLPiiPhiConfidence,
+    SQLPiiPhiReasonCode,
+    SQLPiiPhiEvaluatedVia,
+    SQLPiiPhiDeclaration,
+    SQLPiiPhiMatch,
+    SQLPiiPhiDetectionRequest,
+    SQLPiiPhiDetectionResult,
+    SQLPiiPhiDetector,
+)
 
 __all__ = [
     "SQL_PERMISSION_POLICY_CONTRACT_VERSION",
@@ -98,4 +113,17 @@ __all__ = [
     "SQLSensitiveDataPolicyRequest",
     "SQLSensitiveDataPolicyResult",
     "SQLSensitiveDataPolicyContract",
+    "SQL_PII_PHI_DETECTION_CONTRACT_VERSION",
+    "SQLPiiPhiDetectionContractError",
+    "SQLDataClass",
+    "SQLPiiPhiCategory",
+    "SQLPiiPhiDetectionSource",
+    "SQLPiiPhiConfidence",
+    "SQLPiiPhiReasonCode",
+    "SQLPiiPhiEvaluatedVia",
+    "SQLPiiPhiDeclaration",
+    "SQLPiiPhiMatch",
+    "SQLPiiPhiDetectionRequest",
+    "SQLPiiPhiDetectionResult",
+    "SQLPiiPhiDetector",
 ]
