@@ -264,3 +264,39 @@ def test_name_matches_are_deterministically_ordered():
 
 def test_name_matches_empty_for_benign_identifiers():
     assert _detect_name_matches({"orders", "id", "total", "qty"}) == []
+
+
+# Task 6: _luhn_ok + _detect_literal_matches
+from app.security.sql_pii_phi_detection import _luhn_ok, _detect_literal_matches
+
+
+def test_luhn_accepts_valid_card_and_rejects_invalid():
+    assert _luhn_ok("4111111111111111") is True
+    assert _luhn_ok("4111111111111112") is False
+    assert _luhn_ok("123") is False           # too short
+    assert _luhn_ok("notanumber") is False
+
+
+def test_literal_detects_email_ssn_iban():
+    cats = {c for c, _ in _detect_literal_matches(
+        "... WHERE email = 'a.b@example.com' AND ssn = '123-45-6789' "
+        "AND acct = 'GB82WEST12345698765432'")}
+    assert SQLPiiPhiCategory.EMAIL in cats
+    assert SQLPiiPhiCategory.SSN in cats
+    assert SQLPiiPhiCategory.IBAN in cats
+
+
+def test_literal_detects_luhn_card_high_confidence():
+    found = _detect_literal_matches("INSERT INTO t(cc) VALUES ('4111111111111111')")
+    card = [conf for cat, conf in found if cat == SQLPiiPhiCategory.CREDIT_CARD]
+    assert card == [SQLPiiPhiConfidence.HIGH]
+
+
+def test_literal_does_not_flag_non_luhn_digit_run_as_card():
+    found = _detect_literal_matches("WHERE order_no = '4111111111111112'")
+    cats = {c for c, _ in found}
+    assert SQLPiiPhiCategory.CREDIT_CARD not in cats
+
+
+def test_literal_empty_for_benign_sql():
+    assert _detect_literal_matches("SELECT id, qty FROM orders WHERE qty > 3") == []

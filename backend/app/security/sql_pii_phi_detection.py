@@ -330,3 +330,52 @@ def _detect_name_matches(identifiers: Set[str]) -> List[Tuple[SQLPiiPhiCategory,
             if pattern.search(ident):
                 out.append((category, ident))
     return out
+
+
+# --- Layer C: literal-value detection over the RAW sql (best-effort) ---
+
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+_IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")
+# Loose phone: an optional + then a run of digits/space/()-.- at least 9 long.
+_PHONE_RE = re.compile(r"(?<![\w.])\+?\d(?:[\d\s().-]{7,})\d(?![\w.])")
+# A 13-19 "digit" run allowing single space/dash separators; Luhn-checked after.
+_CARD_CANDIDATE_RE = re.compile(r"\b\d(?:[ -]?\d){12,18}\b")
+
+
+def _luhn_ok(digits: str) -> bool:
+    """Standard Luhn checksum. Only 13-19 all-digit strings can pass."""
+    if not digits.isdigit() or not (13 <= len(digits) <= 19):
+        return False
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        d = int(ch)
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+
+def _detect_literal_matches(sql: str) -> List[Tuple[SQLPiiPhiCategory, SQLPiiPhiConfidence]]:
+    """Value-format detections over the raw SQL. Deterministic, value-free output.
+
+    Over-detection is intentional (a signal, never a gate): e.g. an SSN literal also
+    looks like a phone number, so both may be emitted; a long Luhn-valid order number
+    may read as a card. No matched value is ever returned or stored.
+    """
+    out: List[Tuple[SQLPiiPhiCategory, SQLPiiPhiConfidence]] = []
+    if _EMAIL_RE.search(sql):
+        out.append((SQLPiiPhiCategory.EMAIL, SQLPiiPhiConfidence.MEDIUM))
+    if _SSN_RE.search(sql):
+        out.append((SQLPiiPhiCategory.SSN, SQLPiiPhiConfidence.MEDIUM))
+    if _IBAN_RE.search(sql):
+        out.append((SQLPiiPhiCategory.IBAN, SQLPiiPhiConfidence.MEDIUM))
+    for m in _CARD_CANDIDATE_RE.finditer(sql):
+        if _luhn_ok(re.sub(r"[ -]", "", m.group(0))):
+            out.append((SQLPiiPhiCategory.CREDIT_CARD, SQLPiiPhiConfidence.HIGH))
+            break
+    if _PHONE_RE.search(sql):
+        out.append((SQLPiiPhiCategory.PHONE, SQLPiiPhiConfidence.LOW))
+    return out
