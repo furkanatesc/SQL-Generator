@@ -217,3 +217,78 @@ class AuditEvent:
         payload = self._payload()
         payload["entry_hash"] = self.entry_hash
         return payload
+
+
+def _canonical(payload: Dict[str, Any]) -> str:
+    """Deterministic JSON: sorted keys, no whitespace, stable across runs."""
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def compute_entry_hash(event: AuditEvent) -> str:
+    """SHA-256 over the canonical payload (every field except entry_hash, incl.
+    prev_hash). Recomputing this and comparing to the stored entry_hash is how
+    verify_chain detects mutation."""
+    return hashlib.sha256(_canonical(event._payload()).encode("utf-8")).hexdigest()
+
+
+def link(
+    prev: Optional[AuditEvent],
+    *,
+    event_id: str,
+    occurred_at: str,
+    category: AuditCategory,
+    action: str,
+    outcome: AuditOutcome,
+    severity: AuditSeverity,
+    actor: AuditActor,
+    resource: AuditResource,
+    reason_code: str,
+    reason: str,
+    contract_source: str,
+    sql_sha256: Optional[str],
+    details: Dict[str, Any],
+) -> AuditEvent:
+    """Build the next AuditEvent, chained to ``prev`` (None = genesis).
+    Computes prev_hash and entry_hash; returns a validated, frozen record."""
+    prev_hash = prev.entry_hash if prev is not None else None
+    # Build a draft to derive the payload, then stamp the real entry_hash.
+    # entry_hash is excluded from the payload, so a placeholder is hashed-out.
+    draft = AuditEvent(
+        schema_version=AUDIT_EVENT_CONTRACT_VERSION,
+        event_id=event_id,
+        occurred_at=occurred_at,
+        category=category,
+        action=action,
+        outcome=outcome,
+        severity=severity,
+        actor=actor,
+        resource=resource,
+        reason_code=reason_code,
+        reason=reason,
+        contract_source=contract_source,
+        sql_sha256=sql_sha256,
+        details=details,
+        prev_hash=prev_hash,
+        entry_hash="0" * 64,    # placeholder; excluded from _payload(), replaced below
+    )
+    entry_hash = compute_entry_hash(draft)
+    import dataclasses
+    return dataclasses.replace(draft, entry_hash=entry_hash)
+
+
+def verify_chain(events: Sequence[AuditEvent]) -> Optional[int]:
+    """Return the index of the first broken link, or None if the chain is intact.
+
+    Broken means either (a) the stored entry_hash != recomputed hash (the record
+    was mutated after hashing), or (b) continuity breaks: events[0].prev_hash must
+    be None, and events[i].prev_hash must equal events[i-1].entry_hash. Detects
+    mutation, reorder, insertion and deletion. Empty sequence is vacuously valid."""
+    prev: Optional[AuditEvent] = None
+    for i, event in enumerate(events):
+        expected_prev = prev.entry_hash if prev is not None else None
+        if event.prev_hash != expected_prev:
+            return i
+        if compute_entry_hash(event) != event.entry_hash:
+            return i
+        prev = event
+    return None

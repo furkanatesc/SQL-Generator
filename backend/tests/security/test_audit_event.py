@@ -200,3 +200,82 @@ def test_event_to_dict_is_secret_free():
     blob = json.dumps(e.to_dict())
     assert "SELECT" not in blob.upper()
     assert "users.ssn" not in blob.lower()
+
+
+from app.security.audit_event import compute_entry_hash, link, verify_chain
+
+
+def _link_kwargs(**overrides):
+    kw = dict(
+        event_id="e1",
+        occurred_at="2026-06-21T12:00:00Z",
+        category=AuditCategory.READ_ONLY,
+        action="enforce_read_only",
+        outcome=AuditOutcome.ALLOWED,
+        severity=AuditSeverity.INFO,
+        actor=AuditActor(subject="u"),
+        resource=AuditResource(type="query", id="q1"),
+        reason_code="read_only_ok",
+        reason="ok",
+        contract_source="sql_read_only_enforcement_contract_v1",
+        sql_sha256=None,
+        details={"decision": "allow"},
+    )
+    kw.update(overrides)
+    return kw
+
+
+def test_link_genesis_has_none_prev_hash():
+    e = link(None, **_link_kwargs())
+    assert e.prev_hash is None
+    assert compute_entry_hash(e) == e.entry_hash
+
+
+def test_entry_hash_is_deterministic():
+    e1 = link(None, **_link_kwargs())
+    e2 = link(None, **_link_kwargs())
+    assert e1.entry_hash == e2.entry_hash
+
+
+def test_entry_hash_changes_when_a_field_changes():
+    e1 = link(None, **_link_kwargs(reason="ok"))
+    e2 = link(None, **_link_kwargs(reason="different"))
+    assert e1.entry_hash != e2.entry_hash
+
+
+def test_chain_links_prev_to_entry():
+    e0 = link(None, **_link_kwargs(event_id="e0"))
+    e1 = link(e0, **_link_kwargs(event_id="e1"))
+    e2 = link(e1, **_link_kwargs(event_id="e2"))
+    assert e1.prev_hash == e0.entry_hash
+    assert e2.prev_hash == e1.entry_hash
+    assert verify_chain([e0, e1, e2]) is None
+
+
+def test_verify_chain_empty_and_single():
+    assert verify_chain([]) is None
+    assert verify_chain([link(None, **_link_kwargs())]) is None
+
+
+def test_verify_chain_detects_mutation():
+    e0 = link(None, **_link_kwargs(event_id="e0"))
+    e1 = link(e0, **_link_kwargs(event_id="e1"))
+    e2 = link(e1, **_link_kwargs(event_id="e2"))
+    # Tamper: replace e1 with a copy whose reason differs but keeps old hashes.
+    import dataclasses
+    tampered = dataclasses.replace(e1, reason="tampered")  # entry_hash now stale
+    assert verify_chain([e0, tampered, e2]) == 1
+
+
+def test_verify_chain_detects_reorder():
+    e0 = link(None, **_link_kwargs(event_id="e0"))
+    e1 = link(e0, **_link_kwargs(event_id="e1"))
+    assert verify_chain([e1, e0]) == 0   # e1 first: prev_hash != None -> broken at 0
+
+
+def test_verify_chain_detects_deletion():
+    e0 = link(None, **_link_kwargs(event_id="e0"))
+    e1 = link(e0, **_link_kwargs(event_id="e1"))
+    e2 = link(e1, **_link_kwargs(event_id="e2"))
+    # Drop e1: e2.prev_hash no longer matches e0.entry_hash.
+    assert verify_chain([e0, e2]) == 1
