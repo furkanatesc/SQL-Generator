@@ -28,6 +28,7 @@ asymmetric signing / Merkle trees / external timestamping, clocks, id generation
 querying/SIEM mapping, API/UI. This module performs no I/O.
 """
 
+import dataclasses
 import hashlib
 import json
 import re
@@ -296,7 +297,6 @@ def link(
         entry_hash="0" * 64,    # placeholder; excluded from _payload(), replaced below
     )
     entry_hash = compute_entry_hash(draft)
-    import dataclasses
     return dataclasses.replace(draft, entry_hash=entry_hash)
 
 
@@ -357,7 +357,7 @@ _SENSITIVITY_SEVERITY: Dict[str, AuditSeverity] = {
 # Normalizer builders (six sources)
 # ---------------------------------------------------------------------------
 
-def from_permission(result, *, event_id, occurred_at, actor, resource, prev=None):
+def from_permission(result: SQLPermissionPolicyResult, *, event_id: str, occurred_at: str, actor: AuditActor, resource: AuditResource, prev: Optional[AuditEvent] = None) -> AuditEvent:
     """Normalize a 26.0 permission result into an AuditEvent (AUTHZ_PERMISSION)."""
     dv = result.decision.value
     return link(
@@ -372,7 +372,7 @@ def from_permission(result, *, event_id, occurred_at, actor, resource, prev=None
     )
 
 
-def from_tenant(result, *, event_id, occurred_at, actor, resource, prev=None):
+def from_tenant(result: TenantWorkspaceBoundaryResult, *, event_id: str, occurred_at: str, actor: AuditActor, resource: AuditResource, prev: Optional[AuditEvent] = None) -> AuditEvent:
     """Normalize a 26.1 tenant/workspace boundary result (TENANT_BOUNDARY)."""
     dv = result.decision.value
     return link(
@@ -387,7 +387,7 @@ def from_tenant(result, *, event_id, occurred_at, actor, resource, prev=None):
     )
 
 
-def from_read_only(result, *, event_id, occurred_at, actor, resource, prev=None):
+def from_read_only(result: SQLReadOnlyEnforcementResult, *, event_id: str, occurred_at: str, actor: AuditActor, resource: AuditResource, prev: Optional[AuditEvent] = None) -> AuditEvent:
     """Normalize a 26.2 read-only enforcement result (READ_ONLY)."""
     dv = result.decision.value
     return link(
@@ -402,7 +402,7 @@ def from_read_only(result, *, event_id, occurred_at, actor, resource, prev=None)
     )
 
 
-def from_risk(result, *, event_id, occurred_at, actor, resource, prev=None):
+def from_risk(result: SQLQueryRiskResult, *, event_id: str, occurred_at: str, actor: AuditActor, resource: AuditResource, prev: Optional[AuditEvent] = None) -> AuditEvent:
     """Normalize a 26.3 risk classifier result (QUERY_RISK). A signal, not a gate:
     outcome is always FLAGGED; risk has no reason_code, so the level value is used."""
     lv = result.risk_level.value
@@ -418,7 +418,7 @@ def from_risk(result, *, event_id, occurred_at, actor, resource, prev=None):
     )
 
 
-def from_sensitive(result, *, event_id, occurred_at, actor, resource, prev=None):
+def from_sensitive(result: SQLSensitiveDataPolicyResult, *, event_id: str, occurred_at: str, actor: AuditActor, resource: AuditResource, prev: Optional[AuditEvent] = None) -> AuditEvent:
     """Normalize a 26.4 sensitive-data policy result (SENSITIVE_DATA)."""
     return link(
         prev, event_id=event_id, occurred_at=occurred_at,
@@ -433,7 +433,7 @@ def from_sensitive(result, *, event_id, occurred_at, actor, resource, prev=None)
     )
 
 
-def from_pii_phi(result, *, event_id, occurred_at, actor, resource, prev=None):
+def from_pii_phi(result: SQLPiiPhiDetectionResult, *, event_id: str, occurred_at: str, actor: AuditActor, resource: AuditResource, prev: Optional[AuditEvent] = None) -> AuditEvent:
     """Normalize a 26.5 PII/PHI detection result (PII_PHI). A detector, not a gate:
     outcome is always FLAGGED; severity escalates with PHI and confidence."""
     if result.has_phi:
