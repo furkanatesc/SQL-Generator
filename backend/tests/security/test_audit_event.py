@@ -279,3 +279,219 @@ def test_verify_chain_detects_deletion():
     e2 = link(e1, **_link_kwargs(event_id="e2"))
     # Drop e1: e2.prev_hash no longer matches e0.entry_hash.
     assert verify_chain([e0, e2]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 5: Normalizer builder tests
+# ---------------------------------------------------------------------------
+from app.security import (
+    SQLPermissionPolicyResult, SQLPermissionDecision, SQLPermissionReasonCode,
+    SQL_PERMISSION_POLICY_CONTRACT_VERSION,
+    TenantWorkspaceBoundaryResult, TenantWorkspaceBoundaryDecision,
+    TenantWorkspaceBoundaryReasonCode, TENANT_WORKSPACE_BOUNDARY_CONTRACT_VERSION,
+    SQLReadOnlyEnforcementResult, SQLReadOnlyDecision, SQLReadOnlyReasonCode,
+    SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
+    SQLQueryRiskResult, SQLQueryRiskLevel, SQL_QUERY_RISK_CLASSIFIER_CONTRACT_VERSION,
+    SQLSensitiveDataPolicyResult, SQLSensitiveDataDecision, SQLSensitivityLevel,
+    SQLSensitiveDataReasonCode, SQLSensitiveDataEvaluatedVia,
+    SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
+    SQLPiiPhiDetectionResult, SQLPiiPhiReasonCode, SQLPiiPhiConfidence,
+    SQLPiiPhiEvaluatedVia, SQL_PII_PHI_DETECTION_CONTRACT_VERSION,
+)
+from app.security import (
+    from_permission, from_tenant, from_read_only, from_risk,
+    from_sensitive, from_pii_phi,
+)
+
+_ACTOR = AuditActor(subject="user-1", tenant="t1")
+_RES = AuditResource(type="query", id="q1", dialect="generic")
+_ENV = dict(event_id="e1", occurred_at="2026-06-21T12:00:00Z",
+            actor=_ACTOR, resource=_RES)
+_HEXB = "b" * 64
+
+
+def test_from_permission_deny_maps_to_denied_high():
+    # Real SQLPermissionReasonCode has no ROLE_NOT_PERMITTED; use EXPLICIT_DENY.
+    # Real SQLPermissionPolicyResult requires subject_id, resource_type, resource_id.
+    r = SQLPermissionPolicyResult(
+        version=SQL_PERMISSION_POLICY_CONTRACT_VERSION,
+        decision=SQLPermissionDecision.DENY,
+        reason_code=SQLPermissionReasonCode.EXPLICIT_DENY,
+        reason="role may not run this",
+        subject_id="user-1",
+        action="select",
+        resource_type="query",
+        resource_id="q1",
+    )
+    e = from_permission(r, **_ENV)
+    assert e.category == AuditCategory.AUTHZ_PERMISSION
+    assert e.outcome == AuditOutcome.DENIED
+    assert e.severity == AuditSeverity.HIGH
+    assert e.contract_source == SQL_PERMISSION_POLICY_CONTRACT_VERSION
+    assert e.reason_code == "explicit_deny"
+    assert e.sql_sha256 is None          # permission result carries no sql hash
+    assert e.details == r.to_dict()
+
+
+def test_from_permission_requires_approval_maps_medium():
+    r = SQLPermissionPolicyResult(
+        version=SQL_PERMISSION_POLICY_CONTRACT_VERSION,
+        decision=SQLPermissionDecision.REQUIRES_APPROVAL,
+        reason_code=SQLPermissionReasonCode.REQUIRES_APPROVAL,
+        reason="needs approval",
+        subject_id="user-1",
+        action="select",
+        resource_type="query",
+        resource_id="q1",
+    )
+    e = from_permission(r, **_ENV)
+    assert e.outcome == AuditOutcome.REQUIRES_APPROVAL
+    assert e.severity == AuditSeverity.MEDIUM
+
+
+def test_from_tenant_allow_maps_allowed_info():
+    # Real TenantWorkspaceBoundaryReasonCode has no WITHIN_BOUNDARY; use BOUNDARY_MATCH.
+    # Real TenantWorkspaceBoundaryResult requires tenant_id, workspace_id, action, resource_type, resource_id.
+    r = TenantWorkspaceBoundaryResult(
+        version=TENANT_WORKSPACE_BOUNDARY_CONTRACT_VERSION,
+        decision=TenantWorkspaceBoundaryDecision.ALLOW,
+        reason_code=TenantWorkspaceBoundaryReasonCode.BOUNDARY_MATCH,
+        reason="within tenant",
+        tenant_id="t1",
+        workspace_id="w1",
+        action="select",
+        resource_type="query",
+        resource_id="q1",
+    )
+    e = from_tenant(r, **_ENV)
+    assert e.category == AuditCategory.TENANT_BOUNDARY
+    assert e.outcome == AuditOutcome.ALLOWED
+    assert e.severity == AuditSeverity.INFO
+    assert e.sql_sha256 is None
+
+
+def test_from_read_only_deny_copies_sql_sha256():
+    # Real SQLReadOnlyReasonCode has no WRITE_STATEMENT; use NON_SELECT_STATEMENT.
+    # Real SQLReadOnlyEnforcementResult requires normalized_prefix field.
+    r = SQLReadOnlyEnforcementResult(
+        version=SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
+        decision=SQLReadOnlyDecision.DENY,
+        reason_code=SQLReadOnlyReasonCode.NON_SELECT_STATEMENT,
+        reason="DELETE is not read-only",
+        sql_sha256=_HEXB,
+        normalized_prefix="DELETE",
+        dialect="postgres",
+    )
+    e = from_read_only(r, **_ENV)
+    assert e.category == AuditCategory.READ_ONLY
+    assert e.outcome == AuditOutcome.DENIED
+    assert e.severity == AuditSeverity.HIGH
+    assert e.sql_sha256 == _HEXB
+
+
+def test_from_risk_is_flagged_with_level_severity():
+    # Real SQLQueryRiskResult requires normalized_prefix field.
+    r = SQLQueryRiskResult(
+        version=SQL_QUERY_RISK_CLASSIFIER_CONTRACT_VERSION,
+        risk_level=SQLQueryRiskLevel.CRITICAL,
+        signals=(),
+        reason="unbounded delete-like shape",
+        sql_sha256=_HEXB,
+        normalized_prefix=None,
+        dialect="postgres",
+    )
+    e = from_risk(r, **_ENV)
+    assert e.category == AuditCategory.QUERY_RISK
+    assert e.outcome == AuditOutcome.FLAGGED         # signal, never a gate
+    assert e.severity == AuditSeverity.CRITICAL
+    assert e.reason_code == "critical"               # risk has no reason_code -> level
+    assert e.sql_sha256 == _HEXB
+
+
+def test_from_sensitive_maps_decision_and_level():
+    # Real SQLSensitiveDataReasonCode has no SENSITIVE_MATCH; use SENSITIVE_MATCH_DENY.
+    # Real SQLSensitiveDataPolicyResult requires evaluated_via and dialect.
+    r = SQLSensitiveDataPolicyResult(
+        version=SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
+        decision=SQLSensitiveDataDecision.DENY,
+        sensitivity_level=SQLSensitivityLevel.RESTRICTED,
+        matched=(),
+        reason_code=SQLSensitiveDataReasonCode.SENSITIVE_MATCH_DENY,
+        reason="touches restricted column",
+        sql_sha256=_HEXB,
+        evaluated_via=SQLSensitiveDataEvaluatedVia.EXPLICIT_REFERENCES,
+        dialect="postgres",
+    )
+    e = from_sensitive(r, **_ENV)
+    assert e.category == AuditCategory.SENSITIVE_DATA
+    assert e.outcome == AuditOutcome.DENIED
+    assert e.severity == AuditSeverity.HIGH          # RESTRICTED -> HIGH
+    assert e.sql_sha256 == _HEXB
+
+
+def test_from_pii_phi_phi_is_flagged_high_or_critical():
+    # Real SQLPiiPhiDetectionResult requires categories, evaluated_via, dialect.
+    r = SQLPiiPhiDetectionResult(
+        version=SQL_PII_PHI_DETECTION_CONTRACT_VERSION,
+        detected=(),
+        categories=(),
+        has_phi=True,
+        highest_confidence=SQLPiiPhiConfidence.HIGH,
+        reason_code=SQLPiiPhiReasonCode.PHI_DETECTED,
+        reason="PHI present",
+        sql_sha256=_HEXB,
+        evaluated_via=SQLPiiPhiEvaluatedVia.SQL_TEXT,
+        dialect="postgres",
+    )
+    e = from_pii_phi(r, **_ENV)
+    assert e.category == AuditCategory.PII_PHI
+    assert e.outcome == AuditOutcome.FLAGGED
+    assert e.severity == AuditSeverity.CRITICAL      # PHI + HIGH confidence
+    assert e.reason_code == "phi_detected"
+    assert e.sql_sha256 == _HEXB
+
+
+def test_builders_chain_across_mixed_sources():
+    perm = SQLPermissionPolicyResult(
+        version=SQL_PERMISSION_POLICY_CONTRACT_VERSION,
+        decision=SQLPermissionDecision.ALLOW,
+        reason_code=SQLPermissionReasonCode.EXPLICIT_ALLOW,
+        reason="ok",
+        subject_id="user-1",
+        action="select",
+        resource_type="query",
+        resource_id="q1",
+    )
+    ro = SQLReadOnlyEnforcementResult(
+        version=SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
+        decision=SQLReadOnlyDecision.ALLOW,
+        reason_code=SQLReadOnlyReasonCode.READ_ONLY_SELECT,
+        reason="ok",
+        sql_sha256=_HEXB,
+        normalized_prefix="SELECT",
+        dialect="postgres",
+    )
+    e0 = from_permission(perm, **_ENV)
+    e1 = from_read_only(ro, event_id="e2", occurred_at="2026-06-21T12:00:01Z",
+                        actor=_ACTOR, resource=_RES, prev=e0)
+    assert verify_chain([e0, e1]) is None
+    assert e1.prev_hash == e0.entry_hash
+
+
+def test_audit_event_to_dict_secret_free_through_builder():
+    # The contract guarantees no raw SQL content (e.g. column names, literal values)
+    # leaks into the audit event — only a sha256 hash and schema metadata appear.
+    ro = SQLReadOnlyEnforcementResult(
+        version=SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
+        decision=SQLReadOnlyDecision.ALLOW,
+        reason_code=SQLReadOnlyReasonCode.READ_ONLY_SELECT,
+        reason="ok",
+        sql_sha256=_HEXB,
+        normalized_prefix=None,
+        dialect="postgres",
+    )
+    e = from_read_only(ro, **_ENV)
+    blob = json.dumps(e.to_dict())
+    # Raw SQL content (user-supplied query text like column references) must not appear.
+    assert "users.ssn" not in blob.lower()
+    assert "DROP TABLE" not in blob.upper()

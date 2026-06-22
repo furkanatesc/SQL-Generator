@@ -35,6 +35,30 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Sequence
 
+from app.security.sql_permission_policy import (
+    SQL_PERMISSION_POLICY_CONTRACT_VERSION, SQLPermissionPolicyResult,
+    SQLPermissionDecision,
+)
+from app.security.tenant_workspace_boundary import (
+    TENANT_WORKSPACE_BOUNDARY_CONTRACT_VERSION, TenantWorkspaceBoundaryResult,
+    TenantWorkspaceBoundaryDecision,
+)
+from app.security.sql_read_only_enforcement import (
+    SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION, SQLReadOnlyEnforcementResult,
+    SQLReadOnlyDecision,
+)
+from app.security.sql_query_risk_classifier import (
+    SQL_QUERY_RISK_CLASSIFIER_CONTRACT_VERSION, SQLQueryRiskResult, SQLQueryRiskLevel,
+)
+from app.security.sql_sensitive_data_policy import (
+    SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION, SQLSensitiveDataPolicyResult,
+    SQLSensitiveDataDecision, SQLSensitivityLevel,
+)
+from app.security.sql_pii_phi_detection import (
+    SQL_PII_PHI_DETECTION_CONTRACT_VERSION, SQLPiiPhiDetectionResult,
+    SQLPiiPhiConfidence,
+)
+
 AUDIT_EVENT_CONTRACT_VERSION = "audit_event_contract_v1"
 
 _HEX64 = re.compile(r"[a-f0-9]{64}")
@@ -292,3 +316,143 @@ def verify_chain(events: Sequence[AuditEvent]) -> Optional[int]:
             return i
         prev = event
     return None
+
+
+# ---------------------------------------------------------------------------
+# Mapping tables (keyed by lowercase enum .value strings)
+# ---------------------------------------------------------------------------
+
+# decision .value (shared across the gate result types) -> audit outcome
+_DECISION_OUTCOME: Dict[str, AuditOutcome] = {
+    "allow": AuditOutcome.ALLOWED,
+    "deny": AuditOutcome.DENIED,
+    "requires_approval": AuditOutcome.REQUIRES_APPROVAL,
+}
+
+# decision .value -> severity for the permission/tenant/read-only gates
+_DECISION_SEVERITY: Dict[str, AuditSeverity] = {
+    "allow": AuditSeverity.INFO,
+    "deny": AuditSeverity.HIGH,
+    "requires_approval": AuditSeverity.MEDIUM,
+}
+
+# risk level .value -> severity (and reused for QUERY_RISK reason_code)
+_RISK_SEVERITY: Dict[str, AuditSeverity] = {
+    "low": AuditSeverity.LOW,
+    "medium": AuditSeverity.MEDIUM,
+    "high": AuditSeverity.HIGH,
+    "critical": AuditSeverity.CRITICAL,
+}
+
+# sensitivity level .value -> severity
+_SENSITIVITY_SEVERITY: Dict[str, AuditSeverity] = {
+    "public": AuditSeverity.INFO,
+    "internal": AuditSeverity.LOW,
+    "confidential": AuditSeverity.MEDIUM,
+    "restricted": AuditSeverity.HIGH,
+}
+
+
+# ---------------------------------------------------------------------------
+# Normalizer builders (six sources)
+# ---------------------------------------------------------------------------
+
+def from_permission(result, *, event_id, occurred_at, actor, resource, prev=None):
+    """Normalize a 26.0 permission result into an AuditEvent (AUTHZ_PERMISSION)."""
+    dv = result.decision.value
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.AUTHZ_PERMISSION, action="evaluate_permission",
+        outcome=_DECISION_OUTCOME[dv], severity=_DECISION_SEVERITY[dv],
+        actor=actor, resource=resource,
+        reason_code=result.reason_code.value, reason=result.reason,
+        contract_source=SQL_PERMISSION_POLICY_CONTRACT_VERSION,
+        sql_sha256=None,                      # permission result carries no sql hash
+        details=result.to_dict(),
+    )
+
+
+def from_tenant(result, *, event_id, occurred_at, actor, resource, prev=None):
+    """Normalize a 26.1 tenant/workspace boundary result (TENANT_BOUNDARY)."""
+    dv = result.decision.value
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.TENANT_BOUNDARY, action="check_tenant_boundary",
+        outcome=_DECISION_OUTCOME[dv], severity=_DECISION_SEVERITY[dv],
+        actor=actor, resource=resource,
+        reason_code=result.reason_code.value, reason=result.reason,
+        contract_source=TENANT_WORKSPACE_BOUNDARY_CONTRACT_VERSION,
+        sql_sha256=None,                      # tenant result carries no sql hash
+        details=result.to_dict(),
+    )
+
+
+def from_read_only(result, *, event_id, occurred_at, actor, resource, prev=None):
+    """Normalize a 26.2 read-only enforcement result (READ_ONLY)."""
+    dv = result.decision.value
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.READ_ONLY, action="enforce_read_only",
+        outcome=_DECISION_OUTCOME[dv], severity=_DECISION_SEVERITY[dv],
+        actor=actor, resource=resource,
+        reason_code=result.reason_code.value, reason=result.reason,
+        contract_source=SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
+        sql_sha256=result.sql_sha256,
+        details=result.to_dict(),
+    )
+
+
+def from_risk(result, *, event_id, occurred_at, actor, resource, prev=None):
+    """Normalize a 26.3 risk classifier result (QUERY_RISK). A signal, not a gate:
+    outcome is always FLAGGED; risk has no reason_code, so the level value is used."""
+    lv = result.risk_level.value
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.QUERY_RISK, action="classify_query_risk",
+        outcome=AuditOutcome.FLAGGED, severity=_RISK_SEVERITY[lv],
+        actor=actor, resource=resource,
+        reason_code=lv, reason=result.reason,
+        contract_source=SQL_QUERY_RISK_CLASSIFIER_CONTRACT_VERSION,
+        sql_sha256=result.sql_sha256,
+        details=result.to_dict(),
+    )
+
+
+def from_sensitive(result, *, event_id, occurred_at, actor, resource, prev=None):
+    """Normalize a 26.4 sensitive-data policy result (SENSITIVE_DATA)."""
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.SENSITIVE_DATA, action="evaluate_sensitive_data",
+        outcome=_DECISION_OUTCOME[result.decision.value],
+        severity=_SENSITIVITY_SEVERITY[result.sensitivity_level.value],
+        actor=actor, resource=resource,
+        reason_code=result.reason_code.value, reason=result.reason,
+        contract_source=SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
+        sql_sha256=result.sql_sha256,
+        details=result.to_dict(),
+    )
+
+
+def from_pii_phi(result, *, event_id, occurred_at, actor, resource, prev=None):
+    """Normalize a 26.5 PII/PHI detection result (PII_PHI). A detector, not a gate:
+    outcome is always FLAGGED; severity escalates with PHI and confidence."""
+    if result.has_phi:
+        severity = (AuditSeverity.CRITICAL
+                    if result.highest_confidence == SQLPiiPhiConfidence.HIGH
+                    else AuditSeverity.HIGH)
+    elif result.highest_confidence is not None:      # PII only
+        severity = (AuditSeverity.MEDIUM
+                    if result.highest_confidence == SQLPiiPhiConfidence.HIGH
+                    else AuditSeverity.LOW)
+    else:
+        severity = AuditSeverity.INFO
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.PII_PHI, action="detect_pii_phi",
+        outcome=AuditOutcome.FLAGGED, severity=severity,
+        actor=actor, resource=resource,
+        reason_code=result.reason_code.value, reason=result.reason,
+        contract_source=SQL_PII_PHI_DETECTION_CONTRACT_VERSION,
+        sql_sha256=result.sql_sha256,
+        details=result.to_dict(),
+    )
