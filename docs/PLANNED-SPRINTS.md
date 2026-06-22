@@ -46,8 +46,8 @@ governance.
 | 26.3 | Query Risk Classifier | ✅ Tamam · *statik deterministik risk sınıflandırıcı (LOW→CRITICAL); gate değil, sadece sinyal* |
 | 26.4 | Sensitive Table / Column Policy | ✅ Tamam · *beyan-tabanlı hassas tablo/kolon gate'i (ALLOW/DENY/REQUIRES_APPROVAL) + matched/seviye sinyali; hibrit referans (explicit=sound, SQL extraction=best-effort)* |
 | 26.5 | PII / PHI Detection Contract | ✅ Tamam · *heuristik PII/PHI detector (sinyal, gate değil): kategori + PII/PHI veri-sınıfı + güven; 3 katman (declared=sound, identifier-isim + literal-değer/Luhn=best-effort); secret-free sonuç* |
-| 26.6 | Audit Event Contract | ⏳ Sıradaki |
-| 26.7 | Approval Workflow Contract |
+| 26.6 | Audit Event Contract | ✅ Tamam · *deterministik, secret-free audit kaydı + tamper-evident SHA-256 hash-chain; 26.0–26.5 sonuçlarını tek immutable AuditEvent'e normalize eden 6 builder (OWASP-style kategoriler, NIST SP 800-92 6-soru çekirdeği); zaman/ID caller-supplied; verify_chain mutation/reorder/insert/delete yakalar (integrity-evident, non-repudiation Phase 13)* |
+| 26.7 | Approval Workflow Contract | ⏳ Sıradaki |
 | 26.8 | Prompt-Injection / NL Abuse Defense |
 | 26.9 | Result-Set Privacy & Row/Size Limits |
 | 26.10 | Connection Credential Vault (server-side) |
