@@ -128,3 +128,92 @@ class AuditResource:
 
     def to_dict(self) -> Dict[str, Any]:
         return {"type": self.type, "id": self.id, "dialect": self.dialect}
+
+
+def _check_req_str(value: Any, field: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise AuditEventContractError(f"{field} must be a non-empty string")
+
+
+def _check_hex64(value: Any, field: str) -> None:
+    if not isinstance(value, str) or not _HEX64.fullmatch(value):
+        raise AuditEventContractError(f"{field} must be a 64-char lowercase hex string")
+
+
+@dataclass(frozen=True)
+class AuditEvent:
+    """Immutable, secret-free audit record. Build via ``link`` / the ``from_*``
+    normalizers (Task 4/5) so ``entry_hash`` is computed; direct construction
+    requires a precomputed ``entry_hash``."""
+    schema_version: str
+    event_id: str
+    occurred_at: str
+    category: AuditCategory
+    action: str
+    outcome: AuditOutcome
+    severity: AuditSeverity
+    actor: AuditActor
+    resource: AuditResource
+    reason_code: str
+    reason: str
+    contract_source: str
+    sql_sha256: Optional[str]
+    details: Dict[str, Any]
+    prev_hash: Optional[str]
+    entry_hash: str
+
+    def __post_init__(self) -> None:
+        if self.schema_version != AUDIT_EVENT_CONTRACT_VERSION:
+            raise AuditEventContractError(
+                f"schema_version must be {AUDIT_EVENT_CONTRACT_VERSION!r}, "
+                f"got {self.schema_version!r}"
+            )
+        _check_req_str(self.event_id, "event_id")
+        _check_req_str(self.occurred_at, "occurred_at")
+        _check_req_str(self.action, "action")
+        _check_req_str(self.reason_code, "reason_code")
+        _check_req_str(self.reason, "reason")
+        _check_req_str(self.contract_source, "contract_source")
+        if not isinstance(self.category, AuditCategory):
+            raise AuditEventContractError("category must be an AuditCategory")
+        if not isinstance(self.outcome, AuditOutcome):
+            raise AuditEventContractError("outcome must be an AuditOutcome")
+        if not isinstance(self.severity, AuditSeverity):
+            raise AuditEventContractError("severity must be an AuditSeverity")
+        if not isinstance(self.actor, AuditActor):
+            raise AuditEventContractError("actor must be an AuditActor")
+        if not isinstance(self.resource, AuditResource):
+            raise AuditEventContractError("resource must be an AuditResource")
+        if self.sql_sha256 is not None:
+            _check_hex64(self.sql_sha256, "sql_sha256")
+        if not isinstance(self.details, dict):
+            raise AuditEventContractError("details must be a dict")
+        if self.prev_hash is not None:
+            _check_hex64(self.prev_hash, "prev_hash")
+        _check_hex64(self.entry_hash, "entry_hash")
+
+    def _payload(self) -> Dict[str, Any]:
+        """JSON-safe dict of every field EXCEPT entry_hash (includes prev_hash).
+        This is exactly what entry_hash is computed over (Task 4)."""
+        return {
+            "schema_version": self.schema_version,
+            "event_id": self.event_id,
+            "occurred_at": self.occurred_at,
+            "category": self.category.value,
+            "action": self.action,
+            "outcome": self.outcome.value,
+            "severity": self.severity.value,
+            "actor": self.actor.to_dict(),
+            "resource": self.resource.to_dict(),
+            "reason_code": self.reason_code,
+            "reason": self.reason,
+            "contract_source": self.contract_source,
+            "sql_sha256": self.sql_sha256,
+            "details": self.details,
+            "prev_hash": self.prev_hash,
+        }
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload = self._payload()
+        payload["entry_hash"] = self.entry_hash
+        return payload

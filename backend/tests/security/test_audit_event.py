@@ -91,3 +91,112 @@ def test_resource_to_dict_roundtrips():
 def test_resource_fields_must_be_str_or_none():
     with pytest.raises(AuditEventContractError):
         AuditResource(type=5)
+
+
+from app.security.audit_event import AuditEvent
+
+# A valid 64-hex string for direct construction tests (chain math is Task 4).
+_H = "a" * 64
+
+
+def _make_event(**overrides):
+    fields = dict(
+        schema_version=AUDIT_EVENT_CONTRACT_VERSION,
+        event_id="11111111-1111-1111-1111-111111111111",
+        occurred_at="2026-06-21T12:00:00Z",
+        category=AuditCategory.READ_ONLY,
+        action="enforce_read_only",
+        outcome=AuditOutcome.ALLOWED,
+        severity=AuditSeverity.INFO,
+        actor=AuditActor(subject="user-1", tenant="t1"),
+        resource=AuditResource(type="query", id="q1", dialect="generic"),
+        reason_code="read_only_ok",
+        reason="statement is read-only",
+        contract_source="sql_read_only_enforcement_contract_v1",
+        sql_sha256="b" * 64,
+        details={"decision": "allow"},
+        prev_hash=None,
+        entry_hash=_H,
+    )
+    fields.update(overrides)
+    return AuditEvent(**fields)
+
+
+def test_event_builds_and_to_dict_roundtrips():
+    e = _make_event()
+    d = e.to_dict()
+    assert json.loads(json.dumps(d)) == d          # JSON-safe
+    assert d["category"] == "read_only"            # enum -> value
+    assert d["outcome"] == "allowed"
+    assert d["severity"] == "info"
+    assert d["actor"]["subject"] == "user-1"
+    assert d["entry_hash"] == _H
+
+
+def test_payload_excludes_entry_hash_includes_prev_hash():
+    e = _make_event(prev_hash=_H)
+    payload = e._payload()
+    assert "entry_hash" not in payload
+    assert payload["prev_hash"] == _H
+
+
+def test_event_rejects_wrong_schema_version():
+    with pytest.raises(AuditEventContractError):
+        _make_event(schema_version="audit_event_contract_v2")
+
+
+def test_event_rejects_empty_required_strings():
+    for field in ("event_id", "occurred_at", "action", "reason_code",
+                  "reason", "contract_source"):
+        with pytest.raises(AuditEventContractError):
+            _make_event(**{field: "  "})
+
+
+def test_event_rejects_bad_enum_types():
+    with pytest.raises(AuditEventContractError):
+        _make_event(category="read_only")          # bare string, not enum
+    with pytest.raises(AuditEventContractError):
+        _make_event(outcome="allowed")
+    with pytest.raises(AuditEventContractError):
+        _make_event(severity="info")
+
+
+def test_event_rejects_bad_actor_resource():
+    with pytest.raises(AuditEventContractError):
+        _make_event(actor={"subject": "u"})        # not an AuditActor
+    with pytest.raises(AuditEventContractError):
+        _make_event(resource="users")              # not an AuditResource
+
+
+def test_event_rejects_bad_hashes():
+    with pytest.raises(AuditEventContractError):
+        _make_event(entry_hash="xyz")              # not 64-hex
+    with pytest.raises(AuditEventContractError):
+        _make_event(sql_sha256="nope")
+    with pytest.raises(AuditEventContractError):
+        _make_event(prev_hash="zz")
+
+
+def test_event_sql_sha256_and_prev_hash_may_be_none():
+    e = _make_event(sql_sha256=None, prev_hash=None)
+    assert e.sql_sha256 is None and e.prev_hash is None
+
+
+def test_event_details_must_be_dict():
+    with pytest.raises(AuditEventContractError):
+        _make_event(details=["not", "a", "dict"])
+
+
+def test_event_is_frozen():
+    e = _make_event()
+    with pytest.raises(FrozenInstanceError):
+        e.reason = "x"
+
+
+def test_event_to_dict_is_secret_free():
+    # Planting a raw SQL string anywhere user-controlled must not surface it;
+    # the record never has a raw-SQL field. details is the source's own dict.
+    e = _make_event(details={"decision": "allow", "sql_sha256": "b" * 64})
+    blob = json.dumps(e.to_dict())
+    assert "SELECT" not in blob.upper()
+    assert "users.ssn" not in blob.lower()
