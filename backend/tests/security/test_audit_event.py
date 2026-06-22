@@ -1,5 +1,6 @@
 import json
 import hashlib
+import re
 import pytest
 from dataclasses import FrozenInstanceError
 
@@ -479,19 +480,42 @@ def test_builders_chain_across_mixed_sources():
 
 
 def test_audit_event_to_dict_secret_free_through_builder():
-    # The contract guarantees no raw SQL content (e.g. column names, literal values)
-    # leaks into the audit event — only a sha256 hash and schema metadata appear.
+    # Construct a result whose to_dict() is fully known so we can track every
+    # value that flows into the audit event.
     ro = SQLReadOnlyEnforcementResult(
         version=SQL_READ_ONLY_ENFORCEMENT_CONTRACT_VERSION,
         decision=SQLReadOnlyDecision.ALLOW,
         reason_code=SQLReadOnlyReasonCode.READ_ONLY_SELECT,
-        reason="ok",
+        reason="statement is read-only",
         sql_sha256=_HEXB,
-        normalized_prefix=None,
+        normalized_prefix="SELECT",
         dialect="postgres",
     )
     e = from_read_only(ro, **_ENV)
-    blob = json.dumps(e.to_dict())
-    # Raw SQL content (user-supplied query text like column references) must not appear.
-    assert "users.ssn" not in blob.lower()
-    assert "DROP TABLE" not in blob.upper()
+    d = e.to_dict()
+
+    # 1. SQL is represented solely as a hash: the field holds exactly _HEXB and
+    #    matches the 64-lowercase-hex shape.  A raw SQL statement would not pass
+    #    the regex, so this distinguishes hash from raw text.
+    assert e.sql_sha256 == _HEXB
+    assert re.fullmatch(r"[a-f0-9]{64}", e.sql_sha256)
+
+    # 2. details is an exact passthrough of the source result's own secret-free dict.
+    #    If the builder substituted a raw-SQL-bearing dict, this equality fails.
+    assert d["details"] == ro.to_dict()
+
+    # 3a. The serialized blob is JSON-safe.
+    blob = json.dumps(d)
+
+    # 3b. The audit event schema has exactly the 16 expected top-level keys — no
+    #     extra raw-SQL fields were added by the builder.
+    assert set(d.keys()) == {
+        "schema_version", "event_id", "occurred_at", "category", "action",
+        "outcome", "severity", "actor", "resource", "reason_code", "reason",
+        "contract_source", "sql_sha256", "details", "prev_hash", "entry_hash",
+    }
+
+    # 3c. The hash IS present in the blob (it was recorded), and the top-level
+    #     sql_sha256 field carries the hash, not raw SQL.
+    assert _HEXB in blob
+    assert d["sql_sha256"] == _HEXB
