@@ -78,3 +78,53 @@ _SEVERITY_ORDER: Dict[AuditSeverity, int] = {
     AuditSeverity.HIGH: 3,
     AuditSeverity.CRITICAL: 4,
 }
+
+
+def _check_opt_str(value: Any, field: str) -> None:
+    if value is not None and (not isinstance(value, str) or not value.strip()):
+        raise AuditEventContractError(
+            f"{field} must be a non-empty string or None, got {value!r}"
+        )
+
+
+@dataclass(frozen=True)
+class AuditActor:
+    """WHO performed the action. Only ``subject`` is required."""
+    subject: str
+    tenant: Optional[str] = None
+    workspace: Optional[str] = None
+    source_ip: Optional[str] = None
+    request_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.subject, str) or not self.subject.strip():
+            raise AuditEventContractError("actor.subject must be a non-empty string")
+        _check_opt_str(self.tenant, "actor.tenant")
+        _check_opt_str(self.workspace, "actor.workspace")
+        _check_opt_str(self.source_ip, "actor.source_ip")
+        _check_opt_str(self.request_id, "actor.request_id")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "subject": self.subject,
+            "tenant": self.tenant,
+            "workspace": self.workspace,
+            "source_ip": self.source_ip,
+            "request_id": self.request_id,
+        }
+
+
+@dataclass(frozen=True)
+class AuditResource:
+    """WHAT was acted on. id is e.g. a table or query id -- never raw SQL."""
+    type: Optional[str] = None
+    id: Optional[str] = None
+    dialect: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        _check_opt_str(self.type, "resource.type")
+        _check_opt_str(self.id, "resource.id")
+        _check_opt_str(self.dialect, "resource.dialect")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"type": self.type, "id": self.id, "dialect": self.dialect}
