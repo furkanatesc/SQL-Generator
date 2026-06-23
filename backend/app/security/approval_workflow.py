@@ -30,6 +30,7 @@ RBAC approver eligibility, asymmetric signing, clocks, id generation, API/UI,
 concurrency/locking. This module performs no I/O.
 """
 
+import dataclasses
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -258,3 +259,58 @@ def from_sensitive(result: SQLSensitiveDataPolicyResult, *, request_id: str,
         sql_sha256=result.sql_sha256, resource_id=resource_id,
         opened_at=opened_at, expires_at=expires_at,
     )
+
+
+def _replace_state(request: ApprovalRequest, *, decisions: Tuple[ApprovalDecision, ...],
+                   state: ApprovalState, reason_code: ApprovalReasonCode) -> ApprovalRequest:
+    """Return a NEW validated request with state/decisions/reason_code replaced; all
+    identity/origin fields preserved. (dataclasses.replace re-runs __post_init__.)"""
+    return dataclasses.replace(
+        request, decisions=decisions, state=state, reason_code=reason_code,
+    )
+
+
+def _guard_vote(request: ApprovalRequest, approver: str) -> None:
+    """Fail-closed preconditions shared by approve/reject."""
+    _check_req_str(approver, "approver")
+    if request.is_terminal:
+        raise ApprovalWorkflowContractError(
+            f"cannot vote on a {request.state.value} (terminal) request"
+        )
+    if approver == request.requester:
+        raise ApprovalWorkflowContractError(
+            "separation of duties: requester cannot vote on their own request"
+        )
+    if any(d.approver == approver for d in request.decisions):
+        raise ApprovalWorkflowContractError(
+            f"approver {approver!r} has already voted on this request"
+        )
+
+
+def approve(request: ApprovalRequest, *, approver: str, occurred_at: str) -> ApprovalRequest:
+    """Record an APPROVE vote. Reaches APPROVED when distinct approvals meet quorum."""
+    _guard_vote(request, approver)
+    decisions = request.decisions + (
+        ApprovalDecision(approver=approver, decision=ApprovalDecisionType.APPROVE,
+                         occurred_at=occurred_at),
+    )
+    approvals = len({
+        d.approver for d in decisions if d.decision == ApprovalDecisionType.APPROVE
+    })
+    if approvals >= request.required_approvals:
+        state, reason = ApprovalState.APPROVED, ApprovalReasonCode.QUORUM_MET
+    else:
+        state, reason = ApprovalState.PENDING, ApprovalReasonCode.APPROVAL_RECORDED
+    return _replace_state(request, decisions=decisions, state=state, reason_code=reason)
+
+
+def reject(request: ApprovalRequest, *, approver: str, occurred_at: str) -> ApprovalRequest:
+    """Record a REJECT vote. A single reject vetoes the request (terminal)."""
+    _guard_vote(request, approver)
+    decisions = request.decisions + (
+        ApprovalDecision(approver=approver, decision=ApprovalDecisionType.REJECT,
+                         occurred_at=occurred_at),
+    )
+    return _replace_state(request, decisions=decisions,
+                          state=ApprovalState.REJECTED,
+                          reason_code=ApprovalReasonCode.REJECTED_VETO)

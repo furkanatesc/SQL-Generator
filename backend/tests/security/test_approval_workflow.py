@@ -245,3 +245,71 @@ def test_from_sensitive_non_approval_fails_closed():
             _sens_result(SQLSensitiveDataDecision.DENY, SQLSensitivityLevel.RESTRICTED),
             request_id="req-5", requester="bob", opened_at="2026-06-23T09:00:00Z",
         )
+
+
+# ---------------------------------------------------------------------------
+# Task 5: approve / reject transitions
+# ---------------------------------------------------------------------------
+from app.security.approval_workflow import approve, reject  # noqa: E402
+
+
+def _pending(required_approvals=2, requester="bob"):
+    return open_request(
+        request_id="req-1", requester=requester,
+        category=ApprovalCategory.SENSITIVE_DATA,
+        required_approvals=required_approvals, opened_at="2026-06-23T09:00:00Z",
+    )
+
+
+def test_approve_below_quorum_stays_pending():
+    r = approve(_pending(required_approvals=2), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    assert r.state == ApprovalState.PENDING
+    assert r.reason_code == ApprovalReasonCode.APPROVAL_RECORDED
+    assert r.count_approvals() == 1
+
+
+def test_approve_reaching_quorum_approves():
+    r1 = approve(_pending(required_approvals=2), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    r2 = approve(r1, approver="carol", occurred_at="2026-06-23T10:05:00Z")
+    assert r2.state == ApprovalState.APPROVED
+    assert r2.reason_code == ApprovalReasonCode.QUORUM_MET
+    assert r2.count_approvals() == 2
+
+
+def test_approve_single_quorum():
+    r = approve(_pending(required_approvals=1), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    assert r.state == ApprovalState.APPROVED
+
+
+def test_reject_vetoes():
+    r = reject(_pending(required_approvals=3), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    assert r.state == ApprovalState.REJECTED
+    assert r.reason_code == ApprovalReasonCode.REJECTED_VETO
+
+
+def test_sod_requester_cannot_vote():
+    with pytest.raises(ApprovalWorkflowContractError):
+        approve(_pending(requester="bob"), approver="bob", occurred_at="2026-06-23T10:00:00Z")
+    with pytest.raises(ApprovalWorkflowContractError):
+        reject(_pending(requester="bob"), approver="bob", occurred_at="2026-06-23T10:00:00Z")
+
+
+def test_duplicate_vote_raises():
+    r1 = approve(_pending(required_approvals=2), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    with pytest.raises(ApprovalWorkflowContractError):
+        approve(r1, approver="alice", occurred_at="2026-06-23T10:10:00Z")
+
+
+def test_vote_on_terminal_raises():
+    approved = approve(_pending(required_approvals=1), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    assert approved.is_terminal
+    with pytest.raises(ApprovalWorkflowContractError):
+        approve(approved, approver="carol", occurred_at="2026-06-23T11:00:00Z")
+    with pytest.raises(ApprovalWorkflowContractError):
+        reject(approved, approver="carol", occurred_at="2026-06-23T11:00:00Z")
+
+
+def test_approve_does_not_mutate_input():
+    base = _pending(required_approvals=2)
+    approve(base, approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    assert base.decisions == ()  # input untouched
