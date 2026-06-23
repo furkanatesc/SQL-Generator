@@ -369,3 +369,18 @@ def test_expire_terminal_raises():
     approved = approve(_pending(required_approvals=1), approver="alice", occurred_at="2026-06-23T10:00:00Z")
     with pytest.raises(ApprovalWorkflowContractError):
         expire(approved, now="2026-06-23T13:00:00Z")
+
+
+# ---------------------------------------------------------------------------
+# Task 7: package-level re-exports
+# ---------------------------------------------------------------------------
+def test_exported_from_package():
+    import app.security as pkg
+    for name in [
+        "APPROVAL_WORKFLOW_CONTRACT_VERSION", "ApprovalWorkflowContractError",
+        "ApprovalState", "ApprovalDecisionType", "ApprovalCategory",
+        "ApprovalReasonCode", "ApprovalDecision", "ApprovalRequest",
+        "TERMINAL_STATES",
+    ]:
+        assert hasattr(pkg, name), name
+    assert "ApprovalRequest" in pkg.__all__
