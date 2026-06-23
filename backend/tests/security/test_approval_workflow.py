@@ -1,4 +1,8 @@
 """Sprint 26.7 — Approval Workflow Contract tests."""
+import dataclasses
+
+import pytest
+
 from app.security.approval_workflow import (
     APPROVAL_WORKFLOW_CONTRACT_VERSION,
     ApprovalWorkflowContractError,
@@ -7,6 +11,7 @@ from app.security.approval_workflow import (
     ApprovalCategory,
     ApprovalReasonCode,
     TERMINAL_STATES,
+    ApprovalDecision,
 )
 
 
@@ -31,3 +36,33 @@ def test_terminal_states():
         ApprovalState.EXPIRED, ApprovalState.CANCELLED,
     })
     assert ApprovalState.PENDING not in TERMINAL_STATES
+
+
+def _decision(approver="alice", dtype=ApprovalDecisionType.APPROVE, at="2026-06-23T10:00:00Z"):
+    return ApprovalDecision(approver=approver, decision=dtype, occurred_at=at)
+
+
+def test_decision_valid_and_to_dict():
+    d = _decision()
+    assert d.to_dict() == {
+        "approver": "alice",
+        "decision": "approve",
+        "occurred_at": "2026-06-23T10:00:00Z",
+    }
+
+
+def test_decision_is_frozen():
+    d = _decision()
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        d.approver = "mallory"  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"approver": ""},
+    {"approver": "   "},
+    {"at": ""},
+    {"dtype": "approve"},  # bare string, not the enum
+])
+def test_decision_invalid_raises(kwargs):
+    with pytest.raises(ApprovalWorkflowContractError):
+        _decision(**kwargs)

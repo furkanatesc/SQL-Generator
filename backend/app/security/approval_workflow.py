@@ -30,7 +30,9 @@ RBAC approver eligibility, asymmetric signing, clocks, id generation, API/UI,
 concurrency/locking. This module performs no I/O.
 """
 
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict
 
 APPROVAL_WORKFLOW_CONTRACT_VERSION = "approval_workflow_contract_v1"
 
@@ -73,3 +75,36 @@ TERMINAL_STATES = frozenset({
     ApprovalState.EXPIRED,
     ApprovalState.CANCELLED,
 })
+
+
+def _check_req_str(value: Any, field: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ApprovalWorkflowContractError(f"{field} must be a non-empty string")
+
+
+def _check_opt_str(value: Any, field: str) -> None:
+    if value is not None and (not isinstance(value, str) or not value.strip()):
+        raise ApprovalWorkflowContractError(
+            f"{field} must be a non-empty string or None, got {value!r}"
+        )
+
+
+@dataclass(frozen=True)
+class ApprovalDecision:
+    """One approver's vote. Secret-free: approver id + enum + caller-supplied time."""
+    approver: str
+    decision: ApprovalDecisionType
+    occurred_at: str
+
+    def __post_init__(self) -> None:
+        _check_req_str(self.approver, "approver")
+        if not isinstance(self.decision, ApprovalDecisionType):
+            raise ApprovalWorkflowContractError("decision must be an ApprovalDecisionType")
+        _check_req_str(self.occurred_at, "occurred_at")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "approver": self.approver,
+            "decision": self.decision.value,
+            "occurred_at": self.occurred_at,
+        }
