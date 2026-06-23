@@ -30,11 +30,14 @@ RBAC approver eligibility, asymmetric signing, clocks, id generation, API/UI,
 concurrency/locking. This module performs no I/O.
 """
 
+import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 
 APPROVAL_WORKFLOW_CONTRACT_VERSION = "approval_workflow_contract_v1"
+
+_HEX64 = re.compile(r"[a-f0-9]{64}")
 
 
 class ApprovalWorkflowContractError(ValueError):
@@ -107,4 +110,80 @@ class ApprovalDecision:
             "approver": self.approver,
             "decision": self.decision.value,
             "occurred_at": self.occurred_at,
+        }
+
+
+@dataclass(frozen=True)
+class ApprovalRequest:
+    """Immutable approval request. Build/transition via the module functions so
+    state and reason_code stay consistent. Secret-free (no raw SQL, no free text)."""
+    schema_version: str
+    request_id: str
+    requester: str
+    category: ApprovalCategory
+    required_approvals: int
+    state: ApprovalState
+    decisions: Tuple[ApprovalDecision, ...]
+    reason_code: ApprovalReasonCode
+    sql_sha256: Optional[str]
+    resource_id: Optional[str]
+    opened_at: str
+    expires_at: Optional[str]
+
+    def __post_init__(self) -> None:
+        if self.schema_version != APPROVAL_WORKFLOW_CONTRACT_VERSION:
+            raise ApprovalWorkflowContractError(
+                f"schema_version must be {APPROVAL_WORKFLOW_CONTRACT_VERSION!r}, "
+                f"got {self.schema_version!r}"
+            )
+        _check_req_str(self.request_id, "request_id")
+        _check_req_str(self.requester, "requester")
+        _check_req_str(self.opened_at, "opened_at")
+        _check_opt_str(self.resource_id, "resource_id")
+        _check_opt_str(self.expires_at, "expires_at")
+        # bool is an int subclass; reject it explicitly.
+        if not isinstance(self.required_approvals, int) or isinstance(self.required_approvals, bool) \
+                or self.required_approvals < 1:
+            raise ApprovalWorkflowContractError(
+                f"required_approvals must be an int >= 1, got {self.required_approvals!r}"
+            )
+        if not isinstance(self.category, ApprovalCategory):
+            raise ApprovalWorkflowContractError("category must be an ApprovalCategory")
+        if not isinstance(self.state, ApprovalState):
+            raise ApprovalWorkflowContractError("state must be an ApprovalState")
+        if not isinstance(self.reason_code, ApprovalReasonCode):
+            raise ApprovalWorkflowContractError("reason_code must be an ApprovalReasonCode")
+        if not isinstance(self.decisions, tuple):
+            raise ApprovalWorkflowContractError("decisions must be a tuple")
+        for d in self.decisions:
+            if not isinstance(d, ApprovalDecision):
+                raise ApprovalWorkflowContractError("decisions must contain ApprovalDecision only")
+        if self.sql_sha256 is not None and not _HEX64.fullmatch(str(self.sql_sha256)):
+            raise ApprovalWorkflowContractError("sql_sha256 must be a 64-char lowercase hex string")
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.state in TERMINAL_STATES
+
+    def count_approvals(self) -> int:
+        """Distinct approver ids whose vote is APPROVE."""
+        return len({
+            d.approver for d in self.decisions
+            if d.decision == ApprovalDecisionType.APPROVE
+        })
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "request_id": self.request_id,
+            "requester": self.requester,
+            "category": self.category.value,
+            "required_approvals": self.required_approvals,
+            "state": self.state.value,
+            "decisions": [d.to_dict() for d in self.decisions],
+            "reason_code": self.reason_code.value,
+            "sql_sha256": self.sql_sha256,
+            "resource_id": self.resource_id,
+            "opened_at": self.opened_at,
+            "expires_at": self.expires_at,
         }
