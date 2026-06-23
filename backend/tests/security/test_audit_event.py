@@ -525,9 +525,11 @@ def test_audit_event_to_dict_secret_free_through_builder():
 # ---------------------------------------------------------------------------
 # Task 8: Audit interlock — AuditCategory.APPROVAL + from_approval
 # ---------------------------------------------------------------------------
+import dataclasses
+
 from app.security.audit_event import from_approval, verify_chain  # noqa: F811
 from app.security.approval_workflow import (
-    open as open_request, approve, reject, cancel,
+    open as open_request, approve, reject, cancel, expire,
     ApprovalCategory, ApprovalState,
 )
 # NOTE: reuse this file's existing _ACTOR/_RES helpers (defined in Task 5 section above).
@@ -575,3 +577,38 @@ def test_from_approval_chains_and_verifies():
     e1 = from_approval(approved, event_id="e1", occurred_at="2026-06-23T10:00:01Z",
                        actor=_ACTOR, resource=_RES, prev=e0)
     assert verify_chain([e0, e1]) is None
+
+
+def test_from_approval_expired_and_cancelled_map_to_denied():
+    # EXPIRED: open with an expires_at, then advance past it.
+    expiring = open_request(
+        request_id="req-exp", requester="bob",
+        category=ApprovalCategory.SENSITIVE_DATA, required_approvals=1,
+        opened_at="2026-06-23T09:00:00Z", sql_sha256="d" * 64,
+        resource_id="patients", expires_at="2026-06-23T10:00:00Z",
+    )
+    expired = expire(expiring, now="2026-06-23T10:00:00Z")
+    ev_expired = from_approval(expired, event_id="e-exp", occurred_at="2026-06-23T10:00:01Z",
+                               actor=_ACTOR, resource=_RES)
+    assert ev_expired.outcome.value == "denied"
+
+    # CANCELLED: cancel a plain pending request.
+    cancelled = cancel(_pending_req())
+    ev_cancelled = from_approval(cancelled, event_id="e-can", occurred_at="2026-06-23T11:00:00Z",
+                                 actor=_ACTOR, resource=_RES)
+    assert ev_cancelled.outcome.value == "denied"
+
+
+def test_from_approval_tamper_detected():
+    # Build a 2-event chain via from_approval + prev=.
+    p = _pending_req()
+    e0 = from_approval(p, event_id="e0", occurred_at="2026-06-23T09:00:01Z",
+                       actor=_ACTOR, resource=_RES)
+    approved = approve(p, approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    e1 = from_approval(approved, event_id="e1", occurred_at="2026-06-23T10:00:01Z",
+                       actor=_ACTOR, resource=_RES, prev=e0)
+    assert verify_chain([e0, e1]) is None
+
+    # Tamper e1: replace occurred_at while keeping the now-stale entry_hash.
+    tampered = dataclasses.replace(e1, occurred_at="2026-06-23T99:00:01Z")
+    assert verify_chain([e0, tampered]) == 1
