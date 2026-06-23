@@ -282,7 +282,10 @@ def test_approve_single_quorum():
 
 
 def test_reject_vetoes():
-    r = reject(_pending(required_approvals=3), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    # a reject vetoes even when approvals have already accumulated
+    r0 = approve(_pending(required_approvals=3), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    assert r0.state == ApprovalState.PENDING
+    r = reject(r0, approver="carol", occurred_at="2026-06-23T10:05:00Z")
     assert r.state == ApprovalState.REJECTED
     assert r.reason_code == ApprovalReasonCode.REJECTED_VETO
 
