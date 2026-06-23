@@ -26,6 +26,7 @@ def test_categories_cover_all_six_sources():
     assert {c.value for c in AuditCategory} == {
         "authz_permission", "tenant_boundary", "read_only",
         "query_risk", "sensitive_data", "pii_phi",
+        "approval",  # 26.7
     }
 
 
@@ -519,3 +520,58 @@ def test_audit_event_to_dict_secret_free_through_builder():
     #     sql_sha256 field carries the hash, not raw SQL.
     assert _HEXB in blob
     assert d["sql_sha256"] == _HEXB
+
+
+# ---------------------------------------------------------------------------
+# Task 8: Audit interlock — AuditCategory.APPROVAL + from_approval
+# ---------------------------------------------------------------------------
+from app.security.audit_event import from_approval, verify_chain  # noqa: F811
+from app.security.approval_workflow import (
+    open as open_request, approve, reject, cancel,
+    ApprovalCategory, ApprovalState,
+)
+# NOTE: reuse this file's existing _ACTOR/_RES helpers (defined in Task 5 section above).
+
+
+def _pending_req():
+    return open_request(
+        request_id="req-1", requester="bob",
+        category=ApprovalCategory.SENSITIVE_DATA, required_approvals=1,
+        opened_at="2026-06-23T09:00:00Z", sql_sha256="d" * 64, resource_id="patients",
+    )
+
+
+def test_audit_has_approval_category():
+    assert AuditCategory.APPROVAL.value == "approval"
+
+
+def test_from_approval_pending_maps_requires_approval():
+    ev = from_approval(_pending_req(), event_id="e1", occurred_at="2026-06-23T09:00:01Z",
+                       actor=_ACTOR, resource=_RES)
+    assert ev.category == AuditCategory.APPROVAL
+    assert ev.action == "orchestrate_approval"
+    assert ev.outcome.value == "requires_approval"
+    assert ev.sql_sha256 == "d" * 64
+    assert ev.details["request_id"] == "req-1"
+
+
+def test_from_approval_state_outcomes():
+    approved = approve(_pending_req(), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    ev_ok = from_approval(approved, event_id="e2", occurred_at="2026-06-23T10:00:01Z",
+                          actor=_ACTOR, resource=_RES)
+    assert ev_ok.outcome.value == "allowed"
+
+    rejected = reject(_pending_req(), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    ev_no = from_approval(rejected, event_id="e3", occurred_at="2026-06-23T10:00:01Z",
+                          actor=_ACTOR, resource=_RES)
+    assert ev_no.outcome.value == "denied"
+
+
+def test_from_approval_chains_and_verifies():
+    p = _pending_req()
+    e0 = from_approval(p, event_id="e0", occurred_at="2026-06-23T09:00:01Z",
+                       actor=_ACTOR, resource=_RES)
+    approved = approve(p, approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    e1 = from_approval(approved, event_id="e1", occurred_at="2026-06-23T10:00:01Z",
+                       actor=_ACTOR, resource=_RES, prev=e0)
+    assert verify_chain([e0, e1]) is None

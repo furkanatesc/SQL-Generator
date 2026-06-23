@@ -85,6 +85,7 @@ from .audit_event import (
     from_risk,
     from_sensitive,
     from_pii_phi,
+    from_approval,  # 26.7 interlock
 )
 from .approval_workflow import (
     APPROVAL_WORKFLOW_CONTRACT_VERSION,
@@ -174,6 +175,7 @@ __all__ = [
     "from_risk",
     "from_sensitive",
     "from_pii_phi",
+    "from_approval",  # 26.7 interlock
     "APPROVAL_WORKFLOW_CONTRACT_VERSION",
     "ApprovalWorkflowContractError",
     "ApprovalState",
