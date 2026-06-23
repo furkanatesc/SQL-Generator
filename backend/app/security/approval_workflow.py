@@ -35,6 +35,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
+from app.security.sql_permission_policy import (
+    SQLPermissionPolicyResult, SQLPermissionDecision,
+)
+from app.security.sql_sensitive_data_policy import (
+    SQLSensitiveDataPolicyResult, SQLSensitiveDataDecision, SQLSensitivityLevel,
+)
+
 APPROVAL_WORKFLOW_CONTRACT_VERSION = "approval_workflow_contract_v1"
 
 _HEX64 = re.compile(r"[a-f0-9]{64}")
@@ -187,3 +194,67 @@ class ApprovalRequest:
             "opened_at": self.opened_at,
             "expires_at": self.expires_at,
         }
+
+
+# sensitivity level -> default quorum. PUBLIC/INTERNAL never reach REQUIRES_APPROVAL,
+# so they are intentionally absent; a missing key is a fail-closed KeyError guarded below.
+_SENSITIVITY_QUORUM: Dict[SQLSensitivityLevel, int] = {
+    SQLSensitivityLevel.CONFIDENTIAL: 1,
+    SQLSensitivityLevel.RESTRICTED: 2,
+}
+
+
+def open(*, request_id: str, requester: str, category: ApprovalCategory,
+         required_approvals: int, sql_sha256: Optional[str] = None,
+         resource_id: Optional[str] = None, opened_at: str,
+         expires_at: Optional[str] = None) -> ApprovalRequest:
+    """Open a fresh PENDING approval request. Validates required_approvals >= 1."""
+    return ApprovalRequest(
+        schema_version=APPROVAL_WORKFLOW_CONTRACT_VERSION,
+        request_id=request_id, requester=requester, category=category,
+        required_approvals=required_approvals, state=ApprovalState.PENDING,
+        decisions=(), reason_code=ApprovalReasonCode.OPENED,
+        sql_sha256=sql_sha256, resource_id=resource_id,
+        opened_at=opened_at, expires_at=expires_at,
+    )
+
+
+def from_permission(result: SQLPermissionPolicyResult, *, request_id: str,
+                    requester: str, opened_at: str, expires_at: Optional[str] = None,
+                    resource_id: Optional[str] = None) -> ApprovalRequest:
+    """Open a request from a 26.0 permission result. Fail-closed: the result's
+    decision must be REQUIRES_APPROVAL. Permission carries no sql hash (N=1)."""
+    if result.decision != SQLPermissionDecision.REQUIRES_APPROVAL:
+        raise ApprovalWorkflowContractError(
+            "from_permission requires a REQUIRES_APPROVAL result, "
+            f"got {result.decision.value!r}"
+        )
+    return open(
+        request_id=request_id, requester=requester,
+        category=ApprovalCategory.PERMISSION, required_approvals=1,
+        sql_sha256=None, resource_id=resource_id,
+        opened_at=opened_at, expires_at=expires_at,
+    )
+
+
+def from_sensitive(result: SQLSensitiveDataPolicyResult, *, request_id: str,
+                   requester: str, opened_at: str, expires_at: Optional[str] = None,
+                   resource_id: Optional[str] = None) -> ApprovalRequest:
+    """Open a request from a 26.4 sensitive-data result. Fail-closed: decision must
+    be REQUIRES_APPROVAL. Quorum derives from sensitivity_level; sql hash copied."""
+    if result.decision != SQLSensitiveDataDecision.REQUIRES_APPROVAL:
+        raise ApprovalWorkflowContractError(
+            "from_sensitive requires a REQUIRES_APPROVAL result, "
+            f"got {result.decision.value!r}"
+        )
+    n = _SENSITIVITY_QUORUM.get(result.sensitivity_level)
+    if n is None:
+        raise ApprovalWorkflowContractError(
+            f"no quorum defined for sensitivity level {result.sensitivity_level.value!r}"
+        )
+    return open(
+        request_id=request_id, requester=requester,
+        category=ApprovalCategory.SENSITIVE_DATA, required_approvals=n,
+        sql_sha256=result.sql_sha256, resource_id=resource_id,
+        opened_at=opened_at, expires_at=expires_at,
+    )

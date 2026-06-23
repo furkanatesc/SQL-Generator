@@ -144,3 +144,104 @@ def test_request_to_dict_secret_free():
     blob = json.dumps(r.to_dict())
     assert secret_sql not in blob
     assert "123-45-6789" not in blob
+
+
+# ---------------------------------------------------------------------------
+# Task 4: open factory + fail-closed builders
+# ---------------------------------------------------------------------------
+from app.security.approval_workflow import open as open_request, from_permission, from_sensitive  # noqa: E402
+from app.security.sql_permission_policy import (  # noqa: E402
+    SQL_PERMISSION_POLICY_CONTRACT_VERSION,
+    SQLPermissionPolicyResult, SQLPermissionDecision, SQLPermissionReasonCode,
+    SQLPermissionAction, SQLPermissionResourceType,
+)
+from app.security.sql_sensitive_data_policy import (  # noqa: E402
+    SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
+    SQLSensitiveDataPolicyResult, SQLSensitiveDataDecision,
+    SQLSensitiveDataReasonCode, SQLSensitivityLevel, SQLSensitiveDataEvaluatedVia,
+)
+
+
+def test_open_yields_pending():
+    r = open_request(
+        request_id="req-1", requester="bob", category=ApprovalCategory.PERMISSION,
+        required_approvals=2, opened_at="2026-06-23T09:00:00Z",
+    )
+    assert r.state == ApprovalState.PENDING
+    assert r.reason_code == ApprovalReasonCode.OPENED
+    assert r.decisions == ()
+    assert r.required_approvals == 2
+    assert r.sql_sha256 is None
+
+
+def _perm_result(decision):
+    # NOTE: SQLPermissionPolicyResult requires version + echoed subject/action/
+    # resource identifiers; reason_code below pairs with the REQUIRES_APPROVAL path
+    # but the builder only inspects .decision, so any valid reason_code is fine.
+    return SQLPermissionPolicyResult(
+        version=SQL_PERMISSION_POLICY_CONTRACT_VERSION,
+        decision=decision,
+        reason_code=SQLPermissionReasonCode.REQUIRES_APPROVAL,
+        reason="needs approval",
+        subject_id="bob",
+        action=SQLPermissionAction.EXECUTE_SQL,
+        resource_type=SQLPermissionResourceType.TABLE,
+        resource_id="patients",
+    )
+
+
+def test_from_permission_requires_approval():
+    r = from_permission(
+        _perm_result(SQLPermissionDecision.REQUIRES_APPROVAL),
+        request_id="req-2", requester="bob", opened_at="2026-06-23T09:00:00Z",
+    )
+    assert r.category == ApprovalCategory.PERMISSION
+    assert r.required_approvals == 1
+    assert r.sql_sha256 is None
+    assert r.state == ApprovalState.PENDING
+
+
+def test_from_permission_non_approval_fails_closed():
+    with pytest.raises(ApprovalWorkflowContractError):
+        from_permission(
+            _perm_result(SQLPermissionDecision.ALLOW),
+            request_id="req-3", requester="bob", opened_at="2026-06-23T09:00:00Z",
+        )
+
+
+def _sens_result(decision, level, sql_sha256="c" * 64):
+    return SQLSensitiveDataPolicyResult(
+        version=SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
+        decision=decision,
+        sensitivity_level=level,
+        matched=(),
+        reason_code=SQLSensitiveDataReasonCode.SENSITIVE_MATCH_REQUIRES_APPROVAL,
+        reason="sensitive",
+        sql_sha256=sql_sha256,
+        evaluated_via=SQLSensitiveDataEvaluatedVia.EXPLICIT_REFERENCES,
+        dialect="postgres",
+    )
+
+
+@pytest.mark.parametrize("level,expected_n", [
+    (SQLSensitivityLevel.CONFIDENTIAL, 1),
+    (SQLSensitivityLevel.RESTRICTED, 2),
+])
+def test_from_sensitive_quorum_mapping(level, expected_n):
+    r = from_sensitive(
+        _sens_result(SQLSensitiveDataDecision.REQUIRES_APPROVAL, level),
+        request_id="req-4", requester="bob", opened_at="2026-06-23T09:00:00Z",
+        resource_id="patients",
+    )
+    assert r.category == ApprovalCategory.SENSITIVE_DATA
+    assert r.required_approvals == expected_n
+    assert r.sql_sha256 == "c" * 64
+    assert r.resource_id == "patients"
+
+
+def test_from_sensitive_non_approval_fails_closed():
+    with pytest.raises(ApprovalWorkflowContractError):
+        from_sensitive(
+            _sens_result(SQLSensitiveDataDecision.DENY, SQLSensitivityLevel.RESTRICTED),
+            request_id="req-5", requester="bob", opened_at="2026-06-23T09:00:00Z",
+        )
