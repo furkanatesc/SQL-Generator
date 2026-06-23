@@ -1,9 +1,4 @@
 """Sprint 26.7 — Approval Workflow Contract tests."""
-import dataclasses
-import json
-
-import pytest
-
 from app.security.approval_workflow import (
     APPROVAL_WORKFLOW_CONTRACT_VERSION,
     ApprovalWorkflowContractError,

@@ -30,14 +30,9 @@ RBAC approver eligibility, asymmetric signing, clocks, id generation, API/UI,
 concurrency/locking. This module performs no I/O.
 """
 
-import re
-from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
 
 APPROVAL_WORKFLOW_CONTRACT_VERSION = "approval_workflow_contract_v1"
-
-_HEX64 = re.compile(r"[a-f0-9]{64}")
 
 
 class ApprovalWorkflowContractError(ValueError):
