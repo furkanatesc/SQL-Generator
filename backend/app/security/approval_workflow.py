@@ -314,3 +314,31 @@ def reject(request: ApprovalRequest, *, approver: str, occurred_at: str) -> Appr
     return _replace_state(request, decisions=decisions,
                           state=ApprovalState.REJECTED,
                           reason_code=ApprovalReasonCode.REJECTED_VETO)
+
+
+def cancel(request: ApprovalRequest) -> ApprovalRequest:
+    """Withdraw a PENDING request (requester/admin). Terminal -> CANCELLED."""
+    if request.is_terminal:
+        raise ApprovalWorkflowContractError(
+            f"cannot cancel a {request.state.value} (terminal) request"
+        )
+    return _replace_state(request, decisions=request.decisions,
+                          state=ApprovalState.CANCELLED,
+                          reason_code=ApprovalReasonCode.CANCELLED)
+
+
+def expire(request: ApprovalRequest, *, now: str) -> ApprovalRequest:
+    """Expire a PENDING request. Fail-closed: requires expires_at set AND
+    now >= expires_at (plain ISO-8601 UTC string comparison; see module docstring)."""
+    _check_req_str(now, "now")
+    if request.is_terminal:
+        raise ApprovalWorkflowContractError(
+            f"cannot expire a {request.state.value} (terminal) request"
+        )
+    if request.expires_at is None or now < request.expires_at:
+        raise ApprovalWorkflowContractError(
+            "expire requires expires_at set and now >= expires_at"
+        )
+    return _replace_state(request, decisions=request.decisions,
+                          state=ApprovalState.EXPIRED,
+                          reason_code=ApprovalReasonCode.EXPIRED)

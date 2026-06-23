@@ -316,3 +316,56 @@ def test_approve_does_not_mutate_input():
     base = _pending(required_approvals=2)
     approve(base, approver="alice", occurred_at="2026-06-23T10:00:00Z")
     assert base.decisions == ()  # input untouched
+
+
+# ---------------------------------------------------------------------------
+# Task 6: cancel + expire transitions
+# ---------------------------------------------------------------------------
+from app.security.approval_workflow import cancel, expire  # noqa: E402
+
+
+def test_cancel_pending():
+    r = cancel(_pending())
+    assert r.state == ApprovalState.CANCELLED
+    assert r.reason_code == ApprovalReasonCode.CANCELLED
+
+
+def test_cancel_terminal_raises():
+    approved = approve(_pending(required_approvals=1), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    with pytest.raises(ApprovalWorkflowContractError):
+        cancel(approved)
+
+
+def _expiring(expires_at="2026-06-23T12:00:00Z"):
+    return open_request(
+        request_id="req-1", requester="bob", category=ApprovalCategory.PERMISSION,
+        required_approvals=1, opened_at="2026-06-23T09:00:00Z", expires_at=expires_at,
+    )
+
+
+def test_expire_when_due():
+    r = expire(_expiring(), now="2026-06-23T12:00:00Z")
+    assert r.state == ApprovalState.EXPIRED
+    assert r.reason_code == ApprovalReasonCode.EXPIRED
+    # also expires strictly after
+    assert expire(_expiring(), now="2026-06-23T13:00:00Z").state == ApprovalState.EXPIRED
+
+
+def test_expire_before_due_raises():
+    with pytest.raises(ApprovalWorkflowContractError):
+        expire(_expiring(), now="2026-06-23T11:59:59Z")
+
+
+def test_expire_without_expires_at_raises():
+    no_expiry = open_request(
+        request_id="req-1", requester="bob", category=ApprovalCategory.PERMISSION,
+        required_approvals=1, opened_at="2026-06-23T09:00:00Z",
+    )
+    with pytest.raises(ApprovalWorkflowContractError):
+        expire(no_expiry, now="2026-06-23T13:00:00Z")
+
+
+def test_expire_terminal_raises():
+    approved = approve(_pending(required_approvals=1), approver="alice", occurred_at="2026-06-23T10:00:00Z")
+    with pytest.raises(ApprovalWorkflowContractError):
+        expire(approved, now="2026-06-23T13:00:00Z")
