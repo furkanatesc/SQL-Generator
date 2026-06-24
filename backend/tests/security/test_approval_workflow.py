@@ -139,6 +139,7 @@ def test_request_is_frozen():
     {"required_approvals": 0},
     {"required_approvals": -1},
     {"required_approvals": 1.0},   # non-int
+    {"required_approvals": True},  # bool is an int subclass — must be rejected
     {"category": "sensitive_data"},  # bare string
     {"state": "pending"},            # bare string
     {"reason_code": "opened"},       # bare string
