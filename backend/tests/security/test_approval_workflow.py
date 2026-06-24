@@ -13,6 +13,24 @@ from app.security.approval_workflow import (
     ApprovalReasonCode,
     TERMINAL_STATES,
     ApprovalDecision,
+    ApprovalRequest,
+    open as open_request,
+    from_permission,
+    from_sensitive,
+    approve,
+    reject,
+    cancel,
+    expire,
+)
+from app.security.sql_permission_policy import (
+    SQL_PERMISSION_POLICY_CONTRACT_VERSION,
+    SQLPermissionPolicyResult, SQLPermissionDecision, SQLPermissionReasonCode,
+    SQLPermissionAction, SQLPermissionResourceType,
+)
+from app.security.sql_sensitive_data_policy import (
+    SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
+    SQLSensitiveDataPolicyResult, SQLSensitiveDataDecision,
+    SQLSensitiveDataReasonCode, SQLSensitivityLevel, SQLSensitiveDataEvaluatedVia,
 )
 
 
@@ -67,9 +85,6 @@ def test_decision_is_frozen():
 def test_decision_invalid_raises(kwargs):
     with pytest.raises(ApprovalWorkflowContractError):
         _decision(**kwargs)
-
-
-from app.security.approval_workflow import ApprovalRequest  # noqa: E402
 
 
 def _request(**over):
@@ -149,19 +164,6 @@ def test_request_to_dict_secret_free():
 # ---------------------------------------------------------------------------
 # Task 4: open factory + fail-closed builders
 # ---------------------------------------------------------------------------
-from app.security.approval_workflow import open as open_request, from_permission, from_sensitive  # noqa: E402
-from app.security.sql_permission_policy import (  # noqa: E402
-    SQL_PERMISSION_POLICY_CONTRACT_VERSION,
-    SQLPermissionPolicyResult, SQLPermissionDecision, SQLPermissionReasonCode,
-    SQLPermissionAction, SQLPermissionResourceType,
-)
-from app.security.sql_sensitive_data_policy import (  # noqa: E402
-    SQL_SENSITIVE_DATA_POLICY_CONTRACT_VERSION,
-    SQLSensitiveDataPolicyResult, SQLSensitiveDataDecision,
-    SQLSensitiveDataReasonCode, SQLSensitivityLevel, SQLSensitiveDataEvaluatedVia,
-)
-
-
 def test_open_yields_pending():
     r = open_request(
         request_id="req-1", requester="bob", category=ApprovalCategory.PERMISSION,
@@ -250,9 +252,6 @@ def test_from_sensitive_non_approval_fails_closed():
 # ---------------------------------------------------------------------------
 # Task 5: approve / reject transitions
 # ---------------------------------------------------------------------------
-from app.security.approval_workflow import approve, reject  # noqa: E402
-
-
 def _pending(required_approvals=2, requester="bob"):
     return open_request(
         request_id="req-1", requester=requester,
@@ -321,9 +320,6 @@ def test_approve_does_not_mutate_input():
 # ---------------------------------------------------------------------------
 # Task 6: cancel + expire transitions
 # ---------------------------------------------------------------------------
-from app.security.approval_workflow import cancel, expire  # noqa: E402
-
-
 def test_cancel_pending():
     r = cancel(_pending())
     assert r.state == ApprovalState.CANCELLED

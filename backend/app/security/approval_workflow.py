@@ -14,6 +14,12 @@ It is a state machine + normalizer, NOT a sink: NO I/O, NO clock, NO randomness.
 caller-supplied so every transition is deterministic and reproducible. Each
 transition returns a NEW frozen request; the input is never mutated.
 
+Clockless expiry: ``expire`` compares ``now`` to ``expires_at`` as a plain
+lexicographic string compare -- it never parses timezones or validates timestamp
+semantics, so the comparison is correct only for same-shape ISO-8601 UTC ``Z``
+strings. Supplying well-formed, same-shape timestamps is the caller's
+responsibility (same posture as 26.6).
+
 Secret-free: no raw SQL, and deliberately NO free-text approver comment (free text
 is an uncontrolled leak channel). Only ids, enum values, and ``sql_sha256`` /
 ``resource_id`` copied verbatim from source results already proven secret-free.
