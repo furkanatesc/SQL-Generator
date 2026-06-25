@@ -297,6 +297,14 @@ def test_dedup_identical_matches():
     assert labels.count("instruction_override/ignore_previous") == 1
 
 
+def test_benign_long_token_does_not_block():
+    # A long benign alphanumeric token trips the base64-blob obfuscation signal
+    # (MEDIUM) by design, but must never escalate to BLOCK on a DIRECT segment.
+    res = _evaluate(_seg("show me row abcdefghijklmnopqrstuvwxyz0123456789"))
+    assert res.disposition in (InjectionDisposition.ALLOW, InjectionDisposition.REVIEW)
+    assert res.disposition != InjectionDisposition.BLOCK
+
+
 def test_public_symbols_exported_from_package():
     import app.security as sec
     for name in (

@@ -37,6 +37,7 @@ model — a later phase):
   homoglyph evasion raises a signal, but nested encodings are not recursively decoded.
 * Turkish-safe by design: the homoglyph check keys on Cyrillic/Greek code points, NOT
   a non-ASCII ratio, so Turkish/diacritic-Latin input is never flagged.
+* The `obfuscation_evasion/hex_blob` branch (LOW) is currently unreachable: any 32+ hex run also satisfies the base64-charset blob check, which is tested first and returns MEDIUM. As a result no pattern currently emits LOW confidence; LOW is reserved for future pattern families. This is a known, deliberate MVP simplification.
 """
 
 import hashlib
@@ -235,7 +236,7 @@ _ZERO_WIDTH = "".join((
 _ZERO_WIDTH_SET = set(_ZERO_WIDTH)
 
 # A long base64 blob (24+ chars) is a smuggled-payload signal.
-_BASE64_RE = re.compile(r"[A-Za-z0-9+/]{24,}={0,2}")
+_BASE64_RE = re.compile(r"[a-z0-9+/]{24,}={0,2}")
 # A long hex run (32+ hex chars) is a weaker smuggled-payload signal.
 _HEX_RE = re.compile(r"(?:0x)?[0-9a-f]{32,}")
 # Cyrillic (U+0400-04FF) or Greek (U+0370-03FF) letters: classic homoglyph attack.
