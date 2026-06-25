@@ -27,5 +27,8 @@ backend/qdrant_data/
 backend/sqlgen.db
 backend/uploads/
 backend/target_test.db
+backend/target_test_pipeline.db
 backend/data/
+data/*.db
+sqlgen.db
 *.db.backup
