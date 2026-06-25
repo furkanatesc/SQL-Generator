@@ -86,6 +86,7 @@ from .audit_event import (
     from_sensitive,
     from_pii_phi,
     from_approval,  # 26.7 interlock
+    from_prompt_injection,  # 26.8 interlock
 )
 from .approval_workflow import (
     APPROVAL_WORKFLOW_CONTRACT_VERSION,
@@ -99,6 +100,20 @@ from .approval_workflow import (
     TERMINAL_STATES,
 )
 from . import approval_workflow  # noqa: F401  (transition fns: approval_workflow.approve, ...)
+from .prompt_injection_defense import (
+    PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION,
+    PromptInjectionDefenseContractError,
+    InjectionCategory,
+    InjectionSource,
+    InjectionConfidence,
+    InjectionDisposition,
+    InjectionReasonCode,
+    PromptSegment,
+    InjectionMatch,
+    PromptInjectionDefenseRequest,
+    PromptInjectionDefenseResult,
+    PromptInjectionDefenseContract,
+)
 
 __all__ = [
     "SQL_PERMISSION_POLICY_CONTRACT_VERSION",
@@ -176,6 +191,7 @@ __all__ = [
     "from_sensitive",
     "from_pii_phi",
     "from_approval",  # 26.7 interlock
+    "from_prompt_injection",  # 26.8 interlock
     "APPROVAL_WORKFLOW_CONTRACT_VERSION",
     "ApprovalWorkflowContractError",
     "ApprovalState",
@@ -185,4 +201,16 @@ __all__ = [
     "ApprovalDecision",
     "ApprovalRequest",
     "TERMINAL_STATES",
+    "PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION",
+    "PromptInjectionDefenseContractError",
+    "InjectionCategory",
+    "InjectionSource",
+    "InjectionConfidence",
+    "InjectionDisposition",
+    "InjectionReasonCode",
+    "PromptSegment",
+    "InjectionMatch",
+    "PromptInjectionDefenseRequest",
+    "PromptInjectionDefenseResult",
+    "PromptInjectionDefenseContract",
 ]
