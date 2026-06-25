@@ -85,7 +85,20 @@ from .audit_event import (
     from_risk,
     from_sensitive,
     from_pii_phi,
+    from_approval,  # 26.7 interlock
 )
+from .approval_workflow import (
+    APPROVAL_WORKFLOW_CONTRACT_VERSION,
+    ApprovalWorkflowContractError,
+    ApprovalState,
+    ApprovalDecisionType,
+    ApprovalCategory,
+    ApprovalReasonCode,
+    ApprovalDecision,
+    ApprovalRequest,
+    TERMINAL_STATES,
+)
+from . import approval_workflow  # noqa: F401  (transition fns: approval_workflow.approve, ...)
 
 __all__ = [
     "SQL_PERMISSION_POLICY_CONTRACT_VERSION",
@@ -162,4 +175,14 @@ __all__ = [
     "from_risk",
     "from_sensitive",
     "from_pii_phi",
+    "from_approval",  # 26.7 interlock
+    "APPROVAL_WORKFLOW_CONTRACT_VERSION",
+    "ApprovalWorkflowContractError",
+    "ApprovalState",
+    "ApprovalDecisionType",
+    "ApprovalCategory",
+    "ApprovalReasonCode",
+    "ApprovalDecision",
+    "ApprovalRequest",
+    "TERMINAL_STATES",
 ]
