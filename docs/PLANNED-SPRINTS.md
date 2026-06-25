@@ -48,8 +48,8 @@ governance.
 | 26.5 | PII / PHI Detection Contract | ✅ Tamam · *heuristik PII/PHI detector (sinyal, gate değil): kategori + PII/PHI veri-sınıfı + güven; 3 katman (declared=sound, identifier-isim + literal-değer/Luhn=best-effort); secret-free sonuç* |
 | 26.6 | Audit Event Contract | ✅ Tamam · *deterministik, secret-free audit kaydı + tamper-evident SHA-256 hash-chain; 26.0–26.5 sonuçlarını tek immutable AuditEvent'e normalize eden 6 builder (OWASP-style kategoriler, NIST SP 800-92 6-soru çekirdeği); zaman/ID caller-supplied; verify_chain mutation/reorder/insert/delete yakalar (integrity-evident, non-repudiation Phase 13)* |
 | 26.7 | Approval Workflow Contract | ✅ Tamam · *saf deterministik approval state machine (I/O & clock yok, time/id caller-supplied, frozen dataclass, secret-free); PENDING + terminal (APPROVED/REJECTED/EXPIRED/CANCELLED) durumları; fail-closed from_permission (N=1) / from_sensitive (CONFIDENTIAL→1, RESTRICTED→2); approve/reject quorum N-of-M + SoD (requester≠approver) + duplicate-vote guard + single-reject veto + terminal immutability; caller-driven expire; audit interlock (AuditCategory.APPROVAL + from_approval)* |
-| 26.8 | Prompt-Injection / NL Abuse Defense | ⏳ Sıradaki |
-| 26.9 | Result-Set Privacy & Row/Size Limits |
+| 26.8 | Prompt-Injection / NL Abuse Defense | ✅ Tamam · *kaynak-duyarlı (source-aware) prompt-injection detector (sinyal, gate değil; secret-free); altı örüntü ailesi (instruction override, role hijack, delimiter/system-prompt spoof, exfiltration, encoded payload, tool/agent abuse) + per-segment tespit; NFKC normalizasyonu + Türkçe-güvenli obfuscation sinyali; Detector.evaluate + kaynak-duyarlı disposition policy; audit interlock (AuditCategory.PROMPT_INJECTION + from_prompt_injection)* |
+| 26.9 | Result-Set Privacy & Row/Size Limits | ⏳ Sıradaki |
 | 26.10 | Connection Credential Vault (server-side) |
 | 26.11 | Policy / Security Eval |
 
