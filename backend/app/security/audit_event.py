@@ -59,6 +59,9 @@ from app.security.sql_pii_phi_detection import (
     SQL_PII_PHI_DETECTION_CONTRACT_VERSION, SQLPiiPhiDetectionResult,
     SQLPiiPhiConfidence,
 )
+from app.security.approval_workflow import (
+    APPROVAL_WORKFLOW_CONTRACT_VERSION, ApprovalRequest, ApprovalState,
+)
 
 AUDIT_EVENT_CONTRACT_VERSION = "audit_event_contract_v1"
 
@@ -77,6 +80,7 @@ class AuditCategory(str, Enum):
     QUERY_RISK = "query_risk"               # 26.3
     SENSITIVE_DATA = "sensitive_data"       # 26.4
     PII_PHI = "pii_phi"                     # 26.5
+    APPROVAL = "approval"                   # 26.7
 
 
 class AuditOutcome(str, Enum):
@@ -455,4 +459,52 @@ def from_pii_phi(result: SQLPiiPhiDetectionResult, *, event_id: str, occurred_at
         contract_source=SQL_PII_PHI_DETECTION_CONTRACT_VERSION,
         sql_sha256=result.sql_sha256,
         details=result.to_dict(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Approval state mapping tables (26.7 interlock)
+# ---------------------------------------------------------------------------
+
+# approval state -> audit outcome
+_APPROVAL_STATE_OUTCOME: Dict[ApprovalState, AuditOutcome] = {
+    ApprovalState.APPROVED: AuditOutcome.ALLOWED,
+    ApprovalState.REJECTED: AuditOutcome.DENIED,
+    ApprovalState.PENDING: AuditOutcome.REQUIRES_APPROVAL,
+    ApprovalState.EXPIRED: AuditOutcome.DENIED,
+    ApprovalState.CANCELLED: AuditOutcome.DENIED,
+}
+
+_APPROVAL_STATE_SEVERITY: Dict[ApprovalState, AuditSeverity] = {
+    ApprovalState.APPROVED: AuditSeverity.INFO,
+    ApprovalState.PENDING: AuditSeverity.MEDIUM,
+    ApprovalState.REJECTED: AuditSeverity.HIGH,
+    ApprovalState.EXPIRED: AuditSeverity.MEDIUM,
+    ApprovalState.CANCELLED: AuditSeverity.LOW,
+}
+
+_APPROVAL_STATE_REASON: Dict[ApprovalState, str] = {
+    ApprovalState.APPROVED: "approval quorum met",
+    ApprovalState.PENDING: "approval pending",
+    ApprovalState.REJECTED: "approval rejected",
+    ApprovalState.EXPIRED: "approval expired",
+    ApprovalState.CANCELLED: "approval cancelled",
+}
+
+
+def from_approval(request: ApprovalRequest, *, event_id: str, occurred_at: str,
+                  actor: AuditActor, resource: AuditResource,
+                  prev: Optional[AuditEvent] = None) -> AuditEvent:
+    """Normalize a 26.7 ApprovalRequest into an AuditEvent (APPROVAL). Maps the
+    request state to outcome/severity; details is the secret-free request.to_dict()."""
+    state = request.state
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.APPROVAL, action="orchestrate_approval",
+        outcome=_APPROVAL_STATE_OUTCOME[state], severity=_APPROVAL_STATE_SEVERITY[state],
+        actor=actor, resource=resource,
+        reason_code=request.reason_code.value, reason=_APPROVAL_STATE_REASON[state],
+        contract_source=APPROVAL_WORKFLOW_CONTRACT_VERSION,
+        sql_sha256=request.sql_sha256,
+        details=request.to_dict(),
     )
