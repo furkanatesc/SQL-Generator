@@ -126,3 +126,5 @@ Projenin tüm teknik detaylarına ve gelecek yol haritasına aşağıdaki belgel
 ## Lisans
 
 Bu proje kurumsal veri güvenliği, veri gizliliği ve yerel entegrasyon standartlarına göre tasarlanmış açık kaynaklı bir platform prototipidir.
+
+[MIT Lisansı](LICENSE) altında dağıtılmaktadır.
