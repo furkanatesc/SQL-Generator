@@ -62,6 +62,10 @@ from app.security.sql_pii_phi_detection import (
 from app.security.approval_workflow import (
     APPROVAL_WORKFLOW_CONTRACT_VERSION, ApprovalRequest, ApprovalState,
 )
+from app.security.prompt_injection_defense import (
+    PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION, PromptInjectionDefenseResult,
+    InjectionDisposition, InjectionConfidence,
+)
 
 AUDIT_EVENT_CONTRACT_VERSION = "audit_event_contract_v1"
 
@@ -81,6 +85,7 @@ class AuditCategory(str, Enum):
     SENSITIVE_DATA = "sensitive_data"       # 26.4
     PII_PHI = "pii_phi"                     # 26.5
     APPROVAL = "approval"                   # 26.7
+    PROMPT_INJECTION = "prompt_injection"   # 26.8
 
 
 class AuditOutcome(str, Enum):
@@ -507,4 +512,44 @@ def from_approval(request: ApprovalRequest, *, event_id: str, occurred_at: str,
         contract_source=APPROVAL_WORKFLOW_CONTRACT_VERSION,
         sql_sha256=request.sql_sha256,
         details=request.to_dict(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prompt-injection disposition -> audit outcome (26.8 interlock)
+# ---------------------------------------------------------------------------
+
+_INJECTION_DISPOSITION_OUTCOME: Dict[InjectionDisposition, AuditOutcome] = {
+    InjectionDisposition.ALLOW: AuditOutcome.ALLOWED,
+    InjectionDisposition.REVIEW: AuditOutcome.FLAGGED,
+    InjectionDisposition.BLOCK: AuditOutcome.DENIED,
+}
+
+
+def from_prompt_injection(result: PromptInjectionDefenseResult, *, event_id: str,
+                          occurred_at: str, actor: AuditActor, resource: AuditResource,
+                          prev: Optional[AuditEvent] = None) -> AuditEvent:
+    """Normalize a 26.8 prompt-injection defense result (PROMPT_INJECTION). A detector
+    with an advisory disposition: outcome from disposition (ALLOW->allowed,
+    REVIEW->flagged, BLOCK->denied); severity from disposition + highest_confidence.
+    26.8 inspects NL not SQL, so sql_sha256 is None; details carry the secret-free
+    input_sha256."""
+    disposition = result.disposition
+    if disposition == InjectionDisposition.BLOCK:
+        severity = (AuditSeverity.CRITICAL
+                    if result.highest_confidence == InjectionConfidence.HIGH
+                    else AuditSeverity.HIGH)
+    elif disposition == InjectionDisposition.REVIEW:
+        severity = AuditSeverity.MEDIUM
+    else:
+        severity = AuditSeverity.INFO
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.PROMPT_INJECTION, action="detect_prompt_injection",
+        outcome=_INJECTION_DISPOSITION_OUTCOME[disposition], severity=severity,
+        actor=actor, resource=resource,
+        reason_code=result.reason_code.value, reason=result.reason,
+        contract_source=PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION,
+        sql_sha256=None,
+        details=result.to_dict(),
     )
