@@ -44,7 +44,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION = "prompt_injection_defense_contract_v1"
 
@@ -360,3 +360,94 @@ def _detect_segment(original: str, normalized: str, source: InjectionSource,
     if source == InjectionSource.INDIRECT:
         out = [(cat, _elevate(conf), label) for cat, conf, label in out]
     return out
+
+
+class PromptInjectionDefenseContract:
+    """Deterministic, static prompt-injection / NL-abuse detector. The result is a pure
+    function of the request. A hybrid detector: it emits a typed signal AND an advisory
+    disposition (ALLOW/REVIEW/BLOCK) — it is NOT a hard gate."""
+
+    def evaluate(self, request: PromptInjectionDefenseRequest) -> PromptInjectionDefenseResult:
+        if not isinstance(request, PromptInjectionDefenseRequest):
+            raise PromptInjectionDefenseContractError("request must be a PromptInjectionDefenseRequest")
+
+        segments = request.segments
+        segment_count = len(segments)
+
+        normalized_segments: List[Tuple[int, InjectionSource, str, str, bool]] = []
+        canonical_parts: List[str] = []
+        for i, seg in enumerate(segments):
+            normalized, removed = _normalize_text(seg.text)
+            normalized_segments.append((i, seg.source, seg.text, normalized, removed))
+            canonical_parts.append(f"{seg.source.value}:{normalized}")
+        input_sha256 = hashlib.sha256("\n".join(canonical_parts).encode("utf-8")).hexdigest()
+
+        if all(not normalized for (_, _, _, normalized, _) in normalized_segments):
+            return PromptInjectionDefenseResult(
+                version=PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION,
+                detected=(), categories=(), highest_confidence=None,
+                disposition=InjectionDisposition.ALLOW,
+                reason_code=InjectionReasonCode.NO_INPUT,
+                reason="No usable text to inspect for prompt injection.",
+                input_sha256=input_sha256, segment_count=segment_count)
+
+        matches: List[InjectionMatch] = []
+        for (i, source, original, normalized, removed) in normalized_segments:
+            for category, confidence, label in _detect_segment(original, normalized, source, removed):
+                matches.append(InjectionMatch(
+                    category=category, source=source, confidence=confidence,
+                    pattern_label=label, segment_index=i))
+
+        return self._aggregate(matches, input_sha256, segment_count)
+
+    def _aggregate(self, matches: List[InjectionMatch], input_sha256: str,
+                   segment_count: int) -> PromptInjectionDefenseResult:
+        if not matches:
+            return PromptInjectionDefenseResult(
+                version=PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION,
+                detected=(), categories=(), highest_confidence=None,
+                disposition=InjectionDisposition.ALLOW,
+                reason_code=InjectionReasonCode.NO_INJECTION_DETECTED,
+                reason="No prompt-injection patterns detected.",
+                input_sha256=input_sha256, segment_count=segment_count)
+
+        # De-duplicate on (category, source, pattern_label, segment_index).
+        seen: Set[Tuple[Any, ...]] = set()
+        unique: List[InjectionMatch] = []
+        for m in matches:
+            key = (m.category, m.source, m.pattern_label, m.segment_index)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(m)
+        # Order: INDIRECT before DIRECT, then category, then confidence desc, then
+        # pattern_label, then segment_index.
+        unique.sort(key=lambda m: (
+            0 if m.source == InjectionSource.INDIRECT else 1,
+            m.category.value,
+            -_CONFIDENCE_ORDER[m.confidence],
+            m.pattern_label,
+            m.segment_index,
+        ))
+
+        categories = tuple(sorted({m.category for m in unique}, key=lambda c: c.value))
+        highest = max((m.confidence for m in unique), key=lambda c: _CONFIDENCE_ORDER[c])
+
+        block = any(m.confidence == InjectionConfidence.HIGH for m in unique) or any(
+            m.source == InjectionSource.INDIRECT
+            and _CONFIDENCE_ORDER[m.confidence] >= _CONFIDENCE_ORDER[InjectionConfidence.MEDIUM]
+            for m in unique)
+        if block:
+            disposition = InjectionDisposition.BLOCK
+            reason_code = InjectionReasonCode.INJECTION_DETECTED
+        else:
+            disposition = InjectionDisposition.REVIEW
+            reason_code = InjectionReasonCode.INJECTION_SUSPECTED
+
+        reason = (f"Detected {len(categories)} injection category(ies); disposition "
+                  f"{disposition.value} (max confidence {highest.value}).")
+        return PromptInjectionDefenseResult(
+            version=PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION,
+            detected=tuple(unique), categories=categories, highest_confidence=highest,
+            disposition=disposition, reason_code=reason_code, reason=reason,
+            input_sha256=input_sha256, segment_count=segment_count)
