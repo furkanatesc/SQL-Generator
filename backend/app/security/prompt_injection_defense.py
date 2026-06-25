@@ -44,7 +44,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION = "prompt_injection_defense_contract_v1"
 
@@ -127,6 +127,18 @@ class InjectionMatch:
     confidence: InjectionConfidence
     pattern_label: str
     segment_index: int
+
+    def __post_init__(self):
+        if not isinstance(self.category, InjectionCategory):
+            raise PromptInjectionDefenseContractError("category must be an InjectionCategory")
+        if not isinstance(self.source, InjectionSource):
+            raise PromptInjectionDefenseContractError("source must be an InjectionSource")
+        if not isinstance(self.confidence, InjectionConfidence):
+            raise PromptInjectionDefenseContractError("confidence must be an InjectionConfidence")
+        if not isinstance(self.pattern_label, str) or not self.pattern_label.strip():
+            raise PromptInjectionDefenseContractError("pattern_label must be a non-empty string")
+        if not isinstance(self.segment_index, int) or self.segment_index < 0:
+            raise PromptInjectionDefenseContractError("segment_index must be a non-negative int")
 
     def to_dict(self) -> Dict[str, Any]:
         return {

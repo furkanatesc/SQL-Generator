@@ -57,6 +57,15 @@ def test_match_to_dict_is_secret_free_and_json_safe():
     }
 
 
+def test_match_validates_fields():
+    with pytest.raises(PromptInjectionDefenseContractError):
+        InjectionMatch(category="instruction_override", source=InjectionSource.DIRECT,
+                       confidence=InjectionConfidence.HIGH, pattern_label="x/y", segment_index=0)
+    with pytest.raises(PromptInjectionDefenseContractError):
+        InjectionMatch(category=InjectionCategory.INSTRUCTION_OVERRIDE, source=InjectionSource.DIRECT,
+                       confidence=InjectionConfidence.HIGH, pattern_label="x/y", segment_index=-1)
+
+
 def test_request_version_mismatch_raises():
     with pytest.raises(PromptInjectionDefenseContractError):
         PromptInjectionDefenseRequest(version="wrong", segments=())
