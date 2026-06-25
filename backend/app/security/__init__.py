@@ -99,6 +99,20 @@ from .approval_workflow import (
     TERMINAL_STATES,
 )
 from . import approval_workflow  # noqa: F401  (transition fns: approval_workflow.approve, ...)
+from .prompt_injection_defense import (
+    PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION,
+    PromptInjectionDefenseContractError,
+    InjectionCategory,
+    InjectionSource,
+    InjectionConfidence,
+    InjectionDisposition,
+    InjectionReasonCode,
+    PromptSegment,
+    InjectionMatch,
+    PromptInjectionDefenseRequest,
+    PromptInjectionDefenseResult,
+    PromptInjectionDefenseContract,
+)
 
 __all__ = [
     "SQL_PERMISSION_POLICY_CONTRACT_VERSION",
@@ -185,4 +199,16 @@ __all__ = [
     "ApprovalDecision",
     "ApprovalRequest",
     "TERMINAL_STATES",
+    "PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION",
+    "PromptInjectionDefenseContractError",
+    "InjectionCategory",
+    "InjectionSource",
+    "InjectionConfidence",
+    "InjectionDisposition",
+    "InjectionReasonCode",
+    "PromptSegment",
+    "InjectionMatch",
+    "PromptInjectionDefenseRequest",
+    "PromptInjectionDefenseResult",
+    "PromptInjectionDefenseContract",
 ]
