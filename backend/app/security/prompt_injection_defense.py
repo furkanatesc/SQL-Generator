@@ -44,7 +44,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION = "prompt_injection_defense_contract_v1"
 
@@ -223,3 +223,56 @@ class PromptInjectionDefenseResult:
             "input_sha256": self.input_sha256,
             "segment_count": self.segment_count,
         }
+
+
+# --- Normalization + obfuscation signal -----------------------------------
+
+# Zero-width / invisible characters commonly used to split or hide keywords.
+_ZERO_WIDTH = "".join((
+    "​", "‌", "‍", "‎", "‏",  # ZWSP, ZWNJ, ZWJ, LRM, RLM
+    "⁠", "﻿", "­",                        # WJ, BOM/ZWNBSP, soft hyphen
+))
+_ZERO_WIDTH_SET = set(_ZERO_WIDTH)
+
+# A long base64 blob (24+ chars) is a smuggled-payload signal.
+_BASE64_RE = re.compile(r"[A-Za-z0-9+/]{24,}={0,2}")
+# A long hex run (32+ hex chars) is a weaker smuggled-payload signal.
+_HEX_RE = re.compile(r"(?:0x)?[0-9a-f]{32,}")
+# Cyrillic (U+0400-04FF) or Greek (U+0370-03FF) letters: classic homoglyph attack.
+# Turkish/diacritic-Latin lives in Latin ranges and is intentionally NOT matched.
+_CYRILLIC_GREEK_RE = re.compile(r"[Ͱ-ϿЀ-ӿ]")
+
+
+def _normalize_text(text: str) -> Tuple[str, bool]:
+    """Normalize a segment for matching. Returns (normalized, removed), where
+    ``removed`` is True iff any zero-width or disallowed control character was stripped
+    (itself an obfuscation signal). Steps: NFKC -> strip zero-width/control (keep
+    \\t/\\n) -> collapse whitespace -> casefold."""
+    nfkc = unicodedata.normalize("NFKC", text)
+    removed = False
+    kept: List[str] = []
+    for ch in nfkc:
+        if ch in _ZERO_WIDTH_SET:
+            removed = True
+            continue
+        if unicodedata.category(ch).startswith("C") and ch not in ("\t", "\n"):
+            removed = True
+            continue
+        kept.append(ch)
+    collapsed = re.sub(r"\s+", " ", "".join(kept)).strip()
+    return collapsed.casefold(), removed
+
+
+def _detect_obfuscation(original: str, normalized: str,
+                        removed: bool) -> Optional[Tuple[InjectionConfidence, str]]:
+    """Obfuscation signal from the normalization delta. Precedence: zero-width/control
+    (HIGH) > base64 blob (MEDIUM) > Cyrillic/Greek homoglyph (MEDIUM) > hex run (LOW)."""
+    if removed:
+        return (InjectionConfidence.HIGH, "obfuscation_evasion/zero_width_or_control")
+    if _BASE64_RE.search(normalized):
+        return (InjectionConfidence.MEDIUM, "obfuscation_evasion/base64_blob")
+    if _CYRILLIC_GREEK_RE.search(original):
+        return (InjectionConfidence.MEDIUM, "obfuscation_evasion/mixed_script")
+    if _HEX_RE.search(normalized):
+        return (InjectionConfidence.LOW, "obfuscation_evasion/hex_blob")
+    return None
