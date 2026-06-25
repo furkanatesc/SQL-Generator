@@ -276,3 +276,87 @@ def _detect_obfuscation(original: str, normalized: str,
     if _HEX_RE.search(normalized):
         return (InjectionConfidence.LOW, "obfuscation_evasion/hex_blob")
     return None
+
+
+# --- Six pattern families (curated, documented, NON-exhaustive denylists) --
+# Each entry: (compiled regex over normalized casefolded text, category, base
+# confidence, stable pattern_label). Patterns are lowercase; matching text is
+# already casefolded.
+_PATTERNS: List[Tuple["re.Pattern[str]", InjectionCategory, InjectionConfidence, str]] = [
+    # INSTRUCTION_OVERRIDE
+    (re.compile(r"\bignore\s+(?:all\s+|the\s+)?(?:previous|prior|above|earlier)\s+(?:instructions?|prompts?|messages?|context)\b"),
+     InjectionCategory.INSTRUCTION_OVERRIDE, InjectionConfidence.HIGH, "instruction_override/ignore_previous"),
+    (re.compile(r"\bdisregard\s+(?:all\s+|the\s+|your\s+)?(?:previous\s+|prior\s+|above\s+)?(?:instructions?|rules?|guidelines?)\b"),
+     InjectionCategory.INSTRUCTION_OVERRIDE, InjectionConfidence.HIGH, "instruction_override/disregard_rules"),
+    (re.compile(r"\bforget\s+(?:everything|all|the\s+(?:prompt|instructions?|rules?))\b"),
+     InjectionCategory.INSTRUCTION_OVERRIDE, InjectionConfidence.MEDIUM, "instruction_override/forget"),
+    (re.compile(r"\boverride\s+(?:your\s+)?(?:instructions?|guardrails?|rules?|safety)\b"),
+     InjectionCategory.INSTRUCTION_OVERRIDE, InjectionConfidence.MEDIUM, "instruction_override/override"),
+    # SYSTEM_PROMPT_EXFIL
+    (re.compile(r"\b(?:reveal|print|show|repeat|output|display)\s+(?:me\s+)?(?:your\s+|the\s+)?(?:system\s+)?(?:prompt|instructions?|rules?|guidelines?)\b"),
+     InjectionCategory.SYSTEM_PROMPT_EXFIL, InjectionConfidence.HIGH, "system_prompt_exfil/reveal_prompt"),
+    (re.compile(r"\bwhat\s+(?:are|were)\s+your\s+(?:instructions?|rules?|guidelines?|system\s+prompt)\b"),
+     InjectionCategory.SYSTEM_PROMPT_EXFIL, InjectionConfidence.MEDIUM, "system_prompt_exfil/what_are_your_rules"),
+    (re.compile(r"\b(?:everything|all\s+(?:the\s+)?text)\s+above\s+(?:this\s+(?:line|point)|here)\b"),
+     InjectionCategory.SYSTEM_PROMPT_EXFIL, InjectionConfidence.MEDIUM, "system_prompt_exfil/everything_above"),
+    # ROLE_HIJACK
+    (re.compile(r"\byou\s+are\s+now\b"),
+     InjectionCategory.ROLE_HIJACK, InjectionConfidence.MEDIUM, "role_hijack/you_are_now"),
+    (re.compile(r"\bact\s+as\s+(?:a\s+|an\s+)?"),
+     InjectionCategory.ROLE_HIJACK, InjectionConfidence.MEDIUM, "role_hijack/act_as"),
+    (re.compile(r"\bpretend\s+(?:to\s+be|you\s+are|that\s+you)\b"),
+     InjectionCategory.ROLE_HIJACK, InjectionConfidence.MEDIUM, "role_hijack/pretend"),
+    (re.compile(r"\bdeveloper\s+mode\b"),
+     InjectionCategory.ROLE_HIJACK, InjectionConfidence.HIGH, "role_hijack/developer_mode"),
+    (re.compile(r"\bdan\s+mode\b|\bdo\s+anything\s+now\b"),
+     InjectionCategory.ROLE_HIJACK, InjectionConfidence.HIGH, "role_hijack/dan"),
+    (re.compile(r"\bno\s+(?:restrictions?|limitations?|filters?|guardrails?)\b"),
+     InjectionCategory.ROLE_HIJACK, InjectionConfidence.MEDIUM, "role_hijack/no_restrictions"),
+    (re.compile(r"\bjailbreak\b"),
+     InjectionCategory.ROLE_HIJACK, InjectionConfidence.MEDIUM, "role_hijack/jailbreak"),
+    # DELIMITER_BREAKOUT
+    (re.compile(r"-{3,}\s*end\s+of\s+(?:prompt|system|instructions?)"),
+     InjectionCategory.DELIMITER_BREAKOUT, InjectionConfidence.HIGH, "delimiter_breakout/end_of_prompt"),
+    (re.compile(r"<\s*/?\s*(?:system|assistant|user|im_start|im_end)\s*>"),
+     InjectionCategory.DELIMITER_BREAKOUT, InjectionConfidence.HIGH, "delimiter_breakout/role_tag"),
+    (re.compile(r"\[\s*/?\s*(?:inst|sys|system)\s*\]"),
+     InjectionCategory.DELIMITER_BREAKOUT, InjectionConfidence.HIGH, "delimiter_breakout/inst_tag"),
+    (re.compile(r"`{3,}\s*(?:system|assistant)\b"),
+     InjectionCategory.DELIMITER_BREAKOUT, InjectionConfidence.MEDIUM, "delimiter_breakout/fenced_role"),
+    # SQL_ABUSE_INTENT
+    (re.compile(r"\bdrop\s+(?:the\s+)?(?:table|database|schema)\b"),
+     InjectionCategory.SQL_ABUSE_INTENT, InjectionConfidence.HIGH, "sql_abuse_intent/drop"),
+    (re.compile(r"\b(?:delete|remove)\s+(?:all|every)\s+(?:rows?|records?|users?|data)\b"),
+     InjectionCategory.SQL_ABUSE_INTENT, InjectionConfidence.HIGH, "sql_abuse_intent/delete_all"),
+    (re.compile(r"\btruncate\s+(?:table\s+)?\w"),
+     InjectionCategory.SQL_ABUSE_INTENT, InjectionConfidence.MEDIUM, "sql_abuse_intent/truncate"),
+    (re.compile(r"\bgrant\s+(?:me\s+)?(?:all|admin|superuser|root)\b"),
+     InjectionCategory.SQL_ABUSE_INTENT, InjectionConfidence.HIGH, "sql_abuse_intent/grant_admin"),
+    (re.compile(r"\b(?:disable|bypass|turn\s+off)\s+(?:rls|row[\s-]?level\s+security|read[\s-]?only|permissions?)\b"),
+     InjectionCategory.SQL_ABUSE_INTENT, InjectionConfidence.HIGH, "sql_abuse_intent/disable_security"),
+]
+
+
+def _elevate(confidence: InjectionConfidence) -> InjectionConfidence:
+    """Bump a confidence one notch, capped at HIGH (used for INDIRECT-source matches)."""
+    order = _CONFIDENCE_ORDER[confidence]
+    if order >= _CONFIDENCE_ORDER[InjectionConfidence.HIGH]:
+        return InjectionConfidence.HIGH
+    return next(c for c, o in _CONFIDENCE_ORDER.items() if o == order + 1)
+
+
+def _detect_segment(original: str, normalized: str, source: InjectionSource,
+                    removed: bool) -> List[Tuple[InjectionCategory, InjectionConfidence, str]]:
+    """Run all six families + the obfuscation signal over one normalized segment.
+    INDIRECT-source matches are elevated one confidence notch (instruction-like text in
+    data the user did not type is inherently more suspicious)."""
+    out: List[Tuple[InjectionCategory, InjectionConfidence, str]] = []
+    for pattern, category, confidence, label in _PATTERNS:
+        if pattern.search(normalized):
+            out.append((category, confidence, label))
+    obf = _detect_obfuscation(original, normalized, removed)
+    if obf is not None:
+        out.append((InjectionCategory.OBFUSCATION_EVASION, obf[0], obf[1]))
+    if source == InjectionSource.INDIRECT:
+        out = [(cat, _elevate(conf), label) for cat, conf, label in out]
+    return out
