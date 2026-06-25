@@ -18,7 +18,7 @@ Bu dosya yol haritasının **tek giriş noktasıdır**. Eksen: **Phase → Sprin
 | Durum | Kapsam | Detay |
 |---|---|---|
 | ✅ **Tamamlandı** | Sprint 0 → **26.5** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) kapandı; **Phase 7 devam ediyor** — 26.0 Permission Policy + 26.1 Tenant/Workspace Boundary + 26.2 Read-Only Enforcement + 26.3 Query Risk Classifier + 26.4 Sensitive Table/Column Policy + 26.5 PII/PHI Detection tamam. `docs/SPRINT-PR-LOG.md` |
-| ▶️ **Sıradaki** | **Phase 7 · Sprint 26.6** | Audit Event Contract (`docs/PLANNED-SPRINTS.md`) |
+| ▶️ **Sıradaki** | **Phase 7 · Sprint 26.9** | Result-Set Privacy & Row/Size Limits (`docs/PLANNED-SPRINTS.md`) |
 | 🗓️ **Planlanan** | **Phase 7 → 15** (Sprint 26.4 → 34.7) | `docs/PLANNED-SPRINTS.md` |
 
 ### Planlanan fazlar (durum)
