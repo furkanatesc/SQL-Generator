@@ -67,6 +67,19 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from app.security._sql_text import to_executable_core as _to_executable_core
+from app.security._pii_value_scan import (
+    SQLDataClass,
+    SQLPiiPhiCategory,
+    SQLPiiPhiConfidence,
+    _CATEGORY_DATA_CLASS,
+    _CONFIDENCE_ORDER,
+    _luhn_ok,
+    scan_value_categories,
+)
+
+# Behavior-preserving alias: 26.5's literal-value scan is now the shared helper.
+# Retained so existing imports of `_detect_literal_matches` keep working.
+_detect_literal_matches = scan_value_categories
 
 SQL_PII_PHI_DETECTION_CONTRACT_VERSION = "sql_pii_phi_detection_contract_v1"
 
@@ -76,35 +89,10 @@ class SQLPiiPhiDetectionContractError(ValueError):
     pass
 
 
-class SQLDataClass(str, Enum):
-    PII = "pii"   # personal data
-    PHI = "phi"   # protected health information (HIPAA-style)
-
-
-class SQLPiiPhiCategory(str, Enum):
-    EMAIL = "email"
-    PHONE = "phone"
-    SSN = "ssn"
-    CREDIT_CARD = "credit_card"
-    IBAN = "iban"
-    DATE_OF_BIRTH = "date_of_birth"
-    PERSON_NAME = "person_name"
-    POSTAL_ADDRESS = "postal_address"
-    MEDICAL_RECORD_NUMBER = "medical_record_number"
-    DIAGNOSIS = "diagnosis"
-    HEALTH_GENERIC = "health_generic"
-
-
 class SQLPiiPhiDetectionSource(str, Enum):
     DECLARED = "declared"                 # operator-declared map (sound)
     IDENTIFIER_NAME = "identifier_name"   # name heuristic (best-effort)
     LITERAL_VALUE = "literal_value"       # value-format heuristic (best-effort)
-
-
-class SQLPiiPhiConfidence(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
 
 
 class SQLPiiPhiReasonCode(str, Enum):
@@ -118,30 +106,6 @@ class SQLPiiPhiEvaluatedVia(str, Enum):
     EXPLICIT_REFERENCES = "explicit_references"  # caller-supplied identifier lists (sound view)
     SQL_TEXT = "sql_text"                        # heuristics over the SQL string
     NONE = "none"                                # no usable input
-
-
-# Each category's data class (PII vs PHI). The result's has_phi flag is True iff any
-# matched category maps to PHI; PHI dominates the reason code.
-_CATEGORY_DATA_CLASS: Dict[SQLPiiPhiCategory, SQLDataClass] = {
-    SQLPiiPhiCategory.EMAIL: SQLDataClass.PII,
-    SQLPiiPhiCategory.PHONE: SQLDataClass.PII,
-    SQLPiiPhiCategory.SSN: SQLDataClass.PII,
-    SQLPiiPhiCategory.CREDIT_CARD: SQLDataClass.PII,
-    SQLPiiPhiCategory.IBAN: SQLDataClass.PII,
-    SQLPiiPhiCategory.DATE_OF_BIRTH: SQLDataClass.PII,
-    SQLPiiPhiCategory.PERSON_NAME: SQLDataClass.PII,
-    SQLPiiPhiCategory.POSTAL_ADDRESS: SQLDataClass.PII,
-    SQLPiiPhiCategory.MEDICAL_RECORD_NUMBER: SQLDataClass.PHI,
-    SQLPiiPhiCategory.DIAGNOSIS: SQLDataClass.PHI,
-    SQLPiiPhiCategory.HEALTH_GENERIC: SQLDataClass.PHI,
-}
-
-# Confidence ordering (low -> high). The result's highest_confidence is the MAX.
-_CONFIDENCE_ORDER: Dict[SQLPiiPhiConfidence, int] = {
-    SQLPiiPhiConfidence.LOW: 0,
-    SQLPiiPhiConfidence.MEDIUM: 1,
-    SQLPiiPhiConfidence.HIGH: 2,
-}
 
 
 def _normalize_id(value: str) -> str:
@@ -329,55 +293,6 @@ def _detect_name_matches(identifiers: Set[str]) -> List[Tuple[SQLPiiPhiCategory,
         for pattern, category in _NAME_PATTERNS:
             if pattern.search(ident):
                 out.append((category, ident))
-    return out
-
-
-# --- Layer C: literal-value detection over the RAW sql (best-effort) ---
-
-_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-_SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
-_IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")
-# Loose phone: an optional + then a run of digits/space/()-.- at least 9 long.
-_PHONE_RE = re.compile(r"(?<![\w.])\+?\d(?:[\d\s().-]{7,})\d(?![\w.])")
-# A 13-19 "digit" run allowing single space/dash separators; Luhn-checked after.
-_CARD_CANDIDATE_RE = re.compile(r"\b\d(?:[ -]?\d){12,18}\b")
-
-
-def _luhn_ok(digits: str) -> bool:
-    """Standard Luhn checksum. Only 13-19 all-digit strings can pass."""
-    if not digits.isdigit() or not (13 <= len(digits) <= 19):
-        return False
-    total = 0
-    for i, ch in enumerate(reversed(digits)):
-        d = int(ch)
-        if i % 2 == 1:
-            d *= 2
-            if d > 9:
-                d -= 9
-        total += d
-    return total % 10 == 0
-
-
-def _detect_literal_matches(sql: str) -> List[Tuple[SQLPiiPhiCategory, SQLPiiPhiConfidence]]:
-    """Value-format detections over the raw SQL. Deterministic, value-free output.
-
-    Over-detection is intentional (a signal, never a gate): e.g. an SSN literal also
-    looks like a phone number, so both may be emitted; a long Luhn-valid order number
-    may read as a card. No matched value is ever returned or stored.
-    """
-    out: List[Tuple[SQLPiiPhiCategory, SQLPiiPhiConfidence]] = []
-    if _EMAIL_RE.search(sql):
-        out.append((SQLPiiPhiCategory.EMAIL, SQLPiiPhiConfidence.MEDIUM))
-    if _SSN_RE.search(sql):
-        out.append((SQLPiiPhiCategory.SSN, SQLPiiPhiConfidence.MEDIUM))
-    if _IBAN_RE.search(sql):
-        out.append((SQLPiiPhiCategory.IBAN, SQLPiiPhiConfidence.MEDIUM))
-    for m in _CARD_CANDIDATE_RE.finditer(sql):
-        if _luhn_ok(re.sub(r"[ -]", "", m.group(0))):
-            out.append((SQLPiiPhiCategory.CREDIT_CARD, SQLPiiPhiConfidence.HIGH))
-            break
-    if _PHONE_RE.search(sql):
-        out.append((SQLPiiPhiCategory.PHONE, SQLPiiPhiConfidence.LOW))
     return out
 
 

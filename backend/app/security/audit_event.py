@@ -66,6 +66,10 @@ from app.security.prompt_injection_defense import (
     PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION, PromptInjectionDefenseResult,
     InjectionDisposition, InjectionConfidence,
 )
+from app.security.result_set_privacy_limits import (
+    RESULT_SET_PRIVACY_LIMITS_CONTRACT_VERSION, ResultSetPrivacyLimitsResult,
+    ResultSetLimitDisposition,
+)
 
 AUDIT_EVENT_CONTRACT_VERSION = "audit_event_contract_v1"
 
@@ -86,6 +90,7 @@ class AuditCategory(str, Enum):
     PII_PHI = "pii_phi"                     # 26.5
     APPROVAL = "approval"                   # 26.7
     PROMPT_INJECTION = "prompt_injection"   # 26.8
+    RESULT_SET_PRIVACY = "result_set_privacy"   # 26.9
 
 
 class AuditOutcome(str, Enum):
@@ -550,6 +555,60 @@ def from_prompt_injection(result: PromptInjectionDefenseResult, *, event_id: str
         actor=actor, resource=resource,
         reason_code=result.reason_code.value, reason=result.reason,
         contract_source=PROMPT_INJECTION_DEFENSE_CONTRACT_VERSION,
+        sql_sha256=None,
+        details=result.to_dict(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Result-set privacy/limits -> audit outcome/severity (26.9 interlock)
+# ---------------------------------------------------------------------------
+
+_RESULT_SET_LIMIT_SEVERITY: Dict[ResultSetLimitDisposition, AuditSeverity] = {
+    ResultSetLimitDisposition.DENY: AuditSeverity.MEDIUM,
+    ResultSetLimitDisposition.TRUNCATE: AuditSeverity.LOW,
+    ResultSetLimitDisposition.ALLOW: AuditSeverity.INFO,
+}
+
+
+def _result_set_privacy_severity(result: ResultSetPrivacyLimitsResult) -> AuditSeverity:
+    """26.5 privacy matrix over the result's privacy rollup: PHI+HIGH -> CRITICAL,
+    PHI -> HIGH, PII+HIGH -> MEDIUM, PII -> LOW, none -> INFO."""
+    if not result.privacy_categories:
+        return AuditSeverity.INFO
+    high = result.highest_privacy_confidence == SQLPiiPhiConfidence.HIGH
+    if result.has_phi:
+        return AuditSeverity.CRITICAL if high else AuditSeverity.HIGH
+    return AuditSeverity.MEDIUM if high else AuditSeverity.LOW
+
+
+def from_result_set(result: ResultSetPrivacyLimitsResult, *, event_id: str,
+                    occurred_at: str, actor: AuditActor, resource: AuditResource,
+                    prev: Optional[AuditEvent] = None) -> AuditEvent:
+    """Normalize a 26.9 result-set privacy/limits result (RESULT_SET_PRIVACY). A
+    hybrid: a size gate plus an advisory privacy signal. outcome: DENY -> DENIED;
+    else TRUNCATE or any privacy match -> FLAGGED; else ALLOWED. severity =
+    max(limit severity, privacy severity). 26.9 inspects a result set not SQL, so
+    sql_sha256 is None; details carry the secret-free to_dict()."""
+    limit_severity = _RESULT_SET_LIMIT_SEVERITY[result.limit_disposition]
+    privacy_severity = _result_set_privacy_severity(result)
+    severity = max((limit_severity, privacy_severity), key=lambda s: _SEVERITY_ORDER[s])
+
+    has_privacy = bool(result.privacy_categories)
+    if result.limit_disposition == ResultSetLimitDisposition.DENY:
+        outcome = AuditOutcome.DENIED
+    elif result.limit_disposition == ResultSetLimitDisposition.TRUNCATE or has_privacy:
+        outcome = AuditOutcome.FLAGGED
+    else:
+        outcome = AuditOutcome.ALLOWED
+
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.RESULT_SET_PRIVACY, action="evaluate_result_set",
+        outcome=outcome, severity=severity,
+        actor=actor, resource=resource,
+        reason_code=result.limit_reason_code.value, reason=result.reason,
+        contract_source=RESULT_SET_PRIVACY_LIMITS_CONTRACT_VERSION,
         sql_sha256=None,
         details=result.to_dict(),
     )
