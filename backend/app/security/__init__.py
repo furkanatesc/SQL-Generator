@@ -87,6 +87,7 @@ from .audit_event import (
     from_pii_phi,
     from_approval,  # 26.7 interlock
     from_prompt_injection,  # 26.8 interlock
+    from_result_set,  # 26.9 interlock
 )
 from .approval_workflow import (
     APPROVAL_WORKFLOW_CONTRACT_VERSION,
@@ -113,6 +114,17 @@ from .prompt_injection_defense import (
     PromptInjectionDefenseRequest,
     PromptInjectionDefenseResult,
     PromptInjectionDefenseContract,
+)
+from .result_set_privacy_limits import (
+    RESULT_SET_PRIVACY_LIMITS_CONTRACT_VERSION,
+    ResultSetPrivacyLimitsContractError,
+    ResultSetLimitDisposition,
+    ResultSetLimitReasonCode,
+    ResultSetLimitPolicy,
+    ResultSetColumnPrivacy,
+    ResultSetPrivacyLimitsRequest,
+    ResultSetPrivacyLimitsResult,
+    ResultSetPrivacyLimitsContract,
 )
 
 __all__ = [
@@ -192,6 +204,7 @@ __all__ = [
     "from_pii_phi",
     "from_approval",  # 26.7 interlock
     "from_prompt_injection",  # 26.8 interlock
+    "from_result_set",  # 26.9 interlock
     "APPROVAL_WORKFLOW_CONTRACT_VERSION",
     "ApprovalWorkflowContractError",
     "ApprovalState",
@@ -213,4 +226,13 @@ __all__ = [
     "PromptInjectionDefenseRequest",
     "PromptInjectionDefenseResult",
     "PromptInjectionDefenseContract",
+    "RESULT_SET_PRIVACY_LIMITS_CONTRACT_VERSION",
+    "ResultSetPrivacyLimitsContractError",
+    "ResultSetLimitDisposition",
+    "ResultSetLimitReasonCode",
+    "ResultSetLimitPolicy",
+    "ResultSetColumnPrivacy",
+    "ResultSetPrivacyLimitsRequest",
+    "ResultSetPrivacyLimitsResult",
+    "ResultSetPrivacyLimitsContract",
 ]

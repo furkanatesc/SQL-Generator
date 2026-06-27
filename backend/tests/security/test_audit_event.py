@@ -26,8 +26,9 @@ def test_categories_cover_all_six_sources():
     assert {c.value for c in AuditCategory} == {
         "authz_permission", "tenant_boundary", "read_only",
         "query_risk", "sensitive_data", "pii_phi",
-        "approval",           # 26.7
-        "prompt_injection",   # 26.8
+        "approval",             # 26.7
+        "prompt_injection",     # 26.8
+        "result_set_privacy",   # 26.9
     }
 
 
@@ -667,3 +668,67 @@ def test_from_prompt_injection_is_chain_linkable_and_secret_free():
                                actor=_PI_ACTOR, resource=_PI_RESOURCE)
     assert verify_chain([ev]) is None
     assert "drop the table" not in _json.dumps(ev.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# Task 6 (26.9): Audit interlock — AuditCategory.RESULT_SET_PRIVACY + from_result_set
+# ---------------------------------------------------------------------------
+from app.security.audit_event import from_result_set, AuditCategory, AuditOutcome, AuditSeverity
+from app.security.result_set_privacy_limits import (
+    RESULT_SET_PRIVACY_LIMITS_CONTRACT_VERSION,
+    ResultSetPrivacyLimitsRequest,
+    ResultSetLimitPolicy,
+    ResultSetPrivacyLimitsContract,
+)
+from app.security.audit_event import AuditActor, AuditResource
+
+
+def _rs_result(columns, rows, **policy_kw):
+    req = ResultSetPrivacyLimitsRequest(
+        version=RESULT_SET_PRIVACY_LIMITS_CONTRACT_VERSION,
+        columns=tuple(columns), rows=tuple(rows),
+        policy=ResultSetLimitPolicy(**policy_kw))
+    return ResultSetPrivacyLimitsContract().evaluate(req)
+
+
+def _actor_resource():
+    return (AuditActor(subject="svc"), AuditResource(type="result_set", id="q1"))
+
+
+def test_from_result_set_allow_clean_is_allowed_info():
+    actor, resource = _actor_resource()
+    res = _rs_result(("id",), ((1,), (2,)))
+    ev = from_result_set(res, event_id="e1", occurred_at="2026-06-26T00:00:00Z",
+                         actor=actor, resource=resource)
+    assert ev.category == AuditCategory.RESULT_SET_PRIVACY
+    assert ev.outcome == AuditOutcome.ALLOWED
+    assert ev.severity == AuditSeverity.INFO
+    assert ev.sql_sha256 is None
+
+
+def test_from_result_set_deny_is_denied():
+    actor, resource = _actor_resource()
+    res = _rs_result(("a", "b", "c"), ((1, 2, 3),), max_columns=2)
+    ev = from_result_set(res, event_id="e2", occurred_at="2026-06-26T00:00:00Z",
+                         actor=actor, resource=resource)
+    assert ev.outcome == AuditOutcome.DENIED
+    assert ev.severity == AuditSeverity.MEDIUM    # limit DENY -> MEDIUM, no privacy
+
+
+def test_from_result_set_truncate_or_privacy_is_flagged():
+    actor, resource = _actor_resource()
+    res = _rs_result(("id",), ((1,), (2,), (3,)), max_rows=2, truncate_allowed=True)
+    ev = from_result_set(res, event_id="e3", occurred_at="2026-06-26T00:00:00Z",
+                         actor=actor, resource=resource)
+    assert ev.outcome == AuditOutcome.FLAGGED
+
+
+def test_from_result_set_phi_escalates_severity_and_is_secret_free():
+    actor, resource = _actor_resource()
+    secret = "patient ssn 123-45-6789"
+    # SSN -> PII MEDIUM; ALLOW limit. outcome FLAGGED (privacy present), severity LOW.
+    res = _rs_result(("notes",), ((secret,),))
+    ev = from_result_set(res, event_id="e4", occurred_at="2026-06-26T00:00:00Z",
+                         actor=actor, resource=resource)
+    assert ev.outcome == AuditOutcome.FLAGGED
+    assert "123-45-6789" not in json.dumps(ev.to_dict())
