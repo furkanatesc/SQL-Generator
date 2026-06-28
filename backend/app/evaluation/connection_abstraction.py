@@ -43,15 +43,14 @@ class SQLConnectionSecretRef:
             raise SQLConnectionAbstractionContractError("key is too long to be a valid identifier")
         if any(c.isspace() for c in self.key):
             raise SQLConnectionAbstractionContractError("key cannot contain whitespace")
-        if "://" in self.key or "://" in self.provider:
-            raise SQLConnectionAbstractionContractError("key/provider cannot contain URLs or connection strings")
-
-        key_lower = self.key.lower()
-        for pattern in ["password=", "token=", "secret=", "key="]:
-            if pattern in key_lower:
-                raise SQLConnectionAbstractionContractError(
-                    "key cannot contain assignment patterns suggesting raw secret values"
-                )
+        # Lazy import breaks the circular dependency:
+        # connection_abstraction → app.security (pkg __init__) → connection_credential_vault
+        #                        → connection_abstraction  (cycle)
+        from app.security._secret_pattern_scan import scan_secret_patterns  # noqa: PLC0415
+        if scan_secret_patterns(self.provider) or scan_secret_patterns(self.key):
+            raise SQLConnectionAbstractionContractError(
+                "key/provider cannot contain URLs, connection strings, or raw secret values"
+            )
 
 
 @dataclass(frozen=True)
