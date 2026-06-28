@@ -126,6 +126,32 @@ from .result_set_privacy_limits import (
     ResultSetPrivacyLimitsResult,
     ResultSetPrivacyLimitsContract,
 )
+# 26.10 connection credential vault — LAZY (PEP 562). Eager import here would pull
+# app.evaluation (DB adapters/drivers, urllib) into every `app.security` import,
+# breaking the driver-isolation invariant guarded by the forbidden-module tests
+# (test_sql_read_only_enforcement / test_sql_query_risk_classifier). Defer to access.
+_LAZY_CREDENTIAL_VAULT = {
+    "CONNECTION_CREDENTIAL_VAULT_CONTRACT_VERSION",
+    "ConnectionCredentialVaultContractError",
+    "CredentialResolutionDecision",
+    "CredentialCallerPurpose",
+    "CredentialVaultReasonCode",
+    "CredentialLeakSignal",
+    "ConnectionCredentialVaultPolicy",
+    "ConnectionCredentialVaultRequest",
+    "ConnectionCredentialVaultResult",
+    "evaluate_connection_credential_vault",
+}
+
+
+def __getattr__(name):
+    if name in _LAZY_CREDENTIAL_VAULT:
+        from . import connection_credential_vault as _ccv
+        return _ccv.evaluate if name == "evaluate_connection_credential_vault" else getattr(_ccv, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+from .audit_event import from_credential_vault
 
 __all__ = [
     "SQL_PERMISSION_POLICY_CONTRACT_VERSION",
@@ -235,4 +261,15 @@ __all__ = [
     "ResultSetPrivacyLimitsRequest",
     "ResultSetPrivacyLimitsResult",
     "ResultSetPrivacyLimitsContract",
+    "CONNECTION_CREDENTIAL_VAULT_CONTRACT_VERSION",
+    "ConnectionCredentialVaultContractError",
+    "CredentialResolutionDecision",
+    "CredentialCallerPurpose",
+    "CredentialVaultReasonCode",
+    "CredentialLeakSignal",
+    "ConnectionCredentialVaultPolicy",
+    "ConnectionCredentialVaultRequest",
+    "ConnectionCredentialVaultResult",
+    "evaluate_connection_credential_vault",
+    "from_credential_vault",
 ]

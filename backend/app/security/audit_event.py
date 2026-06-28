@@ -34,7 +34,7 @@ import json
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence
 
 from app.security.sql_permission_policy import (
     SQL_PERMISSION_POLICY_CONTRACT_VERSION, SQLPermissionPolicyResult,
@@ -70,6 +70,10 @@ from app.security.result_set_privacy_limits import (
     RESULT_SET_PRIVACY_LIMITS_CONTRACT_VERSION, ResultSetPrivacyLimitsResult,
     ResultSetLimitDisposition,
 )
+if TYPE_CHECKING:
+    from app.security.connection_credential_vault import (
+        ConnectionCredentialVaultResult,
+    )
 
 AUDIT_EVENT_CONTRACT_VERSION = "audit_event_contract_v1"
 
@@ -91,6 +95,7 @@ class AuditCategory(str, Enum):
     APPROVAL = "approval"                   # 26.7
     PROMPT_INJECTION = "prompt_injection"   # 26.8
     RESULT_SET_PRIVACY = "result_set_privacy"   # 26.9
+    CONNECTION_CREDENTIAL = "connection_credential"   # 26.10
 
 
 class AuditOutcome(str, Enum):
@@ -609,6 +614,43 @@ def from_result_set(result: ResultSetPrivacyLimitsResult, *, event_id: str,
         actor=actor, resource=resource,
         reason_code=result.limit_reason_code.value, reason=result.reason,
         contract_source=RESULT_SET_PRIVACY_LIMITS_CONTRACT_VERSION,
+        sql_sha256=None,
+        details=result.to_dict(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Connection credential vault -> audit outcome/severity (26.10 interlock)
+# ---------------------------------------------------------------------------
+
+def from_credential_vault(result: "ConnectionCredentialVaultResult", *, event_id: str,
+                          occurred_at: str, actor: AuditActor, resource: AuditResource,
+                          prev: Optional[AuditEvent] = None) -> AuditEvent:
+    """Normalize a 26.10 credential-vault result (CONNECTION_CREDENTIAL). A
+    resolution gate: ALLOW -> ALLOWED/INFO; DENY -> DENIED, severity HIGH when a
+    secret leak was suspected else MEDIUM. Governs a secret reference, not SQL,
+    so sql_sha256 is None; details carry the secret-free to_dict()."""
+    # Lazy import breaks the circular dependency:
+    # connection_abstraction → app.security (pkg init) → audit_event → connection_credential_vault
+    #                        → connection_abstraction  (cycle)
+    from app.security.connection_credential_vault import (
+        CredentialResolutionDecision,
+        CONNECTION_CREDENTIAL_VAULT_CONTRACT_VERSION,
+    )
+    if result.decision == CredentialResolutionDecision.ALLOW:
+        outcome = AuditOutcome.ALLOWED
+        severity = AuditSeverity.INFO
+    else:
+        outcome = AuditOutcome.DENIED
+        severity = AuditSeverity.HIGH if result.leak_signal.leak_detected else AuditSeverity.MEDIUM
+
+    return link(
+        prev, event_id=event_id, occurred_at=occurred_at,
+        category=AuditCategory.CONNECTION_CREDENTIAL, action="resolve_credential",
+        outcome=outcome, severity=severity,
+        actor=actor, resource=resource,
+        reason_code=result.reason_code.value, reason=result.reason_code.value,
+        contract_source=CONNECTION_CREDENTIAL_VAULT_CONTRACT_VERSION,
         sql_sha256=None,
         details=result.to_dict(),
     )

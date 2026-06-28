@@ -29,6 +29,7 @@ def test_categories_cover_all_six_sources():
         "approval",             # 26.7
         "prompt_injection",     # 26.8
         "result_set_privacy",   # 26.9
+        "connection_credential",  # 26.10
     }
 
 
