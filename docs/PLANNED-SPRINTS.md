@@ -51,11 +51,14 @@ governance.
 | 26.8 | Prompt-Injection / NL Abuse Defense | ✅ Tamam · *kaynak-duyarlı (source-aware) prompt-injection detector (sinyal, gate değil; secret-free); altı örüntü ailesi (instruction override, role hijack, delimiter/system-prompt spoof, exfiltration, encoded payload, tool/agent abuse) + per-segment tespit; NFKC normalizasyonu + Türkçe-güvenli obfuscation sinyali; Detector.evaluate + kaynak-duyarlı disposition policy; audit interlock (AuditCategory.PROMPT_INJECTION + from_prompt_injection)* |
 | 26.9 | Result-Set Privacy & Row/Size Limits | ✅ Tamam · *post-execution sonuç kümesi üzerinde ilk contract; hibrit limit GATE (ALLOW/TRUNCATE/DENY — max_rows/max_bytes/max_columns + truncate_allowed) + advisory kolon-seviyesi PII/PHI privacy sinyali (26.5 value-scan reuse); audit interlock (RESULT_SET_PRIVACY + from_result_set); PHI yolu belgeli-inert (yalnız PII üretilir)* |
 | 26.10 | Connection Credential Vault (server-side) | ✅ Tamam · *saf, deterministik, secret-free, I/O-free governance contract: secret_ref resolve gate + ham-secret sızıntı advisory sinyali; 6 boyutlu deterministik öncelik (leak→auth_mode→provider→environment→tenant→purpose→ALLOW), 7 reason code; ham secret'ı asla tutmaz/çözmez (referans+karar); audit interlock (CONNECTION_CREDENTIAL + from_credential_vault); PEP 562 lazy export ile driver-isolation korunur* |
-| 26.11 | Policy / Security Eval | ⏳ Sıradaki |
+| 26.11 | Policy / Security Eval | ✅ Tamam · *saf, deterministik, secret-free, I/O-free meta-evaluation harness 26.0–26.10 contract'ları üzerinde (app.evaluation'da yaşar → app.security driver-free kalır); normalize SecurityEvalOutcome + 11 per-contract projector (enum-purity invariant: yalnız enum .value) + 22 in-code blessed golden case (gerçek contract çağrısı) + exact-match drift gate + enum-introspection coverage (universe − declared exclusions) + PASS/WARN/FAIL aggregator (SQLEvalGate'i aynalar; case mismatch→FAIL, coverage gap→WARN); audit interlock/JSON loader bilinçli kapsam-dışı; driver-isolation invariant doğrulandı* |
 
 > ⚠️ Phase 14 (SaaS) ile örtüşme: tenant boundary (26.1 ↔ 33.0), RBAC/permission
 > (26.0 ↔ 33.2), audit (26.6 ↔ 33.6). Phase 7 = **backend sözleşme/politika
 > katmanı**, Phase 14 = **SaaS/UI katmanı** olarak ayrılmalıdır.
+
+> ✅ **Phase 7 (Security & Governance) kapandı** (26.0–26.11 tamam). Sıradaki ana
+> faz: **Phase 8 — Observability & Debuggability** (28.x).
 
 ---
 
