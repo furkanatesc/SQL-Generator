@@ -58,7 +58,7 @@ governance.
 > katmanı**, Phase 14 = **SaaS/UI katmanı** olarak ayrılmalıdır.
 
 > ✅ **Phase 7 (Security & Governance) kapandı** (26.0–26.11 tamam). Sıradaki ana
-> faz: **Phase 8 — Observability & Debuggability** (28.x).
+> faz: **Phase 8 — Observability & Debuggability** (27.x).
 
 ---
 
@@ -68,7 +68,7 @@ context seçildi?", "hangi policy blocked etti?" sorularına cevap verebilmek.
 
 | Sprint | İş |
 |---|---|
-| 27.0 | End-to-End Trace Contract |
+| 27.0 | End-to-End Trace Contract | ✅ Tamam · *saf, deterministik, secret-free, I/O-free EndToEndTrace sözleşmesi — pipeline per-stage çıktılarını tek request_id altında ilişkilendirir. Typed envelope (EndToEndTrace) + ordered TraceSpan tuple (hibrit: stage başına typed detail + generic attributes escape hatch); enums + frozen records + cross-field __post_init__ invariant'lar + JSON-safe to_payload; derive_terminal precedence (execution blocked/rejected > ilk ERROR span > COMPLETED) + build_end_to_end_trace assembler; duck-typed build_execution_span + build_security_span (getattr off Any; empty/None→SKIPPED) → app.trace.* dışına import yok, driver-isolation korunur. Secret-free: yalnız sql_sha256 + reason/symbol string + redacted error payload'a ulaşır. Kalan stage builder'ları + live wiring → 27.1. SDD (5 görev + 2 pre-merge minor fix, her biri TDD + task review; opus whole-branch review merge-ready, 0 Critical/Important). Full suite 1998 passed/9 skipped. `backend/app/trace/end_to_end_trace{,_builders}.py`* |
 | 27.1 | Prompt / Retrieval / Schema / Execution Trace Unification |
 | 27.2 | Error Taxonomy v2 |
 | 27.3 | User Feedback Capture |
