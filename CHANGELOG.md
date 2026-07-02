@@ -137,6 +137,23 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   metadata → sonraki sprint). Gerçek parser/EXPLAIN, execution, sensitive/PII
   policy, audit, approval, API/UI, tenant/RBAC/AuthN bu sprintte **yok**.
 
+### Fixed
+- **Şema ilişki graph'ı görünürlük düzeltmesi** (2026-07-02 · ara fix, sprint
+  dışı): `SchemaManager.vue`'daki D3 graph'ı top-N hub seçimini *izole tablolar
+  dahil tüm tablolar* üzerinden yapıp yalnızca iki ucu da seçimde kalan
+  edge'leri çizdiğinden, varsayılan `maxNodesLimit=5` ile örnek şemada 93
+  ilişkinin yalnızca **3'ü** görünüyordu; "limitsiz" seçeneği ise 2175 tablonun
+  2073'ü izole olmasına rağmen hepsini render edip tarayıcıyı donduruyordu
+  (`docs/TECH-DEBT.md` #2'nin kökeni). Seçim mantığı saf
+  `frontend/src/utils/graphSelection.ts` modülüne çıkarıldı: izole tablolar hiç
+  çizilmez, limit yalnızca bağlantılı tablolar arasında uygulanır, varsayılan
+  `0 = tüm bağlantılı tablolar` oldu (örnek şemada 102 tablo + **93/93**
+  ilişki). Graph paneline render istatistiği rozeti eklendi; edge objeleri D3
+  `forceLink` mutasyonuna karşı kopyalanıyor; ilişki hiç yoksa boş-durum mesajı
+  artık doğru tetikleniyor. Test: `frontend/tests/graphSelection.test.ts`
+  (8 test, `node --experimental-strip-types`). Kalan borç (çok büyük *bağlantılı*
+  graph'lar için WebGL/virtualized render) `docs/TECH-DEBT.md` #2'de.
+
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
   Sprint 25.8 ile read-only `SELECT` execution **yalnızca local Docker** ortamında
