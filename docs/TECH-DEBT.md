@@ -48,16 +48,31 @@ fingerprint'e dahil edildi.
 
 ---
 
-## 2. D3 Graph UI Performans Limiti (maxNodesLimit = 5) — AÇIK
+## 2. D3 Graph UI Performans Limiti (maxNodesLimit = 5) — BÜYÜK ÖLÇÜDE ÇÖZÜLDÜ (2026-07-02 ara fix)
 
-**Durum:** Tarayıcı çökmesini engellemek için `SchemaManager.vue`'da
-`maxNodesLimit` varsayılan olarak **5 tabloya** sınırlandırılmıştır
-(`frontend/src/components/SchemaManager.vue:28`). UI üzerinden manuel olarak
-değiştirilebilir (`0 = limitsiz`).
+**Eski durum:** Tarayıcı çökmesini engellemek için `maxNodesLimit` varsayılan
+olarak **5 tabloya** sınırlandırılmıştı; üstelik top-N seçimi *izole tablolar
+dahil tüm tablolar* üzerinden yapılıp yalnızca iki ucu da seçimde kalan edge'ler
+çizildiğinden, örnek şemada (2175 tablo / 93 FK) ilişkilerin yalnızca **3/93**'ü
+görünüyordu. "Limitsiz" seçeneği ise 2073'ü tamamen izole olan 2175 node'u
+render ederek tarayıcıyı kilitliyordu — donmanın asıl kaynağı buydu.
 
-**Teknik borç:** Bu limit, "800+ tablolu kurumsal şema" iddiasıyla çelişir. Büyük
-şemalarda D3 force-directed graph render'ı tarayıcıyı kilitlemektedir. Kalıcı
-çözüm için kademeli yükleme (progressive/virtualized rendering), WebGL tabanlı
-graph kütüphanesi veya sunucu tarafı layout hesaplaması değerlendirilmelidir.
+**Uygulanan çözüm (ara fix, 2026-07-02):** Node/edge seçim mantığı saf
+`frontend/src/utils/graphSelection.ts` modülüne çıkarıldı. İzole (ilişkisiz)
+tablolar artık **hiç çizilmiyor**; limit yalnızca bağlantılı tablolar arasında
+uygulanıyor ve varsayılan `0 = tüm bağlantılı tablolar` oldu (örnek şemada 102
+tablo + 93/93 ilişki, akıcı render). Graph paneli render istatistiği gösteriyor
+("X/Y bağlantılı tablo · Z ilişki · N izole tablo gizlendi"). Test:
+`frontend/tests/graphSelection.test.ts`.
 
-*İlgili Dosya:* `frontend/src/components/SchemaManager.vue`
+**Kalan borç (Phase 12 · 31.x UI/UX Production Layer'a aday):** *Bağlantılı*
+tablo sayısının da binlere ulaştığı şemalarda D3 force-directed SVG render yine
+zorlanır; kalıcı çözüm için kademeli yükleme (progressive/virtualized
+rendering), WebGL tabanlı graph kütüphanesi veya sunucu tarafı layout
+hesaplaması değerlendirilmelidir. `Node Limiti` girişi bu senaryo için kaçış
+kapısı olarak korunmuştur. Ayrıca frontend'de test framework yok;
+`graphSelection` testleri şimdilik `node --experimental-strip-types` ile koşulan
+tek dosyalık script'tir (vitest kurulumu ayrı bir kalem).
+
+*İlgili Dosyalar:* `frontend/src/components/SchemaManager.vue`,
+`frontend/src/utils/graphSelection.ts`, `frontend/tests/graphSelection.test.ts`
