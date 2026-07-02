@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue';
 import { apiService } from '../services/api';
 import * as d3 from 'd3';
 import PlanetDbSelector from './PlanetDbSelector.vue';
+import { selectGraphData } from '../utils/graphSelection';
 
 interface NodeItem extends d3.SimulationNodeDatum {
   id: string;
@@ -25,7 +26,8 @@ const showIncoming = ref(false);
 const isHidingElements = ref(false);
 const isGraphExpanded = ref(false);
 const isPhysicsActive = ref(true);
-const maxNodesLimit = ref(5); // GECICI COZUM: Tarayıcı performansını korumak için geçici olarak sadece 5 tablo render ediliyor (0 = Limitsiz)
+const maxNodesLimit = ref(0); // 0 = tüm bağlantılı tablolar. İzole tablolar hiç çizilmediği için limit yalnızca çok yoğun şemalarda gerekir
+const graphStats = ref<{ rendered: number; totalConnected: number; edges: number; isolated: number } | null>(null);
 const visibleTablesLimit = ref(50); // Sol paneldeki tabloların lazy-loading limiti
 const visibleRelationsLimit = ref(50); // Sağ paneldeki ilişkilerin lazy-loading limiti
 
@@ -395,33 +397,27 @@ const initGraph = () => {
   const svg = d3.select(svgRef.value);
   svg.selectAll('*').remove();
 
-  // D3 mutasyonundan korumak için derin kopya alalım, ve maxNodesLimit ile sınırlandıralım
-  const MAX_NODES = maxNodesLimit.value;
-  
-  // Önce en çok bağlantısı olan (hub) tabloları bulalım
-  const nodeDegrees: Record<string, number> = {};
-  schema.value.graph.edges.forEach((edge: any) => {
-    nodeDegrees[edge.source] = (nodeDegrees[edge.source] || 0) + 1;
-    nodeDegrees[edge.target] = (nodeDegrees[edge.target] || 0) + 1;
-  });
+  // Sadece bağlantılı (ilişkisi olan) tabloları çiz; izole tablolar graph'a bilgi
+  // katmadığı gibi binlerce tabloda tarayıcıyı donduruyordu. Limit, bağlantılı
+  // tablolar arasından en çok ilişkisi olan (hub) tabloları seçer.
+  const selection = selectGraphData(
+    schema.value.graph.nodes,
+    schema.value.graph.edges,
+    maxNodesLimit.value
+  );
 
-  // Tabloları bağlantı sayısına göre sıralayalım
-  const sortedNodes = [...schema.value.graph.nodes].sort((a, b) => (nodeDegrees[b] || 0) - (nodeDegrees[a] || 0));
-  
-  // Eğer MAX_NODES 0'dan büyükse sınırla, değilse (0 veya boşsa) hepsini al
-  const topNodes = MAX_NODES > 0 ? sortedNodes.slice(0, MAX_NODES) : sortedNodes;
-  const topNodesSet = new Set(topNodes);
+  const nodesData: NodeItem[] = selection.nodes.map((table) => ({ id: table }));
+  const linksData: LinkItem[] = selection.edges.map((e) => ({
+    ...e,
+    type: e.type || 'explicit'
+  }));
 
-  const nodesData: NodeItem[] = topNodes.map((table: string) => ({ id: table }));
-  const linksData: LinkItem[] = schema.value.graph.edges
-    .filter((edge: any) => topNodesSet.has(edge.source) && topNodesSet.has(edge.target))
-    .map((edge: any) => ({
-      source: edge.source,
-      target: edge.target,
-      source_col: edge.source_col,
-      target_col: edge.target_col,
-      type: edge.type || 'explicit'
-    }));
+  graphStats.value = {
+    rendered: nodesData.length,
+    totalConnected: selection.totalConnected,
+    edges: linksData.length,
+    isolated: selection.isolatedCount
+  };
 
   if (nodesData.length === 0) return;
 
@@ -1095,7 +1091,7 @@ onUnmounted(() => {
         <div class="flex items-center gap-4">
           <!-- Limit Kontrolü -->
           <div class="flex items-center gap-2 bg-black/30 px-3 py-1.5 rounded-lg border border-zinc-800">
-            <label class="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Node Limiti (0=Sınırsız):</label>
+            <label class="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Node Limiti (0 = Tüm Bağlantılı):</label>
             <input 
               v-model.number="maxNodesLimit" 
               @change="initGraph"
@@ -1400,15 +1396,20 @@ onUnmounted(() => {
             </div>
 
             <!-- Empty State -->
-            <div v-else-if="!schema || !schema.graph || schema.graph.nodes.length === 0" class="absolute inset-0 flex flex-col items-center justify-center space-y-3 z-20 pointer-events-none">
+            <div v-else-if="!schema || !schema.graph || (schema.graph.edges || []).length === 0" class="absolute inset-0 flex flex-col items-center justify-center space-y-3 z-20 pointer-events-none">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M11 3.055A9.003 9.003 0 1020.945 13H11V3.055z" />
               </svg>
               <p class="text-xs text-zinc-500 font-medium">Görselleştirilecek tablo ilişkisi bulunamadı.</p>
             </div>
 
+            <!-- Render istatistikleri -->
+            <div v-if="graphStats && graphStats.edges > 0" class="absolute top-4 left-4 z-10 bg-zinc-900/80 border border-zinc-800 rounded-lg px-3 py-1.5 text-[10px] text-zinc-400 font-mono pointer-events-none">
+              {{ graphStats.rendered }}/{{ graphStats.totalConnected }} bağlantılı tablo · {{ graphStats.edges }} ilişki<span v-if="graphStats.isolated > 0"> · {{ graphStats.isolated }} izole tablo gizlendi</span>
+            </div>
+
             <!-- Controls overlay -->
-            <div v-if="schema && schema.graph && schema.graph.nodes.length > 0" class="absolute bottom-4 right-4 flex items-center gap-2 z-10">
+            <div v-if="schema && schema.graph && (schema.graph.edges || []).length > 0" class="absolute bottom-4 right-4 flex items-center gap-2 z-10">
               <button 
                 @click="resetZoom"
                 class="h-8 w-8 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-750 text-zinc-400 hover:text-white rounded-lg flex items-center justify-center transition-colors shadow-lg active:scale-95"
