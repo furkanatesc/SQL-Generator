@@ -113,3 +113,66 @@ def test_contract_module_does_not_load_drivers():
     assert "app.evaluation.connection_abstraction" not in newly_loaded
     for drv in ("psycopg", "psycopg2", "oracledb", "cx_Oracle"):
         assert drv not in newly_loaded
+
+
+def test_seven_span_assembly_and_secret_free_payload():
+    from types import SimpleNamespace
+    from app.trace.end_to_end_trace import build_end_to_end_trace
+    from app.trace.end_to_end_trace_builders import (
+        build_intent_span, build_retrieval_span, build_prompt_span,
+        build_generation_span, build_validation_span, build_execution_span,
+        build_security_span,
+    )
+    intent = build_intent_span(SimpleNamespace(
+        extraction_version="intent_extraction_v1",
+        intent=SimpleNamespace(normalized_query="who is alice",
+                               intent_type="list", ambiguity_detected=False,
+                               has_filter=True, has_aggregation=False,
+                               has_grouping=False, has_ordering=False,
+                               has_limit=False, requires_join=False,
+                               has_time_range=False, signals=())), duration_ms=1.0)
+    retrieval = build_retrieval_span(SimpleNamespace(
+        k_requested=5, k_returned=1, retrieval_version="top_k_retrieval_v1",
+        candidates=(SimpleNamespace(object_id="tbl.users", object_type="table",
+                                    text="alice PII", score=0.9, rank=1,
+                                    schema_hash="d" * 64),)), duration_ms=2.0)
+    prompt = build_prompt_span(SimpleNamespace(
+        prompt_sha256="e" * 64, prompt_char_count=10, intent_type="list",
+        target_dialect="postgresql", rendered_prompt="SELECT alice",
+        source_section_types=("schema",), source_item_ids=("s1",),
+        input_version="sql_generation_input_v1"), duration_ms=3.0)
+    generation = build_generation_span(SimpleNamespace(
+        response=SimpleNamespace(provider_id="nvidia", model_id="nemotron",
+                                 raw_text="SELECT 1", finish_reason="stop",
+                                 prompt_sha256="e" * 64, output_sha256="f" * 64,
+                                 latency_ms=42, token_usage=None),
+        prompt_sha256="e" * 64, output_sha256="f" * 64))
+    validation = build_validation_span((), valid=True, sql_sha256="f" * 64,
+                                       duration_ms=1.0)
+    security = build_security_span((SimpleNamespace(
+        category=SimpleNamespace(value="read_only"),
+        outcome=SimpleNamespace(value="allowed"),
+        severity=SimpleNamespace(value="info"),
+        reason_code="read_only_op", entry_hash="b" * 64),))
+    execution = build_execution_span(SimpleNamespace(
+        status="executed",
+        plan=SimpleNamespace(effective_dialect=SimpleNamespace(value="postgresql")),
+        execution_result=SimpleNamespace(sql_sha256="f" * 64, row_count=1,
+                                         truncated=False, execution_error=None),
+        error=None, warnings=()), duration_ms=5.0)
+
+    trace = build_end_to_end_trace(
+        trace_id="t1", request_id="r1",
+        spans=(intent, retrieval, prompt, generation, validation, security, execution),
+        job_id="j1", dialect="postgresql", nl_query_sha256="c" * 64,
+        total_duration_ms=14.0)
+
+    assert len(trace.spans) == 7
+    assert trace.terminal_status.value == "completed"
+    dumped = json.dumps(trace.to_payload())      # must not raise
+    # secret-free: no raw NL / SQL / prompt / candidate text leaked anywhere
+    for leak in ("alice", "SELECT", "PII"):
+        assert leak.upper() not in dumped.upper()
+    # but hashes and identifiers are present
+    assert "e" * 64 in dumped and "f" * 64 in dumped
+    assert '"stage": "intent"' in dumped and '"stage": "generation"' in dumped

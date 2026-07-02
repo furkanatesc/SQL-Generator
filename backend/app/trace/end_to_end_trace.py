@@ -61,6 +61,15 @@ class ExecutionSpanDetail(TraceSpanDetail):
 
 
 @dataclass(frozen=True)
+class IntentSpanDetail(TraceSpanDetail):
+    intent_type: str
+    flags: Tuple[str, ...] = ()
+    ambiguity_detected: bool = False
+    signal_names: Tuple[str, ...] = ()      # only IntentSignal.name; value/reason excluded
+    extraction_version: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class SecurityCheck:
     category: str
     outcome: str
@@ -72,6 +81,61 @@ class SecurityCheck:
 @dataclass(frozen=True)
 class SecuritySpanDetail(TraceSpanDetail):
     checks: Tuple[SecurityCheck, ...] = ()
+
+
+@dataclass(frozen=True)
+class RetrievalCandidateRef:
+    object_id: str
+    object_type: str            # table | column | relationship
+    score: float
+    rank: int
+    schema_hash: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class RetrievalSpanDetail(TraceSpanDetail):
+    k_requested: Optional[int] = None
+    k_returned: Optional[int] = None
+    candidates: Tuple[RetrievalCandidateRef, ...] = ()   # candidate.text excluded
+    retrieval_version: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class PromptSpanDetail(TraceSpanDetail):
+    prompt_sha256: Optional[str] = None     # never the raw prompt
+    prompt_char_count: Optional[int] = None
+    intent_type: Optional[str] = None
+    target_dialect: Optional[str] = None
+    source_section_types: Tuple[str, ...] = ()
+    source_item_ids: Tuple[str, ...] = ()
+    input_version: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class GenerationSpanDetail(TraceSpanDetail):
+    provider_id: Optional[str] = None
+    model_id: Optional[str] = None
+    finish_reason: Optional[str] = None
+    prompt_sha256: Optional[str] = None
+    output_sha256: Optional[str] = None     # never the raw SQL
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class ValidationIssue:
+    category: str               # e.g. syntax_error/missing_column/unsafe_sql
+    stage: Optional[str] = None
+    severity: Optional[str] = None
+    reason_code: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ValidationSpanDetail(TraceSpanDetail):
+    valid: bool = True
+    sql_sha256: Optional[str] = None
+    issues: Tuple[ValidationIssue, ...] = ()   # issue .message excluded
 
 
 @dataclass(frozen=True)
