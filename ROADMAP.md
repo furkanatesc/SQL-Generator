@@ -17,15 +17,15 @@ Bu dosya yol haritasının **tek giriş noktasıdır**. Eksen: **Phase → Sprin
 
 | Durum | Kapsam | Detay |
 |---|---|---|
-| ✅ **Tamamlandı** | Sprint 0 → **26.5** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) kapandı; **Phase 7 devam ediyor** — 26.0 Permission Policy + 26.1 Tenant/Workspace Boundary + 26.2 Read-Only Enforcement + 26.3 Query Risk Classifier + 26.4 Sensitive Table/Column Policy + 26.5 PII/PHI Detection tamam. `docs/SPRINT-PR-LOG.md` |
-| ▶️ **Sıradaki** | **Phase 8 · Sprint 27.1** | Remaining Stage Span Builders — kalan 5 stage'in saf/duck-typed span builder'ları (canlı telçekimi ayrı "27.1w Live Trace Wiring" kalemine ertelendi). `docs/PLANNED-SPRINTS.md` |
-| 🗓️ **Planlanan** | **Phase 7 → 15** (Sprint 26.4 → 34.7) | `docs/PLANNED-SPRINTS.md` |
+| ✅ **Tamamlandı** | Sprint 0 → **27.1** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) ve **Phase 7 (Security & Governance, 26.0–26.11) kapandı**. **Phase 8 devam ediyor** — 27.0 End-to-End Trace Contract + 27.1 Remaining Stage Span Builders tamam (builder seti tam; canlı telçekimi 27.1w'de). `docs/SPRINT-PR-LOG.md` |
+| ▶️ **Sıradaki** | **Phase 8 · Sprint 27.1w** | Live Trace Wiring — `request_id` plumbing, per-stage `perf_counter`, `_capture_trace_on_exit`'te `EndToEndTrace` emission, `run_pipeline`'ın modüler stage'lere örülmesi (27.1'den bilinçli ertelendi; 27.1'in 3 Minor'ı da burada). `docs/PLANNED-SPRINTS.md` |
+| 🗓️ **Planlanan** | **Phase 8 → 15** (Sprint 27.2 → 34.7) | `docs/PLANNED-SPRINTS.md` |
 
 ### Planlanan fazlar (durum)
 | Phase | Tema | Sprint aralığı | Durum |
 |---|---|---|---|
-| 7 | Security & Governance | 26.x | ▶️ Devam ediyor *(26.0–26.5 tamam)* |
-| 8 | Observability & Debuggability | 27.x | 🗓️ Planlı |
+| 7 | Security & Governance | 26.x | ✅ Tamamlandı *(26.0–26.11)* |
+| 8 | Observability & Debuggability | 27.x | ▶️ Devam ediyor *(27.0–27.1 tamam; sıradaki 27.1w)* |
 | 9 | Large Schema Production Scale | 28.x | 🗓️ Planlı |
 | 10 | Real Database Adapter Layer | 29.x | 🗓️ Planlı *(25.8/25.9 stub'larının gerçeği)* |
 | 11 | API / Backend Productization | 30.x | 🗓️ Planlı |
