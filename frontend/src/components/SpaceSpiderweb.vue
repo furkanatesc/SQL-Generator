@@ -2,6 +2,10 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import * as THREE from 'three';
 import gsap from 'gsap';
+import { apiService } from '../services/api';
+import { buildSynapseGraph, type SynapseGraph } from '../utils/synapseNetwork';
+import { computeSynapseLayout } from '../utils/synapseLayout';
+import { PulseScheduler } from '../utils/synapsePulse';
 
 const props = defineProps<{
   activeTab: string;
@@ -12,17 +16,39 @@ const containerRef = ref<HTMLElement | null>(null);
 let animationFrameId: number;
 let renderer: THREE.WebGLRenderer;
 let camera: THREE.PerspectiveCamera;
-let coreGeometry: THREE.BufferGeometry;
-let coreMaterial: THREE.ShaderMaterial;
-let innerGeometry: THREE.BufferGeometry;
-let innerMaterial: THREE.ShaderMaterial;
-let innerMesh: THREE.Mesh;
+let synapseNodesGeometry: THREE.BufferGeometry | null = null;
+let synapseNodesMaterial: THREE.ShaderMaterial | null = null;
+let synapseEdgesGeometry: THREE.BufferGeometry | null = null;
+let synapseEdgesMaterial: THREE.ShaderMaterial | null = null;
+let pulseScheduler: PulseScheduler | null = null;
+let synapsePulseArrays: { start: Float32Array; duration: Float32Array; dir: Float32Array } | null = null;
+let sceneClock: THREE.Clock | null = null;
+let isDisposed = false;
 let starsGeometry: THREE.BufferGeometry;
 let starsMaterial: THREE.ShaderMaterial;
 let virtualScroll = 0; // The actual smooth scroll value
 let targetVirtualScroll = 0; // The target scroll value set by the wheel
 
 const blackHoleState = { strength: 0 };
+
+// Sinaps katmanı görsel ayarları — göz kararı ince ayar hep buradan yapılır
+const SYNAPSE_STYLE = {
+  maxNodes: 150,
+  layoutRadius: 260,
+  nodeBaseSize: 6.0,
+  nodeSizePerDegree: 1.1,
+  nodeMaxSize: 15.0,
+  hubRatio: 0.1,                          // en bağlantılı %10 amber olur
+  nodeColor: [0.85, 0.86, 0.92] as const, // zinc-beyaz
+  hubColor: [0.98, 0.75, 0.35] as const,  // amber
+  edgeOpacity: 0.2,
+  pulseSeconds: 0.9,
+  pulseGlowBoost: 1.1,
+  pulseIntervalMinSec: 0,  // kesintisiz bayrak yarışı — biten darbenin yerine anında yenisi
+  pulseIntervalMaxSec: 0,  // kesintisiz bayrak yarışı — biten darbenin yerine anında yenisi
+  pulseMaxConcurrent: 1,   // ekranda her an tam 1 darbe
+  depthStretch: 1.5,  // yerleşim z'sini sarmal koridora yayar (800 derinlik / ~520 küme)
+} as const;
 
 let isMouseListenerActive = false;
 
@@ -65,17 +91,135 @@ watch(() => props.activeTab, (newTab) => {
   if (newTab === 'schema') {
     gsap.to(blackHoleState, {
       strength: 1.0,
-      duration: 2.0,
-      ease: 'power2.out'
+      duration: 3.2,
+      ease: 'power2.inOut',
+      overwrite: 'auto',
     });
   } else {
     gsap.to(blackHoleState, {
       strength: 0.0,
-      duration: 1.5,
-      ease: 'power2.inOut'
+      duration: 2.8,
+      ease: 'power2.inOut',
+      overwrite: 'auto',
     });
   }
 }, { immediate: true });
+
+// Faz 2 kancası: sorgu pipeline'ı ilgili tablo adlarıyla çağıracak.
+// Faz 1'de çağıran yok; bilinmeyen tablo adları PulseScheduler'da sessizce atlanır.
+const fireSignal = (tableNames: string[]) => {
+  if (!pulseScheduler || !sceneClock) return;
+  pulseScheduler.fire(tableNames, sceneClock.getElapsedTime());
+};
+defineExpose({ fireSignal });
+
+// Kara delik warp bloğu — tünel shader'ından devralınan sözleşme (bhCenter x=85)
+const SYNAPSE_WARP_GLSL = `
+  if (blackHoleStrength > 0.0) {
+    vec2 bhCenter = vec2(85.0, 0.0);
+    vec2 distVec = pos.xy - bhCenter;
+    float r = length(distVec) + 0.1;
+    float swirl = (4.5 / (r * 0.03 + 2.5)) * blackHoleStrength + blackHoleAngle;
+    float cosA = cos(swirl);
+    float sinA = sin(swirl);
+    vec2 rotatedVec = mat2(cosA, -sinA, sinA, cosA) * distVec;
+    float pull = mix(1.0, pow(clamp(r / 550.0, 0.0, 1.0), 1.8), blackHoleStrength * 0.95);
+    pos.xy = bhCenter + rotatedVec * pull;
+    pos.z -= mix(0.0, 750.0 / (r * 0.005 + 1.0), blackHoleStrength);
+  }
+`;
+
+const SYNAPSE_NODE_VERT = `
+  uniform float time;
+  uniform float scrollZ;
+  uniform float blackHoleStrength;
+  uniform float blackHoleAngle;
+  attribute float size;
+  attribute vec3 color;
+  varying vec3 vColor;
+  varying float vDepth;
+  void main() {
+    vColor = color;
+    vec3 pos = position;
+    pos.z = mod(pos.z + scrollZ + 400.0, 800.0) - 400.0;
+    ${SYNAPSE_WARP_GLSL}
+    vDepth = pos.z;
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    float breath = 1.0 + sin(time * 1.4 + position.x * 0.08) * 0.18;
+    gl_PointSize = size * breath * (300.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const SYNAPSE_NODE_FRAG = `
+  uniform sampler2D pointTexture;
+  varying vec3 vColor;
+  varying float vDepth;
+  void main() {
+    vec4 texColor = texture2D(pointTexture, gl_PointCoord);
+    if (texColor.a < 0.01) discard;
+    float depthFade = smoothstep(-400.0, 400.0, vDepth);
+    gl_FragColor = vec4(vColor, depthFade) * texColor;
+  }
+`;
+
+// Edge wrap per-EDGE yapılır (aMidZ): iki uç aynı offset'i alır, sınırda
+// çizgi tüm tüneli kat eden "streak" artefaktı oluşmaz.
+const SYNAPSE_EDGE_VERT = `
+  uniform float time;
+  uniform float scrollZ;
+  uniform float blackHoleStrength;
+  uniform float blackHoleAngle;
+  attribute float aEndpoint;
+  attribute float aMidZ;
+  attribute float aPulseStart;
+  attribute float aPulseDuration;
+  attribute float aPulseDir;
+  varying float vT;
+  varying float vDepth;
+  varying float vPulseStart;
+  varying float vPulseDuration;
+  varying float vPulseDir;
+  void main() {
+    vT = aEndpoint;
+    vPulseStart = aPulseStart;
+    vPulseDuration = aPulseDuration;
+    vPulseDir = aPulseDir;
+    vec3 pos = position;
+    float midRaw = aMidZ + scrollZ;
+    float offset = (mod(midRaw + 400.0, 800.0) - 400.0) - midRaw;
+    pos.z = pos.z + scrollZ + offset;
+    ${SYNAPSE_WARP_GLSL}
+    vDepth = pos.z;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  }
+`;
+
+const SYNAPSE_EDGE_FRAG = `
+  uniform float time;
+  uniform float edgeOpacity;
+  uniform float pulseGlowBoost;
+  varying float vT;
+  varying float vDepth;
+  varying float vPulseStart;
+  varying float vPulseDuration;
+  varying float vPulseDir;
+  void main() {
+    vec3 base = vec3(0.31, 0.27, 0.90);   // indigo #4f46e5
+    vec3 color = base;
+    float alpha = edgeOpacity;
+    if (vPulseStart >= 0.0 && vPulseDuration > 0.0) {
+      float p = clamp((time - vPulseStart) / vPulseDuration, 0.0, 1.0);
+      if (vPulseDir < 0.0) p = 1.0 - p;
+      float d = vT - p;
+      float glow = exp(-d * d * 35.0);
+      color = mix(base, vec3(0.13, 0.83, 0.93), glow);   // cyan #22d3ee
+      alpha += glow * pulseGlowBoost;
+    }
+    float depthFade = smoothstep(-400.0, 400.0, vDepth);
+    gl_FragColor = vec4(color, alpha * depthFade);
+  }
+`;
 
 onMounted(() => {
   if (!containerRef.value) return;
@@ -217,145 +361,135 @@ onMounted(() => {
   scene.add(particleSystem);
 
 
-  // 5. Geodesic Wireframe Tunnel (Mixed Polygons: triangles + pentagons)
-  // Helper: add barycentric coordinates to non-indexed geometry for thin wireframe rendering
-  const addBarycentricAttr = (geo: THREE.BufferGeometry) => {
-    const nonIndexed = geo.index ? geo.toNonIndexed() : geo.clone();
-    const count = nonIndexed.attributes.position.count;
-    const bary = new Float32Array(count * 3);
-    for (let i = 0; i < count; i += 3) {
-      bary[i * 3]     = 1; bary[i * 3 + 1] = 0; bary[i * 3 + 2] = 0;
-      bary[(i+1) * 3] = 0; bary[(i+1) * 3 + 1] = 1; bary[(i+1) * 3 + 2] = 0;
-      bary[(i+2) * 3] = 0; bary[(i+2) * 3 + 1] = 0; bary[(i+2) * 3 + 2] = 1;
-    }
-    nonIndexed.setAttribute('barycentric', new THREE.BufferAttribute(bary, 3));
-    return nonIndexed;
+  // 5. Canlı Şema Sinapsı — gerçek şemadan beslenen sinaptik ağ katmanı
+  const initSynapseLayer = (graph: SynapseGraph) => {
+    const layout = computeSynapseLayout(graph, { radius: SYNAPSE_STYLE.layoutRadius });
+    if (layout.nodes.length === 0) return;
+
+    const prefersReducedMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    pulseScheduler = new PulseScheduler(layout, {
+      seed: 7,
+      pulseDurationSec: SYNAPSE_STYLE.pulseSeconds,
+      intervalMinSec: SYNAPSE_STYLE.pulseIntervalMinSec,
+      intervalMaxSec: SYNAPSE_STYLE.pulseIntervalMaxSec,
+      maxConcurrent: SYNAPSE_STYLE.pulseMaxConcurrent,
+    });
+    pulseScheduler.setEnabled(!prefersReducedMotion);
+
+    // --- Node'lar (tek Points) ---
+    const n = layout.nodes.length;
+    const nodePositions = new Float32Array(n * 3);
+    const nodeColors = new Float32Array(n * 3);
+    const nodeSizes = new Float32Array(n);
+    const sortedDegrees = layout.nodes.map((nd) => nd.degree).sort((a, b) => b - a);
+    const hubThreshold = sortedDegrees[Math.max(0, Math.floor(n * SYNAPSE_STYLE.hubRatio) - 1)] ?? Infinity;
+    layout.nodes.forEach((nd, i) => {
+      nodePositions[i * 3] = nd.x;
+      nodePositions[i * 3 + 1] = nd.y;
+      // z derinlikte gerilir: küme (~520) sarmal koridorun (800) tamamına yayılır,
+      // scroll sırasında ağın büyük bölümü aynı anda kameranın arkasına düşmez.
+      nodePositions[i * 3 + 2] = nd.z * SYNAPSE_STYLE.depthStretch;
+      const c = nd.degree >= hubThreshold && nd.degree > 0 ? SYNAPSE_STYLE.hubColor : SYNAPSE_STYLE.nodeColor;
+      nodeColors[i * 3] = c[0];
+      nodeColors[i * 3 + 1] = c[1];
+      nodeColors[i * 3 + 2] = c[2];
+      nodeSizes[i] = Math.min(
+        SYNAPSE_STYLE.nodeMaxSize,
+        SYNAPSE_STYLE.nodeBaseSize + nd.degree * SYNAPSE_STYLE.nodeSizePerDegree
+      );
+    });
+    synapseNodesGeometry = new THREE.BufferGeometry();
+    synapseNodesGeometry.setAttribute('position', new THREE.BufferAttribute(nodePositions, 3));
+    synapseNodesGeometry.setAttribute('color', new THREE.BufferAttribute(nodeColors, 3));
+    synapseNodesGeometry.setAttribute('size', new THREE.BufferAttribute(nodeSizes, 1));
+    synapseNodesMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 },
+        pointTexture: { value: generateStarTexture() },
+        scrollZ: { value: 0 },
+        blackHoleStrength: { value: 0 },
+        blackHoleAngle: { value: 0 },
+      },
+      vertexShader: SYNAPSE_NODE_VERT,
+      fragmentShader: SYNAPSE_NODE_FRAG,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      transparent: true,
+    });
+    scene.add(new THREE.Points(synapseNodesGeometry, synapseNodesMaterial));
+
+    // --- Sinaps hatları (tek LineSegments) ---
+    const m = layout.edges.length;
+    const edgePositions = new Float32Array(m * 6);
+    const endpoint = new Float32Array(m * 2);
+    const midZ = new Float32Array(m * 2);
+    const pulseStart = new Float32Array(m * 2).fill(-1);
+    const pulseDuration = new Float32Array(m * 2);
+    const pulseDir = new Float32Array(m * 2).fill(1);
+    layout.edges.forEach((e, i) => {
+      const a = layout.nodes[e.sourceIndex];
+      const b = layout.nodes[e.targetIndex];
+      // Node buffer'ıyla aynı derinlik gerilmesi; midZ de gerilmiş z'lerden
+      // hesaplanır ki per-edge wrap tutarlı kalsın.
+      const az = a.z * SYNAPSE_STYLE.depthStretch;
+      const bz = b.z * SYNAPSE_STYLE.depthStretch;
+      edgePositions[i * 6] = a.x; edgePositions[i * 6 + 1] = a.y; edgePositions[i * 6 + 2] = az;
+      edgePositions[i * 6 + 3] = b.x; edgePositions[i * 6 + 4] = b.y; edgePositions[i * 6 + 5] = bz;
+      endpoint[i * 2] = 0; endpoint[i * 2 + 1] = 1;
+      const mz = (az + bz) / 2;
+      midZ[i * 2] = mz; midZ[i * 2 + 1] = mz;
+    });
+    synapsePulseArrays = { start: pulseStart, duration: pulseDuration, dir: pulseDir };
+    synapseEdgesGeometry = new THREE.BufferGeometry();
+    synapseEdgesGeometry.setAttribute('position', new THREE.BufferAttribute(edgePositions, 3));
+    synapseEdgesGeometry.setAttribute('aEndpoint', new THREE.BufferAttribute(endpoint, 1));
+    synapseEdgesGeometry.setAttribute('aMidZ', new THREE.BufferAttribute(midZ, 1));
+    synapseEdgesGeometry.setAttribute('aPulseStart', new THREE.BufferAttribute(pulseStart, 1));
+    synapseEdgesGeometry.setAttribute('aPulseDuration', new THREE.BufferAttribute(pulseDuration, 1));
+    synapseEdgesGeometry.setAttribute('aPulseDir', new THREE.BufferAttribute(pulseDir, 1));
+    synapseEdgesMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 },
+        scrollZ: { value: 0 },
+        blackHoleStrength: { value: 0 },
+        blackHoleAngle: { value: 0 },
+        edgeOpacity: { value: SYNAPSE_STYLE.edgeOpacity },
+        pulseGlowBoost: { value: SYNAPSE_STYLE.pulseGlowBoost },
+      },
+      vertexShader: SYNAPSE_EDGE_VERT,
+      fragmentShader: SYNAPSE_EDGE_FRAG,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      transparent: true,
+    });
+    scene.add(new THREE.LineSegments(synapseEdgesGeometry, synapseEdgesMaterial));
   };
 
-  // Barycentric wireframe vertex shader (shared)
-  const wireVertexShader = `
-    uniform float time;
-    uniform float scrollZ;
-    uniform float blackHoleStrength;
-    uniform float blackHoleAngle;
-    attribute vec3 barycentric;
-    varying vec3 vBary;
-    varying float vDepth;
-    
-    void main() {
-      vBary = barycentric;
-      vec3 pos = position;
-      
-      // Elegant twisting (slowed down for premium feel)
-      float twist = sin(pos.z * 0.002 + time * 0.1) * 0.2;
-      mat2 rot = mat2(cos(twist), -sin(twist), sin(twist), cos(twist));
-      pos.xy = rot * pos.xy;
-      
-      // Gentle wave (slowed down for premium feel)
-      float wave = sin(pos.x * 0.006 + time * 0.15) * 8.0;
-      pos.z += wave;
-
-      // Apply virtual scroll to move through the tunnel
-      pos.z += scrollZ;
-
-      // Wrap around for infinite tunnel
-      pos.z = mod(pos.z + 400.0, 800.0) - 400.0;
-      
-      // Apply Gravitational Black Hole warp if active
-      if (blackHoleStrength > 0.0) {
-        // Shift gravity center to the right (x=85.0) to match the D3 topological schema black hole container position on screen
-        vec2 bhCenter = vec2(85.0, 0.0);
-        vec2 distVec = pos.xy - bhCenter;
-        float r = length(distVec) + 0.1;
-        
-        // 1. Vortex swirl twist: spins vertices dramatically as they approach the center + continuous slow flow (reduced transition snap)
-        float swirl = (4.5 / (r * 0.03 + 2.5)) * blackHoleStrength + blackHoleAngle;
-        float cosA = cos(swirl);
-        float sinA = sin(swirl);
-        vec2 rotatedVec = mat2(cosA, -sinA, sinA, cosA) * distVec;
-        
-        // 2. High-Drama Spaghettification Suction: pulls vertices near center exponentially faster, stretching the geometry
-        float pull = mix(1.0, pow(clamp(r / 550.0, 0.0, 1.0), 1.8), blackHoleStrength * 0.95);
-        pos.xy = bhCenter + rotatedVec * pull;
-        
-        // 3. Extreme Singularity Z-Depth Suction: pulls the vortex center deep into the screen abyss
-        pos.z -= mix(0.0, 750.0 / (r * 0.005 + 1.0), blackHoleStrength);
+  // Şema fetch sonuçlanınca katman BİR KEZ kurulur (spec: ara swap yok);
+  // hata/boş/askıda kalan istek → prosedürel fallback. Arka plan uygulamayı asla bozamaz.
+  // Backend'in hiç yanıt vermediği durumda (ör. erişilemeyen DB'de şema çıkarımı
+  // dakikalarca bloklanır) fetch ne resolve ne reject olur; timeout ile fallback'e düşülür.
+  // Timeout sonrası gerçek şema gelse bile katman değiştirilmez (tek kurulum kuralı).
+  const SCHEMA_FETCH_TIMEOUT_MS = 6000;
+  Promise.race([
+    apiService.getSchema(false),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('schema fetch timed out')), SCHEMA_FETCH_TIMEOUT_MS)
+    ),
+  ])
+    .then((schema) => buildSynapseGraph(schema?.graph ?? null, SYNAPSE_STYLE.maxNodes))
+    .catch(() => buildSynapseGraph(null))
+    .then((graph) => {
+      if (isDisposed) return;
+      try {
+        initSynapseLayer(graph);
+      } catch (err) {
+        console.warn('[SpaceSpiderweb] Sinaps katmanı kurulamadı:', err);
       }
-
-      vDepth = pos.z;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-    }
-  `;
-
-  // Barycentric wireframe fragment shader (shared)
-  const wireFragmentShader = `
-    uniform float time;
-    varying vec3 vBary;
-    varying float vDepth;
-    
-    void main() {
-      // Barycentric wireframe: ultra-thin edge detection
-      float minBary = min(min(vBary.x, vBary.y), vBary.z);
-      float edge = 1.0 - smoothstep(0.0, fwidth(minBary) * 1.5, minBary);
-      
-      if (edge < 0.05) discard;
-      
-      // Bright whitish iridescent / rainbow-shifted palette
-      vec3 rainbow = 0.5 + 0.5 * cos(time * 0.6 + vDepth * 0.004 + vec3(0.0, 2.0, 4.0));
-      vec3 color = mix(vec3(0.95, 0.95, 1.0), rainbow, 0.45);
-      
-      // Smooth depth fade
-      float depthFade = smoothstep(-400.0, 400.0, vDepth);
-      
-      gl_FragColor = vec4(color, edge * 0.55 * depthFade);
-    }
-  `;
-
-  // Primary layer: Icosahedron (geodesic triangular mesh - large outer tunnel)
-  const icoBase = new THREE.IcosahedronGeometry(550, 2);
-  coreGeometry = addBarycentricAttr(icoBase);
-  icoBase.dispose();
-  
-  coreMaterial = new THREE.ShaderMaterial({
-    uniforms: {
-      time: { value: 0 },
-      scrollZ: { value: 0 },
-      blackHoleStrength: { value: 0 },
-      blackHoleAngle: { value: 0 }
-    },
-    vertexShader: wireVertexShader,
-    fragmentShader: wireFragmentShader,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.BackSide,
-    extensions: { derivatives: true }
-  });
-
-  const outerTunnel = new THREE.Mesh(coreGeometry, coreMaterial);
-  scene.add(outerTunnel);
-
-  // Secondary layer: Dodecahedron (pentagonal faces - smaller inner structure)
-  const dodecBase = new THREE.DodecahedronGeometry(350, 1);
-  innerGeometry = addBarycentricAttr(dodecBase);
-  dodecBase.dispose();
-  
-  innerMaterial = new THREE.ShaderMaterial({
-    uniforms: {
-      time: { value: 0 },
-      scrollZ: { value: 0 },
-      blackHoleStrength: { value: 0 },
-      blackHoleAngle: { value: 0 }
-    },
-    vertexShader: wireVertexShader,
-    fragmentShader: wireFragmentShader,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.BackSide,
-    extensions: { derivatives: true }
-  });
-
-  innerMesh = new THREE.Mesh(innerGeometry, innerMaterial);
-  scene.add(innerMesh);
+    });
 
   // 6. Slower Scroll Event Listener with Smooth Target
   const onWheel = (e: WheelEvent) => {
@@ -367,7 +501,8 @@ onMounted(() => {
   // 7. Mouse Tracking is now managed dynamically in the top-level script scope
 
   // 8. The Render Loop
-  const clock = new THREE.Clock();
+  sceneClock = new THREE.Clock();
+  const clock = sceneClock;
   let lastTime = 0;
   let blackHoleAngle = 0;
   
@@ -394,20 +529,36 @@ onMounted(() => {
     starsMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
     starsMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
     
-    coreMaterial.uniforms.time.value = elapsedTime;
-    coreMaterial.uniforms.scrollZ.value = virtualScroll;
-    coreMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
-    coreMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
-    
-    innerMaterial.uniforms.time.value = elapsedTime;
-    innerMaterial.uniforms.scrollZ.value = virtualScroll;
-    innerMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
-    innerMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
+    if (synapseNodesMaterial) {
+      synapseNodesMaterial.uniforms.time.value = elapsedTime;
+      synapseNodesMaterial.uniforms.scrollZ.value = virtualScroll;
+      synapseNodesMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
+      synapseNodesMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
+    }
+    if (synapseEdgesMaterial && synapseEdgesGeometry && pulseScheduler && synapsePulseArrays) {
+      synapseEdgesMaterial.uniforms.time.value = elapsedTime;
+      synapseEdgesMaterial.uniforms.scrollZ.value = virtualScroll;
+      synapseEdgesMaterial.uniforms.blackHoleStrength.value = blackHoleState.strength;
+      synapseEdgesMaterial.uniforms.blackHoleAngle.value = blackHoleAngle;
 
-    // Slowly rotate layers independently for depth (slowed down for premium feel)
+      const pulses = pulseScheduler.tick(elapsedTime);
+      synapsePulseArrays.start.fill(-1);
+      for (const p of pulses) {
+        const i0 = p.edgeIndex * 2;
+        synapsePulseArrays.start[i0] = p.startTime;
+        synapsePulseArrays.start[i0 + 1] = p.startTime;
+        synapsePulseArrays.duration[i0] = p.duration;
+        synapsePulseArrays.duration[i0 + 1] = p.duration;
+        synapsePulseArrays.dir[i0] = p.direction;
+        synapsePulseArrays.dir[i0 + 1] = p.direction;
+      }
+      (synapseEdgesGeometry.attributes.aPulseStart as THREE.BufferAttribute).needsUpdate = true;
+      (synapseEdgesGeometry.attributes.aPulseDuration as THREE.BufferAttribute).needsUpdate = true;
+      (synapseEdgesGeometry.attributes.aPulseDir as THREE.BufferAttribute).needsUpdate = true;
+    }
+
+    // Slowly rotate star layer independently for depth (slowed down for premium feel)
     particleSystem.rotation.z = elapsedTime * 0.012;
-    innerMesh.rotation.y = elapsedTime * 0.008;
-    innerMesh.rotation.x = Math.sin(elapsedTime * 0.08) * 0.04;
 
     renderer.render(scene, camera);
     animationFrameId = requestAnimationFrame(tick);
@@ -433,10 +584,11 @@ onMounted(() => {
     cancelAnimationFrame(animationFrameId);
     starsGeometry.dispose();
     starsMaterial.dispose();
-    coreGeometry.dispose();
-    coreMaterial.dispose();
-    innerGeometry.dispose();
-    innerMaterial.dispose();
+    isDisposed = true;
+    synapseNodesGeometry?.dispose();
+    synapseNodesMaterial?.dispose();
+    synapseEdgesGeometry?.dispose();
+    synapseEdgesMaterial?.dispose();
     renderer.dispose();
   });
 });
