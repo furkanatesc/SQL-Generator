@@ -137,6 +137,23 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   metadata → sonraki sprint). Gerçek parser/EXPLAIN, execution, sensitive/PII
   policy, audit, approval, API/UI, tenant/RBAC/AuthN bu sprintte **yok**.
 
+### Changed
+- **Arka plan: Canlı Şema Sinapsı (Faz 1)** (2026-07-02 · ara iş, sprint dışı):
+  `SpaceSpiderweb.vue`'daki jenerik geodesic wireframe tünel, gerçek veritabanı
+  şemasından beslenen sinaptik ağ katmanıyla değiştirildi — node'lar bağlantılı
+  tablolar (`graphSelection.selectGraphData` yeniden kullanımı, üst sınır 150),
+  hatlar gerçek FK ilişkileri; sinaps hatları boyunca kesintisiz tek sinyal
+  darbesi (cyan; biri biter bitmez yenisi başka bir noktadan başlar), en
+  bağlantılı ~%10 tablo amber hub. Yerleşim
+  deterministik (tablo-adı hash seed'li force layout — her açılışta aynı
+  takımyıldız); şema yoksa YA DA şema isteği 6 sn içinde yanıtlanmazsa prosedürel fallback ağ (arka plan asla boş kalmaz). Yıldız katmanı ve kara delik
+  warp senkronu korunur (uniform sözleşmesi devralındı). `prefers-reduced-motion`
+  → darbeler kapalı. Faz 2 kancası `fireSignal(tableNames)` expose edildi (canlı
+  sorgu tetiklemesi ileride). Saf modüller TDD ile: `frontend/src/utils/
+  {seededRandom,synapseNetwork,synapseLayout,synapsePulse}.ts` +
+  `frontend/tests/*.test.ts`. Spec: `docs/superpowers/specs/
+  2026-07-02-living-schema-synapse-background-design.md`.
+
 ### Fixed
 - **Şema ilişki graph'ı görünürlük düzeltmesi** (2026-07-02 · ara fix, sprint
   dışı): `SchemaManager.vue`'daki D3 graph'ı top-N hub seçimini *izole tablolar
