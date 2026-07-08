@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import hashlib
 import logging
 from typing import Dict, Any, List, Optional, Set, Tuple
 import sqlglot
@@ -296,6 +297,255 @@ class SQLGenerationPipeline:
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
         return pruned_schema, prompt_schema_context, schema_selection_trace, None, elapsed_ms
 
+    def _stage_writer_critic(
+        self,
+        *,
+        aqr: dict,
+        natural_query: Optional[str],
+        previous_sql: Optional[str],
+        prompt_schema_context: Optional[str],
+        pruned_schema: dict,
+        dialect: str,
+        api_key: Optional[str],
+        max_attempts: int,
+        log_callback: Optional[Any],
+        result: Dict[str, Any],
+    ) -> Tuple[Dict[str, Any], Dict[str, int]]:
+        """3. İteratif Üretim Döngüsü (Writer-Critic).
+
+        `result` sözlüğü yerinde mutasyona uğratılır (attempts/success/generated_sql
+        AYNEN mevcut davranış gibi). Ayrıca prompt/generation/validation/security
+        için per-phase zamanlama ve son attempt'in prompt hash/char_count bilgisini
+        toplayıp döner.
+
+        Dönüş: (wc, timings)
+          wc = {"last_generated_sql", "validation_errors", "prompt_sha256",
+                "prompt_char_count", "natural_query"}
+          timings = {"prompt", "generation", "validation", "security"} (ms, int)
+        """
+        natural_query = aqr.get("natural_query", "")
+        timings = {"prompt": 0, "generation": 0, "validation": 0, "security": 0}
+        prompt_sha256: Optional[str] = None
+        prompt_char_count: Optional[int] = None
+
+        current_sql = ""
+        last_error = "Syntax error in SQL query"
+        validation_errors = []
+        last_generated_sql = None
+
+        for attempt in range(1, max_attempts + 1):
+            attempt_info = {
+                "attempt": attempt,
+                "action": "generate" if attempt == 1 else "correct",
+                "sql": "",
+                "valid": False,
+                "error": None
+            }
+
+            try:
+                if attempt == 1:
+                    purpose = "writer"
+                    if log_callback:
+                        log_callback("NVIDIA NIM (Llama-3.3-Nemotron) ile taslak SQL sorgusu üretiliyor...", 3)
+                    t = time.perf_counter()
+                    prompt = PromptTemplateManager.get_writer_prompt(
+                        natural_query=natural_query,
+                        aqr=aqr,
+                        prompt_schema_context=prompt_schema_context,
+                        previous_sql=previous_sql,
+                        dialect=dialect
+                    )
+                    timings["prompt"] += int((time.perf_counter() - t) * 1000)
+                else:
+                    purpose = "corrector"
+                    if log_callback:
+                        log_callback(f"Critic döngüsü devrede. AST hataları düzeltiliyor (Deneme {attempt}/{max_attempts})...", 5)
+                    t = time.perf_counter()
+                    prompt = PromptTemplateManager.get_corrector_prompt(
+                        natural_query=natural_query,
+                        original_sql=current_sql,
+                        error_message=last_error,
+                        prompt_schema_context=prompt_schema_context,
+                        dialect=dialect
+                    )
+                    timings["prompt"] += int((time.perf_counter() - t) * 1000)
+
+                prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+                prompt_char_count = len(prompt)
+
+                # API Çağrısı ile SQL üret
+                t = time.perf_counter()
+                generated_sql = self._generate_sql(
+                    prompt=prompt,
+                    dialect=dialect,
+                    purpose=purpose,
+                    api_key=api_key
+                )
+                timings["generation"] += int((time.perf_counter() - t) * 1000)
+                current_sql = generated_sql
+                last_generated_sql = current_sql
+                attempt_info["sql"] = current_sql
+
+                if log_callback:
+                    log_callback(f"Taslak SQL üretildi. sqlglot ile diyalekt ({dialect}) sözdizimi doğrulaması yapılıyor...", 4)
+
+                # ── Katman 4: Oracle Büyük Harf Zorlama (Pre-Validation) ──
+                if dialect.lower() == "oracle":
+                    current_sql = enforce_oracle_case(current_sql, dialect=dialect)
+                    attempt_info["sql"] = current_sql
+
+                # --- Guardrail Validation ---
+                t = time.perf_counter()
+                try:
+                    guardrail_errors = SQLGuardrailValidator.validate(current_sql, dialect=dialect)
+                finally:
+                    timings["security"] += int((time.perf_counter() - t) * 1000)
+                if guardrail_errors:
+                    last_error = guardrail_errors[0]["message"]
+                    attempt_info["valid"] = False
+                    attempt_info["error"] = last_error
+                    attempt_info["validation_errors"] = guardrail_errors
+                    result["attempts"].append(attempt_info)
+                    for err in guardrail_errors:
+                        validation_errors.append(err)
+                    if log_callback:
+                        log_callback(f"Güvenlik doğrulaması (Guardrail) BAŞARISIZ: {last_error}", 4)
+
+                    if guardrail_errors[0]["type"] == "sql_parse_error":
+                        continue
+                    else:
+                        break
+
+                # --- Sandbox Safety Validation ---
+                t = time.perf_counter()
+                try:
+                    try:
+                        SqlSafetyValidator().ensure_read_only(current_sql)
+                    except sqlglot.errors.ParseError:
+                        # Let the syntax parse errors be caught standardly by the pipeline's AST validator
+                        pass
+                    except ValueError as safety_err:
+                        last_error = str(safety_err)
+                        attempt_info["valid"] = False
+                        attempt_info["error"] = last_error
+                        attempt_info["validation_errors"] = [{
+                            "type": "unsafe_sql",
+                            "stage": "sql_sandbox_safety",
+                            "message": last_error
+                        }]
+                        result["attempts"].append(attempt_info)
+                        validation_errors.append(attempt_info["validation_errors"][0])
+                        if log_callback:
+                            log_callback(f"Sandbox güvenlik doğrulaması BAŞARISIZ: {last_error}", 4)
+                        break
+                finally:
+                    timings["security"] += int((time.perf_counter() - t) * 1000)
+
+                # AST Doğrulama (sqlglot)
+                t = time.perf_counter()
+                try:
+                    try:
+                        sqlglot.parse_one(current_sql, read=dialect)
+                    except sqlglot.errors.ParseError as parse_err:
+                        last_error = f"SQLGLOT AST Parse Error: {str(parse_err)}"
+                        attempt_info["valid"] = False
+                        attempt_info["error"] = last_error
+                        classified_error = classify_sql_error(last_error, stage="ast_parse")
+                        attempt_info["validation_errors"] = [classified_error]
+                        result["attempts"].append(attempt_info)
+                        validation_errors.append(classified_error)
+                        if log_callback:
+                            log_callback(f"AST doğrulaması BAŞARISIZ: {last_error}", 4)
+                        continue
+                finally:
+                    timings["validation"] += int((time.perf_counter() - t) * 1000)
+
+                if log_callback:
+                    log_callback("AST sözdizimi doğrulaması geçti. Şema-bazlı semantik doğrulama başlatılıyor...", 4)
+
+                # ── Katman 1 + 5: Schema-Aware Semantik Doğrulama ──
+                t = time.perf_counter()
+                sem_valid, sem_error = SQLValidator.validate(
+                    current_sql, pruned_schema, dialect=dialect
+                )
+                timings["validation"] += int((time.perf_counter() - t) * 1000)
+                if not sem_valid:
+                    last_error = sem_error
+                    attempt_info["valid"] = False
+                    attempt_info["error"] = last_error
+                    classified_error = classify_sql_error(last_error, stage="semantic_validation")
+                    attempt_info["validation_errors"] = [classified_error]
+                    result["attempts"].append(attempt_info)
+                    validation_errors.append(classified_error)
+                    if log_callback:
+                        log_callback(f"Semantik doğrulama BAŞARISIZ (Critic döngüsüne yönlendiriliyor): {last_error}", 4)
+                    continue
+
+                # Tüm doğrulamalar geçti
+                t = time.perf_counter()
+                try:
+                    # SQL'i formatla (Pretty Print)
+                    parsed_tree = sqlglot.parse_one(current_sql, read=dialect)
+                    current_sql = parsed_tree.sql(dialect=dialect, pretty=True)
+                    last_generated_sql = current_sql
+                except Exception:
+                    pass  # Formatlama başarısız olursa orijinal haliyle bırak
+                finally:
+                    timings["validation"] += int((time.perf_counter() - t) * 1000)
+
+                attempt_info["valid"] = True
+                attempt_info["sql"] = current_sql
+                result["attempts"].append(attempt_info)
+                result["success"] = True
+                result["generated_sql"] = current_sql
+                if log_callback:
+                    log_callback("AST + Semantik doğrulama başarılı! SQL sorgusu üretildi, şema uyumlu ve diyalekt standartlarıyla tam uyumlu.", 4)
+                break
+
+            except Exception as e:
+                last_error = f"LLM API Çağrı Hatası: {str(e)}"
+                attempt_info["valid"] = False
+                attempt_info["error"] = last_error
+                classified_error = {
+                    "type": "llm_api_error",
+                    "stage": "llm_generation",
+                    "message": last_error,
+                }
+                attempt_info["validation_errors"] = [classified_error]
+                result["attempts"].append(attempt_info)
+                validation_errors.append(classified_error)
+                if log_callback:
+                    log_callback(f"LLM API Çağrı Hatası: {str(e)}", 3)
+                continue
+
+        if not result["success"]:
+            result["error"] = f"SQL üretimi başarısız oldu. {max_attempts} deneme yapıldı."
+            if log_callback:
+                log_callback(f"Maksimum deneme limitine ({max_attempts}) ulaşıldı. Süreç başarısız.", 5)
+            if result["attempts"]:
+                last_attempt = result["attempts"][-1]
+                has_guardrail_error = any(
+                    err.get("stage") in ["sql_guardrail", "sql_sandbox_safety"]
+                    for err in last_attempt.get("validation_errors", [])
+                )
+                if has_guardrail_error:
+                    # Do not expose unsafe/rejected SQL in the public generated_sql field
+                    result["generated_sql"] = ""
+                else:
+                    result["generated_sql"] = last_attempt["sql"]
+        else:
+            if log_callback:
+                log_callback("Tebrikler! SQL üretim aşaması başarıyla sonuçlandırıldı.", 5)
+
+        wc = {
+            "last_generated_sql": last_generated_sql,
+            "validation_errors": validation_errors,
+            "prompt_sha256": prompt_sha256,
+            "prompt_char_count": prompt_char_count,
+            "natural_query": natural_query,
+        }
+        return wc, timings
+
     def run_pipeline(
         self,
         job_id: str = "local_test",
@@ -380,194 +630,17 @@ class SQLGenerationPipeline:
             return redact_sensitive(result, known_secrets)
         result["pruned_schema_tables"] = list(pruned_schema.get("tables", {}).keys())
 
-        # 3. İteratif Üretim Döngüsü (Writer-Critic)
-        natural_query = aqr.get("natural_query", "")
-        current_sql = ""
-        last_error = "Syntax error in SQL query"
-        validation_errors = []
-        last_generated_sql = None
-        
-        for attempt in range(1, max_attempts + 1):
-            attempt_info = {
-                "attempt": attempt,
-                "action": "generate" if attempt == 1 else "correct",
-                "sql": "",
-                "valid": False,
-                "error": None
-            }
-            
-            try:
-                if attempt == 1:
-                    purpose = "writer"
-                    if log_callback:
-                        log_callback("NVIDIA NIM (Llama-3.3-Nemotron) ile taslak SQL sorgusu üretiliyor...", 3)
-                    prompt = PromptTemplateManager.get_writer_prompt(
-                        natural_query=natural_query,
-                        aqr=aqr,
-                        prompt_schema_context=prompt_schema_context,
-                        previous_sql=previous_sql,
-                        dialect=dialect
-                    )
-                else:
-                    purpose = "corrector"
-                    if log_callback:
-                        log_callback(f"Critic döngüsü devrede. AST hataları düzeltiliyor (Deneme {attempt}/{max_attempts})...", 5)
-                    prompt = PromptTemplateManager.get_corrector_prompt(
-                        natural_query=natural_query,
-                        original_sql=current_sql,
-                        error_message=last_error,
-                        prompt_schema_context=prompt_schema_context,
-                        dialect=dialect
-                    )
-                
-                # API Çağrısı ile SQL üret
-                generated_sql = self._generate_sql(
-                    prompt=prompt,
-                    dialect=dialect,
-                    purpose=purpose,
-                    api_key=api_key
-                )
-                current_sql = generated_sql
-                last_generated_sql = current_sql
-                attempt_info["sql"] = current_sql
-                
-                if log_callback:
-                    log_callback(f"Taslak SQL üretildi. sqlglot ile diyalekt ({dialect}) sözdizimi doğrulaması yapılıyor...", 4)
-                
-                # ── Katman 4: Oracle Büyük Harf Zorlama (Pre-Validation) ──
-                if dialect.lower() == "oracle":
-                    current_sql = enforce_oracle_case(current_sql, dialect=dialect)
-                    attempt_info["sql"] = current_sql
+        # 3. İteratif üretim döngüsü (writer-critic)
+        wc, wc_timings = self._stage_writer_critic(
+            aqr=aqr, natural_query=natural_query, previous_sql=previous_sql,
+            prompt_schema_context=prompt_schema_context,
+            pruned_schema=pruned_schema, dialect=dialect, api_key=api_key,
+            max_attempts=max_attempts, log_callback=log_callback, result=result)
+        natural_query = wc["natural_query"]
+        last_generated_sql = wc["last_generated_sql"]
+        validation_errors = wc["validation_errors"]
 
-                # --- Guardrail Validation ---
-                guardrail_errors = SQLGuardrailValidator.validate(current_sql, dialect=dialect)
-                if guardrail_errors:
-                    last_error = guardrail_errors[0]["message"]
-                    attempt_info["valid"] = False
-                    attempt_info["error"] = last_error
-                    attempt_info["validation_errors"] = guardrail_errors
-                    result["attempts"].append(attempt_info)
-                    for err in guardrail_errors:
-                        validation_errors.append(err)
-                    if log_callback:
-                        log_callback(f"Güvenlik doğrulaması (Guardrail) BAŞARISIZ: {last_error}", 4)
-                    
-                    if guardrail_errors[0]["type"] == "sql_parse_error":
-                        continue
-                    else:
-                        break
-
-                # --- Sandbox Safety Validation ---
-                try:
-                    SqlSafetyValidator().ensure_read_only(current_sql)
-                except sqlglot.errors.ParseError:
-                    # Let the syntax parse errors be caught standardly by the pipeline's AST validator
-                    pass
-                except ValueError as safety_err:
-                    last_error = str(safety_err)
-                    attempt_info["valid"] = False
-                    attempt_info["error"] = last_error
-                    attempt_info["validation_errors"] = [{
-                        "type": "unsafe_sql",
-                        "stage": "sql_sandbox_safety",
-                        "message": last_error
-                    }]
-                    result["attempts"].append(attempt_info)
-                    validation_errors.append(attempt_info["validation_errors"][0])
-                    if log_callback:
-                        log_callback(f"Sandbox güvenlik doğrulaması BAŞARISIZ: {last_error}", 4)
-                    break
-
-                # AST Doğrulama (sqlglot)
-                try:
-                    sqlglot.parse_one(current_sql, read=dialect)
-                except sqlglot.errors.ParseError as parse_err:
-                    last_error = f"SQLGLOT AST Parse Error: {str(parse_err)}"
-                    attempt_info["valid"] = False
-                    attempt_info["error"] = last_error
-                    classified_error = classify_sql_error(last_error, stage="ast_parse")
-                    attempt_info["validation_errors"] = [classified_error]
-                    result["attempts"].append(attempt_info)
-                    validation_errors.append(classified_error)
-                    if log_callback:
-                        log_callback(f"AST doğrulaması BAŞARISIZ: {last_error}", 4)
-                    continue
-
-                if log_callback:
-                    log_callback("AST sözdizimi doğrulaması geçti. Şema-bazlı semantik doğrulama başlatılıyor...", 4)
-
-                # ── Katman 1 + 5: Schema-Aware Semantik Doğrulama ──
-                sem_valid, sem_error = SQLValidator.validate(
-                    current_sql, pruned_schema, dialect=dialect
-                )
-                if not sem_valid:
-                    last_error = sem_error
-                    attempt_info["valid"] = False
-                    attempt_info["error"] = last_error
-                    classified_error = classify_sql_error(last_error, stage="semantic_validation")
-                    attempt_info["validation_errors"] = [classified_error]
-                    result["attempts"].append(attempt_info)
-                    validation_errors.append(classified_error)
-                    if log_callback:
-                        log_callback(f"Semantik doğrulama BAŞARISIZ (Critic döngüsüne yönlendiriliyor): {last_error}", 4)
-                    continue
-
-                # Tüm doğrulamalar geçti
-                try:
-                    # SQL'i formatla (Pretty Print)
-                    parsed_tree = sqlglot.parse_one(current_sql, read=dialect)
-                    current_sql = parsed_tree.sql(dialect=dialect, pretty=True)
-                    last_generated_sql = current_sql
-                except Exception:
-                    pass  # Formatlama başarısız olursa orijinal haliyle bırak
-                
-                attempt_info["valid"] = True
-                attempt_info["sql"] = current_sql
-                result["attempts"].append(attempt_info)
-                result["success"] = True
-                result["generated_sql"] = current_sql
-                if log_callback:
-                    log_callback("AST + Semantik doğrulama başarılı! SQL sorgusu üretildi, şema uyumlu ve diyalekt standartlarıyla tam uyumlu.", 4)
-                break
-                    
-            except Exception as e:
-                last_error = f"LLM API Çağrı Hatası: {str(e)}"
-                attempt_info["valid"] = False
-                attempt_info["error"] = last_error
-                classified_error = {
-                    "type": "llm_api_error",
-                    "stage": "llm_generation",
-                    "message": last_error,
-                }
-                attempt_info["validation_errors"] = [classified_error]
-                result["attempts"].append(attempt_info)
-                validation_errors.append(classified_error)
-                if log_callback:
-                    log_callback(f"LLM API Çağrı Hatası: {str(e)}", 3)
-                continue
-
-        if not result["success"]:
-            result["error"] = f"SQL üretimi başarısız oldu. {max_attempts} deneme yapıldı."
-            if log_callback:
-                log_callback(f"Maksimum deneme limitine ({max_attempts}) ulaşıldı. Süreç başarısız.", 5)
-            if result["attempts"]:
-                last_attempt = result["attempts"][-1]
-                has_guardrail_error = any(
-                    err.get("stage") in ["sql_guardrail", "sql_sandbox_safety"] 
-                    for err in last_attempt.get("validation_errors", [])
-                )
-                if has_guardrail_error:
-                    # Do not expose unsafe/rejected SQL in the public generated_sql field
-                    result["generated_sql"] = ""
-                else:
-                    result["generated_sql"] = last_attempt["sql"]
-        else:
-            if log_callback:
-                log_callback("Tebrikler! SQL üretim aşaması başarıyla sonuçlandırıldı.", 5)
-                
         # --- İzlenebilirlik (Traceability) Kaydı ---
-        pruned_schema_ref = locals().get("pruned_schema", {})
-        
         final_sql_valid = result["success"] if result.get("attempts") else None
         final_attempt = result["attempts"][-1] if result.get("attempts") else None
         final_validation_errors = (
@@ -583,7 +656,7 @@ class SQLGenerationPipeline:
             job_id=job_id,
             dialect=dialect,
             natural_query=natural_query or aqr.get("natural_query", ""),
-            pruned_schema=pruned_schema_ref,
+            pruned_schema=pruned_schema,
             generated_sql=result["generated_sql"] if result["success"] else None,
             last_generated_sql=last_generated_sql,
             sql_valid=final_sql_valid,
