@@ -81,7 +81,7 @@ def build_security_span(audit_events) -> TraceSpan:
             category=_status_str(getattr(e, "category", None)),
             outcome=_status_str(getattr(e, "outcome", None)),
             severity=_status_str(getattr(e, "severity", None)),
-            reason_code=getattr(e, "reason_code", None),
+            reason_code=_status_str(getattr(e, "reason_code", None)),
             audit_entry_hash=getattr(e, "entry_hash", None),
         )
         for e in (audit_events or ())
@@ -149,11 +149,11 @@ def build_retrieval_span(result, *, duration_ms: Optional[float] = None) -> Trac
         RetrievalCandidateRef(
             object_id=_status_str(getattr(c, "object_id", None)),
             object_type=_status_str(getattr(c, "object_type", None)),
-            score=getattr(c, "score", None),
-            rank=getattr(c, "rank", None),
+            score=float(getattr(c, "score", None) if getattr(c, "score", None) is not None else 0.0),
+            rank=int(getattr(c, "rank", None) if getattr(c, "rank", None) is not None else idx),
             schema_hash=getattr(c, "schema_hash", None),
         )
-        for c in (getattr(result, "candidates", ()) or ())
+        for idx, c in enumerate(getattr(result, "candidates", ()) or ())
     )
     k_returned = getattr(result, "k_returned", None)
     detail = RetrievalSpanDetail(
@@ -187,7 +187,7 @@ def build_prompt_span(gen_input, *, duration_ms: Optional[float] = None) -> Trac
                      duration_ms=duration_ms, detail=detail)
 
 
-_GENERATION_ERROR_FINISH = {"error", "content_filter", "null", "none", ""}
+_GENERATION_ERROR_FINISH = {"error", "content_filter", "null", "none"}
 _GENERATION_WARNING_FINISH = {"length", "max_tokens", "truncated"}
 
 
@@ -247,7 +247,7 @@ def build_validation_span(issues, *, valid, sql_sha256: Optional[str] = None,
                                   or getattr(e, "type", None)) or "unknown"),
             stage=_status_str(getattr(e, "stage", None)),
             severity=_status_str(getattr(e, "severity", None)),
-            reason_code=(getattr(e, "reason_code", None) or getattr(e, "type", None)),
+            reason_code=_status_str(getattr(e, "reason_code", None) or getattr(e, "type", None)),
         )
         for e in issues
     )

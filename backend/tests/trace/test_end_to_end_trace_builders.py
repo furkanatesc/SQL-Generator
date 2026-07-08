@@ -403,3 +403,61 @@ def test_builders_module_does_not_load_stage_modules_or_drivers():
         assert mod not in newly_loaded, f"builder import pulled {mod}"
     for drv in ("psycopg", "psycopg2", "oracledb", "cx_Oracle"):
         assert drv not in newly_loaded
+
+
+# ---- Sprint 27.1w: carried Minor fixes ----
+
+def test_generation_span_ok_when_output_present_but_finish_reason_missing():
+    result = SimpleNamespace(
+        response=SimpleNamespace(provider_id="p", model_id="m", finish_reason=None,
+                                 latency_ms=12, token_usage=None),
+        output_sha256="abc123", prompt_sha256="def456")
+    span = build_generation_span(result)
+    assert span.status is TraceSpanStatus.OK
+
+
+def test_generation_span_error_when_output_missing():
+    result = SimpleNamespace(
+        response=SimpleNamespace(provider_id="p", model_id="m", finish_reason=None,
+                                 latency_ms=None, token_usage=None),
+        output_sha256=None, prompt_sha256=None)
+    span = build_generation_span(result)
+    assert span.status is TraceSpanStatus.ERROR
+
+
+def test_generation_span_error_when_finish_reason_is_error():
+    result = SimpleNamespace(
+        response=SimpleNamespace(provider_id="p", model_id="m", finish_reason="error",
+                                 latency_ms=None, token_usage=None),
+        output_sha256="abc123", prompt_sha256=None)
+    span = build_generation_span(result)
+    assert span.status is TraceSpanStatus.ERROR
+
+
+def test_retrieval_candidate_missing_score_rank_gets_typed_fallbacks():
+    result = SimpleNamespace(
+        k_requested=2, k_returned=2, retrieval_version="v1",
+        candidates=[SimpleNamespace(object_id="t1", object_type="table"),
+                    SimpleNamespace(object_id="t2", object_type="table")])
+    span = build_retrieval_span(result)
+    c0, c1 = span.detail.candidates
+    assert c0.score == 0.0 and isinstance(c0.score, float)
+    assert c0.rank == 0 and isinstance(c0.rank, int)
+    assert c1.rank == 1
+
+
+def test_security_and_validation_reason_code_normalized_from_enum():
+    import enum
+
+    class _RC(enum.Enum):
+        POLICY_X = "policy_x"
+
+    event = SimpleNamespace(category="policy", outcome="denied", severity="high",
+                            reason_code=_RC.POLICY_X, entry_hash=None)
+    sec = build_security_span([event])
+    assert sec.detail.checks[0].reason_code == "policy_x"
+
+    issue = SimpleNamespace(category="semantic", stage="semantic_validation",
+                            severity="error", reason_code=_RC.POLICY_X)
+    val = build_validation_span([issue], valid=False)
+    assert val.detail.issues[0].reason_code == "policy_x"
