@@ -126,8 +126,178 @@ class SQLGenerationPipeline:
         except Exception as e:
             logger.error(f"Failed to save NL2SQL trace: {e}")
 
+    def _stage_intent(
+        self,
+        *,
+        excel_file_path: Optional[str],
+        natural_query: Optional[str],
+        log_callback: Optional[Any],
+    ) -> Tuple[Optional[dict], Optional[dict], int]:
+        """1. Excel Ayrıştırma (AQR) veya Doğal Dil Sorgusu.
+
+        Dönüş: (aqr, error, elapsed_ms); error = {"message": str, "error_type": str} | None
+        """
+        t0 = time.perf_counter()
+
+        if excel_file_path:
+            try:
+                if log_callback:
+                    log_callback("Excel dosyası inceleniyor ve AQR formatına dönüştürülüyor...", 1)
+                aqr = parse_excel_request(excel_file_path)
+                if log_callback:
+                    log_callback(f"Excel başarıyla ayrıştırıldı. Sorgu: '{aqr.get('natural_query')}'", 1)
+            except Exception as e:
+                error_message = f"Excel Ayrıştırma Hatası: {str(e)}"
+                if log_callback:
+                    log_callback(f"Excel Ayrıştırma BAŞARISIZ: {str(e)}", 1)
+                elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                return None, {"message": error_message, "error_type": "excel_parse_error"}, elapsed_ms
+        elif natural_query:
+            if log_callback:
+                log_callback("Doğal dil sorgusu alındı (Excel şablonu pas geçildi).", 1)
+            aqr = {
+                "natural_query": natural_query,
+                "entities": [],
+                "fields": [],
+                "filters": [],
+                "aggregations": [],
+                "sorts": [],
+                "business_rules": []
+            }
+
+        else:
+            error_message = "Girdi hatası: Hem Excel dosyası hem de Doğal Dil Sorgusu boş olamaz."
+            if log_callback:
+                log_callback("Girdi hatası: Girdi parametreleri eksik.", 1)
+            elapsed_ms = int((time.perf_counter() - t0) * 1000)
+            return None, {"message": error_message, "error_type": "input_error"}, elapsed_ms
+
+        elapsed_ms = int((time.perf_counter() - t0) * 1000)
+        return aqr, None, elapsed_ms
+
+    def _stage_retrieval(
+        self,
+        *,
+        aqr: dict,
+        natural_query: Optional[str],
+        dialect: str,
+        log_callback: Optional[Any],
+    ) -> Tuple[dict, Optional[str], Optional[dict], Optional[dict], int]:
+        """2. Şema Yükleme, Budama ve Deterministik Context Selection.
+
+        Dönüş: (pruned_schema, prompt_schema_context, schema_selection_trace, error, elapsed_ms)
+        error = {"message": str, "error_type": str, "pruned_schema_for_trace": dict,
+                 "pruned_tables": list[str]} | None
+        """
+        t0 = time.perf_counter()
+        schema_selection_trace = None
+        pruned_schema: Dict[str, Any] = {}
+        prompt_schema_context: Optional[str] = None
+
+        try:
+            if log_callback:
+                log_callback("Veritabanı şeması analiz ediliyor ve akıllı budama (Schema Pruning) tetikleniyor...", 2)
+            pruned_schema = self.schema_pruner.prune_schema(aqr, policy=TraversalPolicy(token_budget=8000))
+            if pruned_schema.get("error"):
+                error_message = pruned_schema["error"]
+                if log_callback:
+                    log_callback(f"Şema Budama Başarısız: {error_message}", 2)
+
+                elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                return (
+                    pruned_schema,
+                    None,
+                    schema_selection_trace,
+                    {
+                        "message": error_message,
+                        "error_type": "schema_pruning_error",
+                        "pruned_schema_for_trace": pruned_schema,
+                        "pruned_tables": [],
+                    },
+                    elapsed_ms,
+                )
+
+            pruned_tables = list(pruned_schema.get("tables", {}).keys())
+            if log_callback:
+                log_callback(f"Şema budama tamamlandı. Bütçelenen token: {pruned_schema.get('estimated_tokens', 0)}. Seçilen tablolar: {', '.join(pruned_tables)}", 2)
+
+            # --- Context Selection ---
+            if log_callback:
+                log_callback("Deterministik schema context selection (Sprint 21.1) başlatılıyor...", 2)
+
+            try:
+                database_schema = from_legacy_schema(pruned_schema, dialect=dialect)
+                schema_context_selection = select_schema_context(
+                    schema=database_schema,
+                    question=natural_query or aqr.get("natural_query", "")
+                )
+
+                prompt_schema_context = serialize_selection_for_prompt(
+                    schema=database_schema,
+                    selection=schema_context_selection,
+                    max_columns_per_table=15
+                )
+
+                # Trace mapping
+                schema_selection_trace = {
+                    "focus_tables": schema_context_selection.focus_tables,
+                    "selected_tables": [st.table_name for st in schema_context_selection.selected_tables],
+                    "fallback_used": schema_context_selection.fallback_used,
+                    "fallback_strategy": schema_context_selection.fallback_strategy,
+                    "fallback_limit": schema_context_selection.fallback_limit,
+                    "max_fallback_tables": schema_context_selection.max_fallback_tables,
+                    "selector_version": "deterministic_v1",
+                    "selection_failed": False
+                }
+            except Exception as context_e:
+                error_message = f"Schema context selection failed: {context_e}"
+                if log_callback:
+                    log_callback(f"Context selection failed: {context_e}", 2)
+
+                schema_selection_trace = {
+                    "selector_version": "deterministic_v1",
+                    "selection_failed": True,
+                    "error_type": "schema_context_selection_exception",
+                }
+
+                elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                return (
+                    pruned_schema,
+                    None,
+                    schema_selection_trace,
+                    {
+                        "message": error_message,
+                        "error_type": "schema_context_selection_exception",
+                        "pruned_schema_for_trace": {"error": error_message},
+                        "pruned_tables": pruned_tables,
+                    },
+                    elapsed_ms,
+                )
+
+        except Exception as e:
+            error_message = f"Şema Budama Hatası: {str(e)}"
+            if log_callback:
+                log_callback(f"Şema Budama BAŞARISIZ: {str(e)}", 2)
+
+            elapsed_ms = int((time.perf_counter() - t0) * 1000)
+            return (
+                pruned_schema,
+                None,
+                schema_selection_trace,
+                {
+                    "message": error_message,
+                    "error_type": "schema_pruning_exception",
+                    "pruned_schema_for_trace": {"error": error_message},
+                    "pruned_tables": [],
+                },
+                elapsed_ms,
+            )
+
+        elapsed_ms = int((time.perf_counter() - t0) * 1000)
+        return pruned_schema, prompt_schema_context, schema_selection_trace, None, elapsed_ms
+
     def run_pipeline(
-        self, 
+        self,
         job_id: str = "local_test",
         excel_file_path: Optional[str] = None, 
         natural_query: Optional[str] = None,
@@ -171,185 +341,44 @@ class SQLGenerationPipeline:
             
         start_time = time.perf_counter()
 
-        # 1. Excel Ayrıştırma (AQR) veya Doğal Dil Sorgusu
-        if excel_file_path:
-            try:
-                if log_callback:
-                    log_callback("Excel dosyası inceleniyor ve AQR formatına dönüştürülüyor...", 1)
-                aqr = parse_excel_request(excel_file_path)
-                result["aqr"] = aqr
-                if log_callback:
-                    log_callback(f"Excel başarıyla ayrıştırıldı. Sorgu: '{aqr.get('natural_query')}'", 1)
-            except Exception as e:
-                result["error"] = f"Excel Ayrıştırma Hatası: {str(e)}"
-                if log_callback:
-                    log_callback(f"Excel Ayrıştırma BAŞARISIZ: {str(e)}", 1)
-                
-                self._capture_trace_on_exit(
-                    start_time=start_time,
-                    job_id=job_id,
-                    dialect=dialect,
-                    natural_query=natural_query or "",
-                    pruned_schema={"error": result["error"]},
-                    generated_sql=None,
-                    last_generated_sql=None,
-                    sql_valid=None,
-                    sql_validation_errors=[],
-                    attempts=[],
-                    error_message=result["error"],
-                    error_type="excel_parse_error",
-                    known_secrets=known_secrets,
-                    schema_selection_trace=schema_selection_trace
-                )
-                return redact_sensitive(result, known_secrets)
-        elif natural_query:
-            if log_callback:
-                log_callback("Doğal dil sorgusu alındı (Excel şablonu pas geçildi).", 1)
-            aqr = {
-                "natural_query": natural_query,
-                "entities": [],
-                "fields": [],
-                "filters": [],
-                "aggregations": [],
-                "sorts": [],
-                "business_rules": []
-            }
-            result["aqr"] = aqr
-
-
-        else:
-            result["error"] = "Girdi hatası: Hem Excel dosyası hem de Doğal Dil Sorgusu boş olamaz."
-            if log_callback:
-                log_callback("Girdi hatası: Girdi parametreleri eksik.", 1)
-            
+        # 1. Girdi yorumlama (Excel AQR / doğal dil)
+        aqr, intent_error, intent_ms = self._stage_intent(
+            excel_file_path=excel_file_path, natural_query=natural_query,
+            log_callback=log_callback)
+        if intent_error:
+            result["error"] = intent_error["message"]
             self._capture_trace_on_exit(
-                start_time=start_time,
-                job_id=job_id,
-                dialect=dialect,
+                start_time=start_time, job_id=job_id, dialect=dialect,
                 natural_query=natural_query or "",
                 pruned_schema={"error": result["error"]},
-                generated_sql=None,
-                last_generated_sql=None,
-                sql_valid=None,
-                sql_validation_errors=[],
-                attempts=[],
+                generated_sql=None, last_generated_sql=None, sql_valid=None,
+                sql_validation_errors=[], attempts=[],
                 error_message=result["error"],
-                error_type="input_error",
+                error_type=intent_error["error_type"],
                 known_secrets=known_secrets,
-                schema_selection_trace=schema_selection_trace
-            )
+                schema_selection_trace=None)
             return redact_sensitive(result, known_secrets)
+        result["aqr"] = aqr
 
-        # 2. Şema Yükleme ve Budama
-        try:
-            if log_callback:
-                log_callback("Veritabanı şeması analiz ediliyor ve akıllı budama (Schema Pruning) tetikleniyor...", 2)
-            pruned_schema = self.schema_pruner.prune_schema(aqr, policy=TraversalPolicy(token_budget=8000))
-            if pruned_schema.get("error"):
-                result["error"] = pruned_schema["error"]
-                if log_callback:
-                    log_callback(f"Şema Budama Başarısız: {result['error']}", 2)
-                
-                self._capture_trace_on_exit(
-                    start_time=start_time,
-                    job_id=job_id,
-                    dialect=dialect,
-                    natural_query=natural_query or aqr.get("natural_query", ""),
-                    pruned_schema=pruned_schema,
-                    generated_sql=None,
-                    last_generated_sql=None,
-                    sql_valid=None,
-                    sql_validation_errors=[],
-                    attempts=[],
-                    error_message=result["error"],
-                    error_type="schema_pruning_error",
-                    known_secrets=known_secrets,
-                    schema_selection_trace=schema_selection_trace
-                )
-                return redact_sensitive(result, known_secrets)
-
-            result["pruned_schema_tables"] = list(pruned_schema.get("tables", {}).keys())
-            if log_callback:
-                log_callback(f"Şema budama tamamlandı. Bütçelenen token: {pruned_schema.get('estimated_tokens', 0)}. Seçilen tablolar: {', '.join(result['pruned_schema_tables'])}", 2)
-            
-            # --- Context Selection ---
-            if log_callback:
-                log_callback("Deterministik schema context selection (Sprint 21.1) başlatılıyor...", 2)
-            
-            try:
-                database_schema = from_legacy_schema(pruned_schema, dialect=dialect)
-                schema_context_selection = select_schema_context(
-                    schema=database_schema,
-                    question=natural_query or aqr.get("natural_query", "")
-                )
-                
-                prompt_schema_context = serialize_selection_for_prompt(
-                    schema=database_schema,
-                    selection=schema_context_selection,
-                    max_columns_per_table=15
-                )
-                
-                # Trace mapping
-                schema_selection_trace = {
-                    "focus_tables": schema_context_selection.focus_tables,
-                    "selected_tables": [st.table_name for st in schema_context_selection.selected_tables],
-                    "fallback_used": schema_context_selection.fallback_used,
-                    "fallback_strategy": schema_context_selection.fallback_strategy,
-                    "fallback_limit": schema_context_selection.fallback_limit,
-                    "max_fallback_tables": schema_context_selection.max_fallback_tables,
-                    "selector_version": "deterministic_v1",
-                    "selection_failed": False
-                }
-            except Exception as context_e:
-                result["error"] = f"Schema context selection failed: {context_e}"
-                if log_callback:
-                    log_callback(f"Context selection failed: {context_e}", 2)
-                    
-                schema_selection_trace = {
-                    "selector_version": "deterministic_v1",
-                    "selection_failed": True,
-                    "error_type": "schema_context_selection_exception",
-                }
-                
-                self._capture_trace_on_exit(
-                    start_time=start_time,
-                    job_id=job_id,
-                    dialect=dialect,
-                    natural_query=natural_query or aqr.get("natural_query", ""),
-                    pruned_schema={"error": result["error"]},
-                    generated_sql=None,
-                    last_generated_sql=None,
-                    sql_valid=None,
-                    sql_validation_errors=[],
-                    attempts=[],
-                    error_message=result["error"],
-                    error_type="schema_context_selection_exception",
-                    known_secrets=known_secrets,
-                    schema_selection_trace=schema_selection_trace
-                )
-                return redact_sensitive(result, known_secrets)
-
-        except Exception as e:
-            result["error"] = f"Şema Budama Hatası: {str(e)}"
-            if log_callback:
-                log_callback(f"Şema Budama BAŞARISIZ: {str(e)}", 2)
-                
+        # 2. Şema yükleme + budama + context selection
+        pruned_schema, prompt_schema_context, schema_selection_trace, retr_error, retrieval_ms = \
+            self._stage_retrieval(aqr=aqr, natural_query=natural_query,
+                                  dialect=dialect, log_callback=log_callback)
+        if retr_error:
+            result["error"] = retr_error["message"]
+            result["pruned_schema_tables"] = retr_error.get("pruned_tables", [])
             self._capture_trace_on_exit(
-                start_time=start_time,
-                job_id=job_id,
-                dialect=dialect,
+                start_time=start_time, job_id=job_id, dialect=dialect,
                 natural_query=natural_query or aqr.get("natural_query", ""),
-                pruned_schema={"error": result["error"]},
-                generated_sql=None,
-                last_generated_sql=None,
-                sql_valid=None,
-                sql_validation_errors=[],
-                attempts=[],
+                pruned_schema=retr_error["pruned_schema_for_trace"],
+                generated_sql=None, last_generated_sql=None, sql_valid=None,
+                sql_validation_errors=[], attempts=[],
                 error_message=result["error"],
-                error_type="schema_pruning_exception",
-                known_secrets=known_secrets
-            )
+                error_type=retr_error["error_type"],
+                known_secrets=known_secrets,
+                schema_selection_trace=schema_selection_trace)
             return redact_sensitive(result, known_secrets)
+        result["pruned_schema_tables"] = list(pruned_schema.get("tables", {}).keys())
 
         # 3. İteratif Üretim Döngüsü (Writer-Critic)
         natural_query = aqr.get("natural_query", "")
