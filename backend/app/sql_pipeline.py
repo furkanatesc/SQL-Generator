@@ -23,7 +23,8 @@ from app.sql_guardrail import SQLGuardrailValidator
 from app.sql_safety import SqlSafetyValidator
 from app.trace.builders import build_trace_from_pruned_schema
 from app.trace.store import TraceStore
-from app.trace.models import NL2SQLTrace
+from app.trace.models import NL2SQLTrace, TraceRecord
+from app.trace.live_trace_assembly import assemble_live_end_to_end_trace
 from app.schema_graph import TraversalPolicy
 
 import time
@@ -611,7 +612,9 @@ class SQLGenerationPipeline:
                 error_type=intent_error["error_type"],
                 known_secrets=known_secrets,
                 schema_selection_trace=None,
-                request_id=rid)
+                request_id=rid,
+                success=False,
+                stage_timings={"intent": intent_ms})
             return redact_sensitive(result, known_secrets)
         result["aqr"] = aqr
 
@@ -632,7 +635,9 @@ class SQLGenerationPipeline:
                 error_type=retr_error["error_type"],
                 known_secrets=known_secrets,
                 schema_selection_trace=schema_selection_trace,
-                request_id=rid)
+                request_id=rid,
+                success=False,
+                stage_timings={"intent": intent_ms, "retrieval": retrieval_ms})
             return redact_sensitive(result, known_secrets)
         result["pruned_schema_tables"] = list(pruned_schema.get("tables", {}).keys())
 
@@ -672,9 +677,13 @@ class SQLGenerationPipeline:
             error_type=final_error_type,
             known_secrets=known_secrets,
             schema_selection_trace=schema_selection_trace,
-            request_id=rid
+            request_id=rid,
+            success=result["success"],
+            stage_timings={"intent": intent_ms, "retrieval": retrieval_ms, **wc_timings},
+            prompt_sha256=wc["prompt_sha256"],
+            prompt_char_count=wc["prompt_char_count"]
         )
-                
+
         return redact_sensitive(result, known_secrets)
 
     def _capture_trace_on_exit(
@@ -693,7 +702,11 @@ class SQLGenerationPipeline:
         error_type: Optional[str] = None,
         known_secrets: Optional[Set[str]] = None,
         schema_selection_trace: Optional[Dict[str, Any]] = None,
-        request_id: Optional[str] = None
+        request_id: Optional[str] = None,
+        success: bool = False,
+        stage_timings: Optional[Dict[str, int]] = None,
+        prompt_sha256: Optional[str] = None,
+        prompt_char_count: Optional[int] = None,
     ):
         if not self.trace_store:
             return
@@ -737,3 +750,32 @@ class SQLGenerationPipeline:
             schema_context_selection=schema_selection_trace
         )
         self._save_trace_safely(trace)
+
+        # --- Sprint 27.1w: EndToEndTrace dual-emit (asla pipeline'ı düşürmez) ---
+        # `save_legacy` varlığı, store'un yeni ikili (legacy + end_to_end) modeli
+        # desteklediğinin sinyalidir (bkz. _save_trace_safely dispatch'i). Bu
+        # sinyali taşımayan eski/tekil-`save()` store'lara e2e kaydı GÖNDERİLMEZ —
+        # aksi halde legacy trace ile aynı `save()` kanalına karışır ve o store'a
+        # bağlı çağıran kodun "her run_pipeline çağrısı = 1 save" varsayımını bozar.
+        if not hasattr(self.trace_store, "save_legacy"):
+            return
+        try:
+            e2e = assemble_live_end_to_end_trace(
+                trace_id=f"e2e_{uuid.uuid4().hex}",
+                request_id=request_id or f"req_{uuid.uuid4().hex}",
+                job_id=job_id, dialect=dialect,
+                natural_query_redacted=natural_query,   # yukarıda redakte edildi
+                total_duration_ms=total_ms,
+                stage_timings=stage_timings,
+                error_type=error_type, success=success,
+                schema_selection_trace=schema_selection_trace,
+                pruned_tables=list((pruned_schema or {}).get("tables", {}).keys()),
+                prompt_sha256=prompt_sha256, prompt_char_count=prompt_char_count,
+                attempts_redacted=attempts or [],
+                last_generated_sql_redacted=last_generated_sql)
+            record = TraceRecord(trace_type="end_to_end",
+                                 request_id=e2e.request_id, job_id=job_id,
+                                 payload=e2e.to_payload())
+            self._save_trace_safely(record)
+        except Exception as e:
+            logger.error(f"Failed to emit end-to-end trace: {e}")
