@@ -3,6 +3,7 @@ import re
 import json
 import hashlib
 import logging
+import uuid
 from typing import Dict, Any, List, Optional, Set, Tuple
 import sqlglot
 from sqlglot import exp as sqlglot_exp
@@ -553,9 +554,10 @@ class SQLGenerationPipeline:
         natural_query: Optional[str] = None,
         previous_sql: Optional[str] = None,
         dialect: str = "postgres", 
-        api_key: str = None, 
+        api_key: str = None,
         max_attempts: int = 3,
-        log_callback: Optional[Any] = None
+        log_callback: Optional[Any] = None,
+        request_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Doğal dilden SQL'e tüm üretim pipeline'ını çalıştırır:
@@ -586,9 +588,11 @@ class SQLGenerationPipeline:
         
         schema_selection_trace = None
 
+        rid = request_id or f"req_{uuid.uuid4().hex}"
+
         if log_callback:
             log_callback("SQL üretim süreci başlatıldı...", 1)
-            
+
         start_time = time.perf_counter()
 
         # 1. Girdi yorumlama (Excel AQR / doğal dil)
@@ -606,7 +610,8 @@ class SQLGenerationPipeline:
                 error_message=result["error"],
                 error_type=intent_error["error_type"],
                 known_secrets=known_secrets,
-                schema_selection_trace=None)
+                schema_selection_trace=None,
+                request_id=rid)
             return redact_sensitive(result, known_secrets)
         result["aqr"] = aqr
 
@@ -626,7 +631,8 @@ class SQLGenerationPipeline:
                 error_message=result["error"],
                 error_type=retr_error["error_type"],
                 known_secrets=known_secrets,
-                schema_selection_trace=schema_selection_trace)
+                schema_selection_trace=schema_selection_trace,
+                request_id=rid)
             return redact_sensitive(result, known_secrets)
         result["pruned_schema_tables"] = list(pruned_schema.get("tables", {}).keys())
 
@@ -665,7 +671,8 @@ class SQLGenerationPipeline:
             error_message=final_error_message,
             error_type=final_error_type,
             known_secrets=known_secrets,
-            schema_selection_trace=schema_selection_trace
+            schema_selection_trace=schema_selection_trace,
+            request_id=rid
         )
                 
         return redact_sensitive(result, known_secrets)
@@ -685,7 +692,8 @@ class SQLGenerationPipeline:
         error_message: Optional[str] = None,
         error_type: Optional[str] = None,
         known_secrets: Optional[Set[str]] = None,
-        schema_selection_trace: Optional[Dict[str, Any]] = None
+        schema_selection_trace: Optional[Dict[str, Any]] = None,
+        request_id: Optional[str] = None
     ):
         if not self.trace_store:
             return
