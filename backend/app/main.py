@@ -4,7 +4,7 @@ import uuid
 import datetime
 import shutil
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, status, Query, Response
+from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, status, Query, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -161,6 +161,7 @@ def set_system_config(key: str, data: ConfigUpdateRequest):
 # 2. File Upload API
 @app.post("/api/files/upload", dependencies=[Depends(verify_api_key)], response_model=FileUploadResponse, responses={400: {"model": ErrorResponse}})
 def upload_excel_file(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     natural_query: Optional[str] = Form(None)
@@ -192,7 +193,7 @@ def upload_excel_file(
     job = create_job(job_id=job_id, file_path=dest_path, natural_query=natural_query, dialect=dialect)
     
     # Arka planda gerçek SQL üretim pipeline'ını çalıştır
-    background_tasks.add_task(process_job_pipeline, job_id)
+    background_tasks.add_task(process_job_pipeline, job_id, request_id=getattr(request.state, "request_id", None))
     
     return {
         "status": "success",
@@ -204,7 +205,8 @@ def upload_excel_file(
 @app.post("/api/jobs/without-file", dependencies=[Depends(verify_api_key)], response_model=JobEnvelopeResponse, responses={422: {"model": ErrorResponse}})
 def start_job_without_file(
     request: JobCreateRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    http_request: Request
 ):
     if not request.natural_query.strip():
         raise HTTPException(
@@ -215,7 +217,7 @@ def start_job_without_file(
     job_id = str(uuid.uuid4())
     dialect = get_config("target_db_type") or "postgres"
     job = create_job(job_id=job_id, natural_query=request.natural_query, previous_sql=request.previous_sql, dialect=dialect)
-    background_tasks.add_task(process_job_pipeline, job_id)
+    background_tasks.add_task(process_job_pipeline, job_id, request_id=getattr(http_request.state, "request_id", None))
     return {
         "status": "success",
         "job": job
@@ -325,7 +327,7 @@ def cancel_job_execution(job_id: str):
     }
 
 # Gerçek Asenkron SQL Üretim Pipeline Worker'ı
-def process_job_pipeline(job_id: str):
+def process_job_pipeline(job_id: str, request_id: Optional[str] = None):
     from app.sql_pipeline import SQLGenerationPipeline
     from app.database import get_job, update_job_status, get_config
     import datetime
@@ -378,7 +380,8 @@ def process_job_pipeline(job_id: str):
             previous_sql=job.get("previous_sql"),
             dialect=dialect,
             api_key=api_key,
-            log_callback=log_callback
+            log_callback=log_callback,
+            request_id=request_id
         )
         
         # İşin iptal edilip edilmediğini kontrol et
