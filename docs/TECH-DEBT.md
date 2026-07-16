@@ -76,3 +76,39 @@ tek dosyalık script'tir (vitest kurulumu ayrı bir kalem).
 
 *İlgili Dosyalar:* `frontend/src/components/SchemaManager.vue`,
 `frontend/src/utils/graphSelection.ts`, `frontend/tests/graphSelection.test.ts`
+
+---
+
+## 3. SKIPPED span'lerde `duration_ms` düşürülüyor (Sprint 27.1w) — AÇIK
+
+**Sorun:**
+`build_intent_span` ve `build_retrieval_span`, `result is None` erken-dönüş
+dalında `TraceSpan(..., status=SKIPPED)` kuruyor ve kendilerine verilen
+`duration_ms` argümanını **hiç kullanmıyor** — imzaları kabul etmesine rağmen
+sessizce düşüyor.
+
+**Etkisi:**
+Canlı yolda intent extraction koşmadığı için INTENT span'i her zaman SKIPPED
+olur; dolayısıyla `_stage_intent`'in ölçülen süresi (`intent_ms`) happy path'te
+payload'a **inmez**. Süre yalnızca INTENT *hata* dalında (elle kurulan ERROR
+span'i) taşınır. Aynı desen RETRIEVAL/SKIPPED için de geçerli.
+
+**Neden şimdilik böyle:**
+27.1w planının düzyazı kuralı (satır 187) "duration_ms: her builder'a
+`stage_timings.get(<stage adı>)` verilir" diyor, ama planın kendi referans kodu
+INTENT/SECURITY'ye geçmiyordu — plan kendi içinde çelişiyordu. Whole-branch
+review bunu yakaladı; SECURITY tarafı düzeltildi (`build_security_span` artık
+`duration_ms` alıyor ve SKIPPED dahil tüm dallarda taşıyor). INTENT/RETRIEVAL'ın
+SKIPPED dalına dokunmak onaylanan fix kapsamı dışındaydı ve semantik bir soru
+içeriyor: **koşmamış (SKIPPED) bir stage'e süre iliştirmek doğru mudur?**
+`_stage_intent` duvar saati harcıyor ama intent *extraction* koşmuyor.
+
+**Karar gerektiren nokta:**
+Ya (a) SKIPPED span'ler de gerçek duvar saatini taşısın (planın düzyazı kuralı
+birebir uygulanır), ya da (b) SKIPPED span'in süresiz olması sözleşmenin bir
+parçası kabul edilip planın düzyazı kuralı düzeltilir. Şu an (b) fiilen
+geçerli ama yazılı değil.
+
+*İlgili Dosyalar:* `backend/app/trace/end_to_end_trace_builders.py:114-115`
+(`build_intent_span`), `:146-147` (`build_retrieval_span`),
+`backend/app/trace/live_trace_assembly.py`
