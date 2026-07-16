@@ -136,6 +136,23 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   listede olmayan yazan fonksiyon işaretlenmez (gerçek çözüm allowlist / `pg_proc`
   metadata → sonraki sprint). Gerçek parser/EXPLAIN, execution, sensitive/PII
   policy, audit, approval, API/UI, tenant/RBAC/AuthN bu sprintte **yok**.
+- **Observability: Canlı Uçtan Uca Trace (Sprint 27.1w)**: 27.0/27.1'in saf
+  `EndToEndTrace` sözleşmesi canlı pipeline'a örüldü — HTTP `X-Request-ID`
+  arka plan job'ına taşınır (yoksa `req_` önekiyle üretilir), her stage
+  `perf_counter` ile ölçülür ve `run_pipeline` çıkışında legacy trace'in
+  YANINA `trace_type="end_to_end"` kaydı (7 sabit span: INTENT/RETRIEVAL/
+  PROMPT/GENERATION/VALIDATION/SECURITY/EXECUTION; koşmayan stage SKIPPED,
+  EXECUTION Faz-1'de hep SKIPPED) emit edilir. `run_pipeline` üç stage
+  metoduna ayrıldı (davranış birebir korunur). Trace emisyon hatası pipeline
+  sonucunu asla etkilemez; SQL payload'a asla ham girmez (yalnız sha256).
+  27.1'den devreden 3 Minor builder düzeltmesi kapatıldı. **Bilinen sınır:**
+  ikili emit yalnızca `save_legacy` metodu expose eden trace store'larda
+  çalışır (`SQLGenerationPipeline._capture_trace_on_exit`, `_save_trace_safely`
+  ile aynı feature-detect dispatch'ini kullanır); production'daki
+  `SQLiteTraceStore` ikisini de desteklediğinden tam ikili emit alır, eski
+  tekil-`save()` store'lar yalnızca legacy trace görür, e2e kaydı almaz. Yeni
+  saf modül: `backend/app/trace/live_trace_assembly.py`. Spec:
+  `docs/superpowers/specs/2026-07-06-sprint-27.1w-live-trace-wiring-design.md`.
 
 ### Changed
 - **Arka plan: Canlı Şema Sinapsı (Faz 1)** (2026-07-02 · ara iş, sprint dışı):
