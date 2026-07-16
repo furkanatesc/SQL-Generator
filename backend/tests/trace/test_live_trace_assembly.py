@@ -108,3 +108,50 @@ def test_payload_is_json_safe():
     t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "input_error",
                                           "success": False})
     json.dumps(t.to_payload())
+
+
+def test_intent_error_span_carries_measured_duration():
+    t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "excel_parse_error",
+        "success": False, "stage_timings": {"intent": 42}})
+    assert _span(t, TraceStageKind.INTENT).duration_ms == 42
+
+
+def test_retrieval_error_span_carries_measured_duration():
+    t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "schema_pruning_error",
+        "success": False, "stage_timings": {"retrieval": 17}})
+    assert _span(t, TraceStageKind.RETRIEVAL).duration_ms == 17
+
+
+def test_security_span_carries_measured_duration_when_ok():
+    ok_attempt = {"attempt": 1, "action": "generate", "sql": "SELECT 1",
+                  "valid": True, "error": None}
+    t = assemble_live_end_to_end_trace(**{**BASE, "error_type": None, "success": True,
+        "schema_selection_trace": {"selected_tables": ["u"]}, "pruned_tables": ["u"],
+        "prompt_sha256": "p" * 64, "prompt_char_count": 5,
+        "attempts_redacted": [ok_attempt], "last_generated_sql_redacted": "SELECT 1",
+        "stage_timings": {"security": 7}})
+    assert _span(t, TraceStageKind.SECURITY).duration_ms == 7
+
+
+def test_security_span_carries_measured_duration_when_denied():
+    bad = {"attempt": 1, "action": "generate", "sql": "", "valid": False,
+           "error": "guardrail", "validation_errors": [
+               {"type": "forbidden_statement", "stage": "sql_guardrail",
+                "message": "DDL yasak"}]}
+    t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "sql_generation_failed",
+        "success": False, "prompt_sha256": "p" * 64, "prompt_char_count": 10,
+        "attempts_redacted": [bad], "last_generated_sql_redacted": "DROP TABLE x",
+        "stage_timings": {"security": 11}})
+    assert _span(t, TraceStageKind.SECURITY).duration_ms == 11
+
+
+def test_live_trace_assembly_module_does_not_load_stage_modules_or_drivers():
+    import sys
+    before = set(sys.modules)
+    import app.trace.live_trace_assembly  # noqa: F401
+    newly_loaded = set(sys.modules) - before
+    assert "app.sql_pipeline" not in newly_loaded
+    for drv in ("psycopg", "psycopg2", "oracledb", "cx_Oracle"):
+        assert drv not in newly_loaded
+    assert not any(m.startswith("app.evaluation") for m in newly_loaded)
+    assert not any(m.startswith("app.schema") for m in newly_loaded)

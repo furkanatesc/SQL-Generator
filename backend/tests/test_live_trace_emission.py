@@ -84,3 +84,27 @@ def test_no_raw_sql_in_e2e_payload():
     import json
     text = json.dumps(_e2e_records(store)[0].payload)
     assert "SELECT 1" not in text  # yalnız sha256 taşınır
+
+
+def test_e2e_trace_record_trace_id_matches_payload_trace_id():
+    store = RecordingStore()
+    _pipeline(store).run_pipeline(job_id="j5", natural_query="kaç kullanıcı",
+                                  dialect="postgres")
+    rec = _e2e_records(store)[0]
+    assert rec.trace_id == rec.payload["trace_id"]
+
+
+def test_happy_path_spans_that_ran_have_durations():
+    store = RecordingStore()
+    _pipeline(store).run_pipeline(job_id="j6", natural_query="kaç kullanıcı",
+                                  dialect="postgres")
+    rec = _e2e_records(store)[0]
+    by_stage = {s["stage"]: s for s in rec.payload["spans"]}
+    # INTENT and EXECUTION are legitimately SKIPPED on the live path (no
+    # intent extraction, no live execution in Phase-1) so no duration is
+    # expected for them. The remaining five stages genuinely run.
+    assert by_stage["intent"]["status"] == "skipped"
+    assert by_stage["execution"]["status"] == "skipped"
+    for stage in ("retrieval", "prompt", "generation", "validation", "security"):
+        assert by_stage[stage]["duration_ms"] is not None, (
+            f"{stage} span ran but carries no duration_ms")

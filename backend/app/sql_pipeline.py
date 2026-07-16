@@ -773,7 +773,7 @@ class SQLGenerationPipeline:
                 prompt_sha256=prompt_sha256, prompt_char_count=prompt_char_count,
                 attempts_redacted=attempts or [],
                 last_generated_sql_redacted=last_generated_sql)
-            record = TraceRecord(trace_type="end_to_end",
+            record = TraceRecord(trace_type="end_to_end", trace_id=e2e.trace_id,
                                  request_id=e2e.request_id, job_id=job_id,
                                  payload=e2e.to_payload())
             self._save_trace_safely(record)
