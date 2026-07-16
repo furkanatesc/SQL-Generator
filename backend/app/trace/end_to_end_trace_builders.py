@@ -70,7 +70,7 @@ _DENY_OUTCOMES = {"denied", "error"}
 _WARN_OUTCOMES = {"flagged", "requires_approval"}
 
 
-def build_security_span(audit_events) -> TraceSpan:
+def build_security_span(audit_events, *, duration_ms: Optional[float] = None) -> TraceSpan:
     """Normalize a sequence of (duck-typed) AuditEvents into a security span.
 
     Reads each event's .category/.outcome/.severity (enum-or-str), .reason_code,
@@ -95,7 +95,7 @@ def build_security_span(audit_events) -> TraceSpan:
     else:
         status = TraceSpanStatus.OK
     return TraceSpan(stage=TraceStageKind.SECURITY, status=status,
-                     detail=SecuritySpanDetail(checks=checks))
+                     duration_ms=duration_ms, detail=SecuritySpanDetail(checks=checks))
 
 
 _INTENT_FLAG_NAMES = (
