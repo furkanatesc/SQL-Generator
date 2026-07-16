@@ -90,14 +90,16 @@ def assemble_live_end_to_end_trace(
     if error_type in _INPUT_ERROR_TYPES:
         intent_span = TraceSpan(stage=TraceStageKind.INTENT,
                                 status=TraceSpanStatus.ERROR,
+                                duration_ms=timings.get("intent"),
                                 attributes={"reason_code": error_type})
     else:
-        intent_span = build_intent_span(None)
+        intent_span = build_intent_span(None, duration_ms=timings.get("intent"))
 
     # RETRIEVAL
     if error_type in _RETRIEVAL_ERROR_TYPES:
         retrieval_span = TraceSpan(stage=TraceStageKind.RETRIEVAL,
                                    status=TraceSpanStatus.ERROR,
+                                   duration_ms=timings.get("retrieval"),
                                    attributes={"reason_code": error_type})
     else:
         table_names = list((schema_selection_trace or {}).get("selected_tables")
@@ -151,17 +153,18 @@ def assemble_live_end_to_end_trace(
 
     # SECURITY
     if not attempts:
-        security_span = build_security_span(())
+        security_span = build_security_span((), duration_ms=timings.get("security"))
     elif security_issues:
         security_span = build_security_span([
             SimpleNamespace(category=e.get("stage"), outcome="denied",
                             severity="error", reason_code=e.get("type"),
                             entry_hash=None)
-            for e in security_issues])
+            for e in security_issues], duration_ms=timings.get("security"))
     else:
         security_span = build_security_span([
             SimpleNamespace(category="sql_guardrail", outcome="allowed",
-                            severity="info", reason_code=None, entry_hash=None)])
+                            severity="info", reason_code=None, entry_hash=None)],
+            duration_ms=timings.get("security"))
 
     # EXECUTION — Faz-1'de canlı çalıştırma yok (spec §1.4).
     execution_span = TraceSpan(stage=TraceStageKind.EXECUTION,

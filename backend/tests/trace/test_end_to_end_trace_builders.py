@@ -129,6 +129,21 @@ def test_security_none_is_skipped():
     assert span.detail.checks == ()
 
 
+def test_security_span_accepts_duration_ms_when_ok():
+    span = build_security_span((_evt("allowed"),), duration_ms=5.0)
+    assert span.duration_ms == 5.0
+
+
+def test_security_span_accepts_duration_ms_when_skipped():
+    span = build_security_span((), duration_ms=2.0)
+    assert span.duration_ms == 2.0
+
+
+def test_security_span_accepts_duration_ms_when_error():
+    span = build_security_span((_evt("denied"),), duration_ms=9.0)
+    assert span.duration_ms == 9.0
+
+
 # --- intent span tests ---
 from app.trace.end_to_end_trace import IntentSpanDetail  # noqa: E402
 from app.trace.end_to_end_trace_builders import build_intent_span  # noqa: E402
