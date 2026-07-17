@@ -68,7 +68,7 @@ def test_final_failure_uses_last_attempt_validation_errors(mock_schema_manager, 
     assert trace.generated_sql is None
     assert trace.last_generated_sql == "DELETE FROM users;"
     assert trace.sql_valid is False
-    assert trace.error_type == "sql_generation_failed"
+    assert trace.error_type == "sql_generation_exhausted"
     assert len(trace.sql_validation_errors) > 0
     assert trace.sql_validation_errors[0]["stage"] == "sql_guardrail"
     assert trace.sql_validation_errors[0]["type"] == "non_select_statement"
@@ -88,7 +88,7 @@ def test_guardrail_failure_fail_fast_trace_contract(mock_schema_manager, mock_nv
     assert trace.generated_sql is None
     assert trace.last_generated_sql == "DELETE FROM users;"
     assert trace.sql_valid is False
-    assert trace.error_type == "sql_generation_failed"
+    assert trace.error_type == "sql_generation_exhausted"
     assert len(trace.attempts) == 1
     assert trace.attempts[0]["valid"] is False
     assert trace.attempts[0]["validation_errors"][0]["stage"] == "sql_guardrail"
@@ -107,7 +107,7 @@ def test_all_guardrail_failures_fail_fast_trace_contract(mock_schema_manager, mo
     assert trace.generated_sql is None
     assert trace.last_generated_sql == "DROP TABLE users;"
     assert trace.sql_valid is False
-    assert trace.error_type == "sql_generation_failed"
+    assert trace.error_type == "sql_generation_exhausted"
     assert len(trace.sql_validation_errors) > 0
     assert trace.sql_validation_errors[0]["stage"] == "sql_guardrail"
     assert len(trace.attempts) == 1
@@ -125,7 +125,7 @@ def test_llm_api_failure_attempt_has_validation_errors(mock_schema_manager, mock
     assert trace.generated_sql is None
     assert trace.last_generated_sql is None
     assert trace.sql_valid is False
-    assert trace.error_type == "sql_generation_failed"
+    assert trace.error_type == "sql_generation_exhausted"
     assert trace.sql_validation_errors[0]["type"] == "llm_api_error"
     assert trace.sql_validation_errors[0]["stage"] == "llm_generation"
     assert len(trace.attempts) == 1
@@ -143,7 +143,7 @@ def test_schema_pruning_error(mock_schema_manager, mock_nvidia_client):
     assert trace.generated_sql is None
     assert trace.last_generated_sql is None
     assert trace.sql_valid is None
-    assert trace.error_type == "schema_pruning_error"
+    assert trace.error_type == "schema_pruning_failed"
     assert trace.error_message == "Schema err"
 
 def test_input_error(mock_schema_manager, mock_nvidia_client):
@@ -182,7 +182,7 @@ def test_schema_pruning_exception_trace_contract(mock_schema_manager, mock_nvidi
     assert trace.sql_valid is None
     assert trace.sql_validation_errors == []
     assert trace.attempts == []
-    assert trace.error_type == "schema_pruning_exception"
+    assert trace.error_type == "schema_pruning_crashed"
     assert "graph exploded" in trace.error_message
 
 def test_excel_parse_error_trace_contract(mock_schema_manager, mock_nvidia_client):
@@ -229,7 +229,7 @@ def test_semantic_missing_column_taxonomy_contract(mock_schema_manager, mock_nvi
             pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=1)
 
     trace = store.saved[0]
-    assert trace.error_type == "sql_generation_failed"
+    assert trace.error_type == "sql_generation_exhausted"
     assert len(trace.attempts) == 1
     assert trace.attempts[0]["validation_errors"][0]["stage"] == "semantic_validation"
     assert trace.attempts[0]["validation_errors"][0]["type"] == "missing_column"
@@ -251,7 +251,7 @@ def test_ast_parse_error_taxonomy_contract(mock_schema_manager, mock_nvidia_clie
             pipeline.run_pipeline(job_id="j1", natural_query="q", max_attempts=1)
 
     trace = store.saved[0]
-    assert trace.error_type == "sql_generation_failed"
+    assert trace.error_type == "sql_generation_exhausted"
     assert len(trace.attempts) == 1
     assert trace.attempts[0]["validation_errors"][0]["stage"] == "ast_parse"
     assert trace.attempts[0]["validation_errors"][0]["type"] == "syntax_error"

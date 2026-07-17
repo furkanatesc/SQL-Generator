@@ -65,7 +65,7 @@ def test_llm_exception_failure_trace_consistency(mock_prompt):
     assert result["attempts"][0]["validation_errors"][0]["type"] == "llm_api_error"
 
     trace = get_saved_trace(trace_store)
-    assert trace_get(trace, "error_type") == "sql_generation_failed"
+    assert trace_get(trace, "error_type") == "sql_generation_exhausted"
     assert trace_get(trace, "sql_valid") is False
     assert trace_get(trace, "generated_sql") is None
     assert trace_get(trace, "last_generated_sql") is None
@@ -118,7 +118,7 @@ def test_guardrail_failure_trace_consistency(mock_prompt):
     assert result["attempts"][0]["validation_errors"][0]["stage"] == "sql_guardrail"
 
     trace = get_saved_trace(trace_store)
-    assert trace_get(trace, "error_type") == "sql_generation_failed"
+    assert trace_get(trace, "error_type") == "sql_generation_exhausted"
     assert trace_get(trace, "sql_valid") is False
     assert trace_get(trace, "generated_sql") is None
     assert trace_get(trace, "last_generated_sql") == "DROP TABLE users;"
@@ -171,7 +171,7 @@ def test_semantic_validation_failure_trace_consistency(mock_prompt):
     assert result["attempts"][0]["validation_errors"][0]["type"] == "missing_column"
 
     trace = get_saved_trace(trace_store)
-    assert trace_get(trace, "error_type") == "sql_generation_failed"
+    assert trace_get(trace, "error_type") == "sql_generation_exhausted"
     assert trace_get(trace, "sql_valid") is False
     assert trace_get(trace, "generated_sql") is None
     assert trace_get(trace, "last_generated_sql") == "SELECT invalid_col FROM users"
@@ -216,7 +216,7 @@ def test_syntax_parse_failure_trace_consistency(mock_prompt):
     assert result["success"] is False
 
     trace = get_saved_trace(trace_store)
-    assert trace_get(trace, "error_type") == "sql_generation_failed"
+    assert trace_get(trace, "error_type") == "sql_generation_exhausted"
     assert trace_get(trace, "sql_valid") is False
     assert trace_get(trace, "generated_sql") is None
     assert trace_get(trace, "last_generated_sql") == "SELECT * FROM"

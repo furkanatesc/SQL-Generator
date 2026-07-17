@@ -1,6 +1,8 @@
 import re
 from typing import Any, Set
 
+from app.errors import ErrorCode
+
 def redact_sensitive_text(value: str, known_secrets: Set[str] = None) -> str:
     if not value or not isinstance(value, str):
         return value
@@ -34,6 +36,11 @@ def redact_sensitive_text(value: str, known_secrets: Set[str] = None) -> str:
     return value
 
 def redact_sensitive(value: Any, known_secrets: Set[str] = None) -> Any:
+    # ErrorCode kapalı bir sözlüktür: asla kullanıcı verisi ya da secret
+    # taşımaz. str alt sınıfı olduğu için aşağıdaki isinstance(value, str)
+    # dalına düşer ve düz string'e indirgenirdi — tipi koruyoruz (Sprint 27.2).
+    if isinstance(value, ErrorCode):
+        return value
     if isinstance(value, str):
         return redact_sensitive_text(value, known_secrets)
     if isinstance(value, list):

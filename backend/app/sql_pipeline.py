@@ -26,6 +26,7 @@ from app.trace.store import TraceStore
 from app.trace.models import NL2SQLTrace, TraceRecord
 from app.trace.live_trace_assembly import assemble_live_end_to_end_trace
 from app.schema_graph import TraversalPolicy
+from app.errors import ErrorCode
 
 import time
 
@@ -66,16 +67,25 @@ def enforce_oracle_case(sql: str, dialect: str = "oracle") -> str:
         return sql.upper()
 
 def classify_sql_error(error_message: str, stage: str) -> Dict[str, Any]:
+    """Validator/critic düzyazısını bir ErrorCode'a eşler.
+
+    Sıra ÖNEMLİ: parse/syntax kontrolü column/table'dan ÖNCE gelir. v1'de tersiydi
+    ve içinde "column" geçen her parse hatası missing_column oluyordu; syntax_error
+    pratikte ulaşılamazdı (Sprint 27.2 T3).
+
+    Düzyazı ayrıştırmanın kendisi mimari bir borçtur (TECH-DEBT): doğru çözüm
+    validator'ların kod döndürmesidir, mesaj eşlemek değil.
+    """
     error_lower = (error_message or "").lower()
 
-    if "missing column" in error_lower or "column" in error_lower:
-        error_type = "missing_column"
+    if "parse" in error_lower or "syntax" in error_lower:
+        error_type = ErrorCode.SYNTAX_ERROR
+    elif "missing column" in error_lower or "column" in error_lower:
+        error_type = ErrorCode.MISSING_COLUMN
     elif "missing table" in error_lower or "table" in error_lower:
-        error_type = "missing_table"
-    elif "parse" in error_lower or "syntax" in error_lower:
-        error_type = "syntax_error"
+        error_type = ErrorCode.MISSING_TABLE
     else:
-        error_type = "validation_error"
+        error_type = ErrorCode.SEMANTIC_VALIDATION_FAILED
 
     return {
         "type": error_type,
@@ -154,7 +164,7 @@ class SQLGenerationPipeline:
                 if log_callback:
                     log_callback(f"Excel Ayrıştırma BAŞARISIZ: {str(e)}", 1)
                 elapsed_ms = int((time.perf_counter() - t0) * 1000)
-                return None, {"message": error_message, "error_type": "excel_parse_error"}, elapsed_ms
+                return None, {"message": error_message, "error_type": ErrorCode.EXCEL_PARSE_ERROR}, elapsed_ms
         elif natural_query:
             if log_callback:
                 log_callback("Doğal dil sorgusu alındı (Excel şablonu pas geçildi).", 1)
@@ -173,7 +183,7 @@ class SQLGenerationPipeline:
             if log_callback:
                 log_callback("Girdi hatası: Girdi parametreleri eksik.", 1)
             elapsed_ms = int((time.perf_counter() - t0) * 1000)
-            return None, {"message": error_message, "error_type": "input_error"}, elapsed_ms
+            return None, {"message": error_message, "error_type": ErrorCode.INPUT_ERROR}, elapsed_ms
 
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
         return aqr, None, elapsed_ms
@@ -213,7 +223,7 @@ class SQLGenerationPipeline:
                     schema_selection_trace,
                     {
                         "message": error_message,
-                        "error_type": "schema_pruning_error",
+                        "error_type": ErrorCode.SCHEMA_PRUNING_FAILED,
                         "pruned_schema_for_trace": pruned_schema,
                         "pruned_tables": [],
                     },
@@ -260,7 +270,7 @@ class SQLGenerationPipeline:
                 schema_selection_trace = {
                     "selector_version": "deterministic_v1",
                     "selection_failed": True,
-                    "error_type": "schema_context_selection_exception",
+                    "error_type": ErrorCode.SCHEMA_CONTEXT_SELECTION_CRASHED,
                 }
 
                 elapsed_ms = int((time.perf_counter() - t0) * 1000)
@@ -270,7 +280,7 @@ class SQLGenerationPipeline:
                     schema_selection_trace,
                     {
                         "message": error_message,
-                        "error_type": "schema_context_selection_exception",
+                        "error_type": ErrorCode.SCHEMA_CONTEXT_SELECTION_CRASHED,
                         "pruned_schema_for_trace": {"error": error_message},
                         "pruned_tables": pruned_tables,
                     },
@@ -289,7 +299,7 @@ class SQLGenerationPipeline:
                 schema_selection_trace,
                 {
                     "message": error_message,
-                    "error_type": "schema_pruning_exception",
+                    "error_type": ErrorCode.SCHEMA_PRUNING_CRASHED,
                     "pruned_schema_for_trace": {"error": error_message},
                     "pruned_tables": [],
                 },
@@ -431,7 +441,7 @@ class SQLGenerationPipeline:
                         attempt_info["valid"] = False
                         attempt_info["error"] = last_error
                         attempt_info["validation_errors"] = [{
-                            "type": "unsafe_sql",
+                            "type": ErrorCode.UNSAFE_SANDBOX_REJECTED,
                             "stage": "sql_sandbox_safety",
                             "message": last_error
                         }]
@@ -509,7 +519,7 @@ class SQLGenerationPipeline:
                 attempt_info["valid"] = False
                 attempt_info["error"] = last_error
                 classified_error = {
-                    "type": "llm_api_error",
+                    "type": ErrorCode.LLM_API_ERROR,
                     "stage": "llm_generation",
                     "message": last_error,
                 }
@@ -584,7 +594,8 @@ class SQLGenerationPipeline:
             "pruned_schema_tables": [],
             "generated_sql": "",
             "attempts": [],
-            "error": None
+            "error": None,
+            "error_code": None,
         }
         
         schema_selection_trace = None
@@ -602,6 +613,7 @@ class SQLGenerationPipeline:
             log_callback=log_callback)
         if intent_error:
             result["error"] = intent_error["message"]
+            result["error_code"] = intent_error["error_type"]
             self._capture_trace_on_exit(
                 start_time=start_time, job_id=job_id, dialect=dialect,
                 natural_query=natural_query or "",
@@ -624,6 +636,7 @@ class SQLGenerationPipeline:
                                   dialect=dialect, log_callback=log_callback)
         if retr_error:
             result["error"] = retr_error["message"]
+            result["error_code"] = retr_error["error_type"]
             result["pruned_schema_tables"] = retr_error.get("pruned_tables", [])
             self._capture_trace_on_exit(
                 start_time=start_time, job_id=job_id, dialect=dialect,
@@ -659,7 +672,8 @@ class SQLGenerationPipeline:
             if result["success"]
             else (final_attempt.get("validation_errors", []) if final_attempt else validation_errors)
         )
-        final_error_type = None if result["success"] else "sql_generation_failed"
+        final_error_type = None if result["success"] else ErrorCode.SQL_GENERATION_EXHAUSTED
+        result["error_code"] = final_error_type
         final_error_message = None if result["success"] else result.get("error")
         
         self._capture_trace_on_exit(

@@ -63,6 +63,6 @@ def test_pipeline_rejection_admin_pragma_sandbox():
     val_errors = attempt["validation_errors"]
     assert len(val_errors) == 1
     err = val_errors[0]
-    assert err["type"] == "unsafe_sql"
+    assert err["type"] == "unsafe_sandbox_rejected"
     assert err["stage"] == "sql_sandbox_safety"
     assert "PRAGMA" in err["message"]
