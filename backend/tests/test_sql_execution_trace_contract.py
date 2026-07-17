@@ -138,7 +138,7 @@ def test_unsafe_sql_not_exposed_in_public_response_but_stage_is_traceable(mock_g
     assert last_attempt["valid"] is False
     assert len(last_attempt["validation_errors"]) == 1
     assert last_attempt["validation_errors"][0]["stage"] == "sql_sandbox_safety"
-    assert last_attempt["validation_errors"][0]["type"] == "unsafe_sql"
+    assert last_attempt["validation_errors"][0]["type"] == "unsafe_sandbox_rejected"
 
     # Verify debug trace gets the detailed last_generated_sql but public response does not leak it
     trace_store.save.assert_called_once()
@@ -148,7 +148,7 @@ def test_unsafe_sql_not_exposed_in_public_response_but_stage_is_traceable(mock_g
     assert getattr(trace, "generated_sql") is None
     assert getattr(trace, "last_generated_sql") == "DELETE FROM users WHERE id = 1;"
     assert getattr(trace, "sql_validation_errors")[0]["stage"] == "sql_sandbox_safety"
-    assert getattr(trace, "sql_validation_errors")[0]["type"] == "unsafe_sql"
+    assert getattr(trace, "sql_validation_errors")[0]["type"] == "unsafe_sandbox_rejected"
 
 
 @patch("app.sql_pipeline.PromptTemplateManager.get_writer_prompt", return_value="dummy prompt")
