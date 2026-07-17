@@ -164,9 +164,9 @@ def test_pipeline_context_selection_exception_fails_closed_without_llm_call():
     # Assert trace error type
     assert pipeline.trace_store.save.call_count == 1
     trace = pipeline.trace_store.save.call_args[0][0]
-    assert trace.error_type == "schema_context_selection_exception"
+    assert trace.error_type == "schema_context_selection_crashed"
     assert trace.schema_context_selection["selection_failed"] is True
-    assert trace.schema_context_selection["error_type"] == "schema_context_selection_exception"
+    assert trace.schema_context_selection["error_type"] == "schema_context_selection_crashed"
 
 
 def test_pipeline_does_not_expose_guardrail_rejected_sql_as_generated_sql():

@@ -127,7 +127,7 @@ def test_pipeline_trace_capture_failure(mock_schema_manager, mock_nvidia_client)
     assert len(store.saved) == 1
     trace = store.saved[0]
     assert trace.error_message == "Failed to prune"
-    assert trace.error_type == "schema_pruning_error"
+    assert trace.error_type == "schema_pruning_failed"
     assert trace.generated_sql is None
 
 def test_pipeline_trace_save_error_does_not_break_flow(mock_schema_manager, mock_nvidia_client):
@@ -182,7 +182,7 @@ def test_pipeline_trace_capture_sql_validation_failure(mock_schema_manager, mock
     assert trace.sql_valid is False
     assert trace.last_generated_sql is not None
     assert trace.generated_sql is None
-    assert trace.error_type == "sql_generation_failed"
+    assert trace.error_type == "sql_generation_exhausted"
     assert len(trace.sql_validation_errors) == 1
     assert trace.sql_validation_errors[0]["type"] == "missing_column"
     assert trace.sql_validation_errors[0]["stage"] == "semantic_validation"
@@ -301,7 +301,7 @@ def test_pipeline_trace_capture_unsafe_sql_fail_fast(mock_schema_manager, mock_n
     assert trace.sql_valid is False
     assert trace.generated_sql is None
     assert trace.last_generated_sql == "DELETE FROM customers WHERE id = 1;"
-    assert trace.error_type == "sql_generation_failed"
+    assert trace.error_type == "sql_generation_exhausted"
     assert len(trace.attempts) == 1
     assert trace.attempts[0]["valid"] is False
     assert trace.attempts[0]["validation_errors"][0]["stage"] == "sql_guardrail"
@@ -337,7 +337,7 @@ def test_pipeline_trace_capture_unsafe_failure_fail_fast(mock_schema_manager, mo
     assert trace.sql_valid is False
     assert trace.generated_sql is None
     assert trace.last_generated_sql == "DROP TABLE users;"
-    assert trace.error_type == "sql_generation_failed"
+    assert trace.error_type == "sql_generation_exhausted"
     assert len(trace.attempts) == 1
     assert trace.attempts[0]["valid"] is False
     assert trace.attempts[0]["validation_errors"][0]["stage"] == "sql_guardrail"
@@ -396,9 +396,9 @@ def test_pipeline_trace_schema_selection_exception(mock_schema_manager, mock_nvi
     assert len(store.saved) == 1
     
     trace = store.saved[0]
-    assert trace.error_type == "schema_context_selection_exception"
+    assert trace.error_type == "schema_context_selection_crashed"
     assert trace.schema_context_selection["selection_failed"] is True
-    assert trace.schema_context_selection["error_type"] == "schema_context_selection_exception"
+    assert trace.schema_context_selection["error_type"] == "schema_context_selection_crashed"
     assert trace.generated_sql is None
 
 def test_pipeline_fallback_is_traced(mock_schema_manager, mock_nvidia_client):
