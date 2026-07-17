@@ -88,7 +88,7 @@ def test_rejects_cte_with_dml():
     """
     errors = SQLGuardrailValidator.validate(sql)
     assert len(errors) == 1
-    assert errors[0]["type"] == "unsafe_sql"
+    assert errors[0]["type"] == "unsafe_dml_keyword"
     assert errors[0]["details"]["reason"] == "dml_keyword_detected"
     assert errors[0]["details"]["keyword"] == "DELETE"
 

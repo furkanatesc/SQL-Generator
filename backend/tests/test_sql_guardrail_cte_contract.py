@@ -53,7 +53,7 @@ def test_guardrail_rejects_delete_inside_cte():
     errors = SQLGuardrailValidator.validate(sql, dialect="postgres")
 
     assert len(errors) == 1
-    assert errors[0]["type"] == "unsafe_sql"
+    assert errors[0]["type"] == "unsafe_dml_keyword"
     assert errors[0]["stage"] == "sql_guardrail"
     assert errors[0]["details"]["reason"] == "dml_keyword_detected"
     assert errors[0]["details"]["keyword"] == "DELETE"
@@ -70,7 +70,7 @@ def test_guardrail_rejects_update_inside_cte():
     errors = SQLGuardrailValidator.validate(sql, dialect="postgres")
 
     assert len(errors) == 1
-    assert errors[0]["type"] in {"unsafe_sql", "sql_parse_error", "non_select_statement"}
+    assert errors[0]["type"] in {"unsafe_dml_keyword", "sql_parse_error", "non_select_statement"}
 
 
 def test_guardrail_rejects_insert_inside_cte():
@@ -84,7 +84,7 @@ def test_guardrail_rejects_insert_inside_cte():
     errors = SQLGuardrailValidator.validate(sql, dialect="postgres")
 
     assert len(errors) == 1
-    assert errors[0]["type"] in {"unsafe_sql", "sql_parse_error", "non_select_statement"}
+    assert errors[0]["type"] in {"unsafe_dml_keyword", "sql_parse_error", "non_select_statement"}
 
 
 def test_guardrail_rejects_create_inside_cte():
@@ -98,7 +98,7 @@ def test_guardrail_rejects_create_inside_cte():
     errors = SQLGuardrailValidator.validate(sql, dialect="postgres")
 
     assert len(errors) == 1
-    assert errors[0]["type"] in {"unsafe_sql", "sql_parse_error", "non_select_statement"}
+    assert errors[0]["type"] in {"unsafe_dml_keyword", "sql_parse_error", "non_select_statement"}
 
 
 def test_guardrail_rejects_cte_plus_second_statement():

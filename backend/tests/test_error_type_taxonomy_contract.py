@@ -20,7 +20,9 @@ ALLOWED_ERROR_TYPES = {
     "empty_sql",
     "multiple_statements",
     "non_select_statement",
-    "unsafe_sql"
+    "unsafe_dangerous_function",
+    "unsafe_dml_keyword",
+    "unsafe_sandbox_rejected",
 }
 
 
@@ -98,7 +100,7 @@ def test_guardrail_dangerous_function_uses_stable_error_type():
     errors = SQLGuardrailValidator.validate("SELECT pg_sleep(10)")
     assert len(errors) > 0
     err = errors[0]
-    assert err["type"] == "unsafe_sql"
+    assert err["type"] == "unsafe_dangerous_function"
     assert err["stage"] == "sql_guardrail"
     assert err["type"] in ALLOWED_ERROR_TYPES
 

@@ -48,7 +48,7 @@ def test_guardrail_rejects_required_dangerous_functions_behaviorally():
         errors = SQLGuardrailValidator.validate(sql, dialect="postgres")
 
         assert len(errors) == 1
-        assert errors[0]["type"] == "unsafe_sql"
+        assert errors[0]["type"] == "unsafe_dangerous_function"
         assert errors[0]["stage"] == "sql_guardrail"
         assert errors[0]["details"]["reason"] == "dangerous_function_detected"
         assert errors[0]["details"]["function"] == expected_function
