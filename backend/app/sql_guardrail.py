@@ -2,6 +2,7 @@ import sqlglot
 from sqlglot import exp
 from typing import List, Dict, Any
 
+from app.errors import ErrorCode
 from app.sql_dialects import DEFAULT_SQL_DIALECT, normalize_sql_dialect
 
 class SQLGuardrailValidator:
@@ -48,14 +49,14 @@ class SQLGuardrailValidator:
             dialect = normalize_sql_dialect(dialect)
         except ValueError as e:
             return [{
-                "type": "unsupported_dialect",
+                "type": ErrorCode.UNSUPPORTED_DIALECT,
                 "stage": "sql_guardrail",
                 "message": str(e),
             }]
 
         if not sql or not sql.strip():
             return [{
-                "type": "empty_sql",
+                "type": ErrorCode.EMPTY_SQL,
                 "stage": "sql_guardrail",
                 "message": "SQL query cannot be empty",
             }]
@@ -67,21 +68,21 @@ class SQLGuardrailValidator:
             valid_stmts = [s for s in stmts if s is not None]
         except Exception as e:
             return [{
-                "type": "sql_parse_error",
+                "type": ErrorCode.SQL_PARSE_ERROR,
                 "stage": "sql_guardrail",
                 "message": f"Failed to parse SQL: {str(e)}",
             }]
 
         if not valid_stmts:
             return [{
-                "type": "empty_sql",
+                "type": ErrorCode.EMPTY_SQL,
                 "stage": "sql_guardrail",
                 "message": "SQL query contains no valid statements",
             }]
 
         if len(valid_stmts) > 1:
             return [{
-                "type": "multiple_statements",
+                "type": ErrorCode.MULTIPLE_STATEMENTS,
                 "stage": "sql_guardrail",
                 "message": "Only single statements are allowed",
             }]
@@ -91,7 +92,7 @@ class SQLGuardrailValidator:
         # Sadece SELECT ve türevlerine (örneğin WITH kullanarak) izin veriyoruz
         if not isinstance(stmt, exp.Select):
             return [{
-                "type": "non_select_statement",
+                "type": ErrorCode.NON_SELECT_STATEMENT,
                 "stage": "sql_guardrail",
                 "message": "Only read-only SELECT statements are allowed",
                 "details": {
@@ -109,7 +110,7 @@ class SQLGuardrailValidator:
 
             if isinstance(node, exp.Func) and function_name in cls.DANGEROUS_FUNCTION_NAMES:
                 errors.append({
-                    "type": "unsafe_sql",
+                    "type": ErrorCode.UNSAFE_DANGEROUS_FUNCTION,
                     "stage": "sql_guardrail",
                     "message": "Dangerous SQL function is not allowed",
                     "details": {
@@ -121,7 +122,7 @@ class SQLGuardrailValidator:
             
             if isinstance(node, cls.FORBIDDEN_NODE_TYPES) or node_key in cls.FORBIDDEN_KEYS:
                 errors.append({
-                    "type": "unsafe_sql",
+                    "type": ErrorCode.UNSAFE_DML_KEYWORD,
                     "stage": "sql_guardrail",
                     "message": "Only read-only SELECT statements are allowed",
                     "details": {

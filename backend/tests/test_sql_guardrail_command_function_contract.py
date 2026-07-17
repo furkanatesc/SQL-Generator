@@ -35,7 +35,7 @@ def test_guardrail_rejects_call_statement():
     )
 
     assert len(errors) == 1
-    assert errors[0]["type"] in {"non_select_statement", "unsafe_sql", "sql_parse_error"}
+    assert errors[0]["type"] in {"non_select_statement", "sql_parse_error"}
     assert errors[0]["stage"] == "sql_guardrail"
 
 
@@ -46,7 +46,7 @@ def test_guardrail_rejects_execute_statement():
     )
 
     assert len(errors) == 1
-    assert errors[0]["type"] in {"non_select_statement", "unsafe_sql", "sql_parse_error"}
+    assert errors[0]["type"] in {"non_select_statement", "sql_parse_error"}
     assert errors[0]["stage"] == "sql_guardrail"
 
 
@@ -57,7 +57,7 @@ def test_guardrail_rejects_copy_statement():
     )
 
     assert len(errors) == 1
-    assert errors[0]["type"] in {"non_select_statement", "unsafe_sql", "sql_parse_error"}
+    assert errors[0]["type"] in {"non_select_statement", "sql_parse_error"}
     assert errors[0]["stage"] == "sql_guardrail"
 
 
@@ -68,7 +68,7 @@ def test_guardrail_rejects_vacuum_statement():
     )
 
     assert len(errors) == 1
-    assert errors[0]["type"] in {"non_select_statement", "unsafe_sql", "sql_parse_error"}
+    assert errors[0]["type"] in {"non_select_statement", "sql_parse_error"}
     assert errors[0]["stage"] == "sql_guardrail"
 
 
@@ -79,7 +79,7 @@ def test_guardrail_rejects_analyze_statement():
     )
 
     assert len(errors) == 1
-    assert errors[0]["type"] in {"non_select_statement", "unsafe_sql", "sql_parse_error"}
+    assert errors[0]["type"] in {"non_select_statement", "sql_parse_error"}
     assert errors[0]["stage"] == "sql_guardrail"
 
 
@@ -90,7 +90,7 @@ def test_guardrail_rejects_pg_sleep_function():
     )
 
     assert len(errors) == 1
-    assert errors[0]["type"] == "unsafe_sql"
+    assert errors[0]["type"] == "unsafe_dangerous_function"
     assert errors[0]["stage"] == "sql_guardrail"
     assert errors[0]["details"]["reason"] == "dangerous_function_detected"
     assert errors[0]["details"]["function"] == "PG_SLEEP"
@@ -103,7 +103,7 @@ def test_guardrail_rejects_pg_read_file_function():
     )
 
     assert len(errors) == 1
-    assert errors[0]["type"] == "unsafe_sql"
+    assert errors[0]["type"] == "unsafe_dangerous_function"
     assert errors[0]["stage"] == "sql_guardrail"
     assert errors[0]["details"]["reason"] == "dangerous_function_detected"
     assert errors[0]["details"]["function"] == "PG_READ_FILE"
@@ -116,7 +116,7 @@ def test_guardrail_rejects_dblink_function():
     )
 
     assert len(errors) == 1
-    assert errors[0]["type"] == "unsafe_sql"
+    assert errors[0]["type"] == "unsafe_dangerous_function"
     assert errors[0]["stage"] == "sql_guardrail"
     assert errors[0]["details"]["reason"] == "dangerous_function_detected"
     assert errors[0]["details"]["function"] == "DBLINK"
@@ -133,7 +133,7 @@ def test_guardrail_rejects_dangerous_function_inside_cte():
     errors = SQLGuardrailValidator.validate(sql, dialect="postgres")
 
     assert len(errors) == 1
-    assert errors[0]["type"] == "unsafe_sql"
+    assert errors[0]["type"] == "unsafe_dangerous_function"
     assert errors[0]["details"]["reason"] == "dangerous_function_detected"
     assert errors[0]["details"]["function"] == "PG_SLEEP"
 
@@ -145,5 +145,5 @@ def test_guardrail_rejects_oracle_execute_immediate():
     )
 
     assert len(errors) == 1
-    assert errors[0]["type"] in {"non_select_statement", "unsafe_sql", "sql_parse_error"}
+    assert errors[0]["type"] in {"non_select_statement", "sql_parse_error"}
     assert errors[0]["stage"] == "sql_guardrail"
