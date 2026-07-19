@@ -27,7 +27,7 @@ Contains the top-level validation errors representing the **final state** of the
 **Get traces with pagination and filtering:**
 ```bash
 curl -H "X-API-Key: YOUR_API_KEY" \
-  "http://localhost:8000/api/debug/traces?limit=10&offset=0&sql_valid=false&error_type=sql_generation_failed"
+  "http://localhost:8000/api/debug/traces?limit=10&offset=0&sql_valid=false&error_type=sql_generation_exhausted"
 ```
 
 **Get a specific trace:**
@@ -35,3 +35,10 @@ curl -H "X-API-Key: YOUR_API_KEY" \
 curl -H "X-API-Key: YOUR_API_KEY" \
   "http://localhost:8000/api/debug/traces/trace-12345"
 ```
+
+---
+
+> **Sprint 27.2 notu:** Geçerli `error_type` değerlerinin tek kaynağı
+> `backend/app/errors/codes.py` (`ErrorCode`). Sprint 27.2 öncesi kaydedilmiş
+> trace satırları v1 kod adlarını taşır ve bu filtreyle eşleşmez; geliştirme
+> veritabanı (`backend/data/nl2sql_traces.db`) migrate edilmemiştir.
