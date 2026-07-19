@@ -110,20 +110,9 @@ def test_success_eval_cases_define_sql_expectations():
 # 7. Failure cases define error type/stage expectations and match allowlist
 def test_failure_eval_cases_define_error_type_and_stage():
     _, cases = load_all_eval_cases()
-    EXPECTED_ERROR_TYPES = {
-        "llm_api_error",
-        "sql_parse_error",
-        "syntax_error",
-        "semantic_validation",
-        "validation_error",
-        "missing_table",
-        "missing_column",
-        "unsupported_dialect",
-        "empty_sql",
-        "multiple_statements",
-        "non_select_statement",
-        "unsafe_sql",
-    }
+    # Sprint 27.2: production enum'ından türetilir (app/errors/codes.py).
+    from app.errors import ErrorCode
+    EXPECTED_ERROR_TYPES = {c.value for c in ErrorCode}
 
     EXPECTED_STAGES = {
         "llm_generation",
