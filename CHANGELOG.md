@@ -153,8 +153,37 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   tekil-`save()` store'lar yalnızca legacy trace görür, e2e kaydı almaz. Yeni
   saf modül: `backend/app/trace/live_trace_assembly.py`. Spec:
   `docs/superpowers/specs/2026-07-06-sprint-27.1w-live-trace-wiring-design.md`.
+- **Error Taxonomy v2 (Sprint 27.2):** Hata sınıflandırması artık tek bir
+  production kaynağında: `backend/app/errors/` (`ErrorCode` 26 kod,
+  `ErrorCategory` 7 kategori, `ErrorDescriptor` registry). Öncesinde taksonominin
+  tek resmî tanımı bir test dosyasındaydı ve pipeline'ın gerçekte emit ettiği bir
+  koddan (`schema_context_selection_exception`) habersizdi.
+- `run_pipeline` sonucu artık `error_code` taşıyor (`ErrorCode | None`).
+
+**Bilinen sınır:** Taksonomi hâlâ iş/API/frontend sınırını geçmiyor —
+`result["error"]` → `job.error_message` dönüşümünde kod kaybolur (27.2.1).
+Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını taşır ve
+`?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
 
 ### Changed
+- **KIRICI:** v1 hata string'lerinin bir kısmı yeniden adlandırıldı:
+  `schema_pruning_error` → `schema_pruning_failed`, `schema_pruning_exception` →
+  `schema_pruning_crashed`, `schema_context_selection_exception` →
+  `schema_context_selection_crashed`, `sql_generation_failed` →
+  `sql_generation_exhausted`, `validation_error` → `semantic_validation_failed`,
+  `execution_error` → `execution_failed`.
+- **KIRICI:** `unsafe_sql` üç ayrı koda bölündü —
+  `unsafe_dangerous_function`, `unsafe_dml_keyword`, `unsafe_sandbox_rejected`.
+  Öncesinde üç farklı güvenlik reddi tek kodda birleşiyordu ve ayrım yalnızca
+  tipsiz bir `details.reason` string'inde yaşıyordu.
+- **KIRICI:** `semantic_validation` artık bir error type DEĞİL, yalnız bir stage.
+- Execution taksonomisi (`sql_execution_errors.py`) aynı registry'ye katıldı;
+  `type` ve `code` alanları artık ortak bir kelime dağarcığı paylaşıyor.
+- `classify_sql_error` kontrol sırası düzeltildi: parse/syntax kontrolü artık
+  column/table'dan önce. Öncesinde içinde "column" geçen her parse hatası
+  `missing_column` oluyordu ve `syntax_error` pratikte ulaşılamazdı.
+- `live_trace_assembly` artık kod listesi tutmuyor; INPUT/RETRIEVAL setleri
+  registry kategori sorgusundan türetiliyor.
 - **Arka plan: Canlı Şema Sinapsı (Faz 1)** (2026-07-02 · ara iş, sprint dışı):
   `SpaceSpiderweb.vue`'daki jenerik geodesic wireframe tünel, gerçek veritabanı
   şemasından beslenen sinaptik ağ katmanıyla değiştirildi — node'lar bağlantılı
