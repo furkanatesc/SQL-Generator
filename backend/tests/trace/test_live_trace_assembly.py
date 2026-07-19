@@ -161,14 +161,23 @@ def test_live_trace_assembly_may_import_only_trace_and_errors_packages():
     """Sprint 27.2: import yüzeyi app.trace.* + app.errors.* ile SINIRLI.
     app.errors yaprak katmandır (kendi purity testi: tests/errors/)."""
     import sys
-    for mod in [m for m in list(sys.modules)
-                if m.startswith("app.trace") or m.startswith("app.errors")]:
-        del sys.modules[mod]
-
-    before = set(sys.modules)
-    import app.trace.live_trace_assembly  # noqa: F401
-    newly_loaded = {m for m in set(sys.modules) - before if m.startswith("app.")}
-
-    for mod in newly_loaded:
-        assert mod.startswith("app.trace") or mod.startswith("app.errors"), \
-            f"izinsiz app modülü yüklendi: {mod}"
+    prefixes = ("app.trace", "app.errors")
+    saved = {m: sys.modules[m] for m in list(sys.modules) if m.startswith(prefixes)}
+    for m in saved:
+        del sys.modules[m]
+    try:
+        before = set(sys.modules)
+        import app.trace.live_trace_assembly  # noqa: F401
+        newly_loaded = {m for m in set(sys.modules) - before if m.startswith("app.")}
+        for mod in newly_loaded:
+            assert mod.startswith(prefixes), \
+                f"izinsiz app modülü yüklendi: {mod}"
+    finally:
+        # Bu test sys.modules'u mutasyona uğrattı. Orijinal modül nesnelerini
+        # birebir geri yükle ki sonraki testler sınıf-kimliğini (ör.
+        # app.trace.models.TraceSerializationError) korusun; aksi halde reimport
+        # yeni sınıf nesneleri üretir ve başka bir test dosyasındaki
+        # pytest.raises(EskiSınıf) yeni exception'ı yakalayamaz.
+        for m in [m for m in list(sys.modules) if m.startswith(prefixes)]:
+            del sys.modules[m]
+        sys.modules.update(saved)
