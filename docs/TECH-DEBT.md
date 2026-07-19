@@ -112,3 +112,40 @@ geçerli ama yazılı değil.
 *İlgili Dosyalar:* `backend/app/trace/end_to_end_trace_builders.py:114-115`
 (`build_intent_span`), `:146-147` (`build_retrieval_span`),
 `backend/app/trace/live_trace_assembly.py`
+
+---
+
+## §4. Error taxonomy v2'nin ulaşamadığı sınırlar (Sprint 27.2) — AÇIK
+
+Sprint 27.2 taksonomiyi tek registry'de topladı ama bilinçli olarak pipeline
+katmanında durdu. Kalanlar:
+
+1. **İş/API/frontend sınırı (27.2.1).** `result["error_code"]` üretiliyor ama
+   `main.py:394-405` yalnız `result["error"]`'ı (serbest metin) `job.error_message`'a
+   yazıyor. `JobDetailResponse` (`api/schemas.py:51-61`) kod alanı taşımıyor.
+   Taksonomi bu sınırda tamamen yok oluyor.
+2. **`api.ts` `detail` bug'ı (kullanıcı-görünür).** Frontend `errData.detail`
+   okuyor (`api.ts:161,174,187`), envelope ise `{"error":{"code",...}}` yolluyor
+   (`api/schemas.py:149-156`). `detail` hiçbir zaman yok → her API hata metni
+   sessizce düşüyor, kullanıcı hardcoded fallback görüyor.
+3. **`ExecutionSpanDetail.error_code` hâlâ beslenmiyor.** 27.0 spec §137 bu alanı
+   "mevcut error taxonomy kodu" için açmıştı. Enum artık gerçek bir değer
+   sağlayabiliyor ama canlı yolda EXECUTION span'i her zaman SKIPPED
+   (`live_trace_assembly.py:170-171`) — besleyecek çağrı yolu yok.
+4. **`classify_sql_error` hâlâ düzyazı ayrıştırıyor.** Sıra bug'ı düzeltildi ama
+   mimari çözüm (validator'ların kod döndürmesi, mesaj eşlemek yerine)
+   yapılmadı.
+5. **`SQLFailureCategory`** (`evaluation/failure_analytics.py:39`) ayrı bir
+   taksonomi olarak duruyor — eval'e özel, farklı eksen, birleştirilmedi.
+6. **HTTP `code` sözlüğü** (`api/errors.py:13`) hâlâ status-türevi ve domain
+   taksonomisiyle hiçbir şey paylaşmıyor.
+7. **`retryable` ekseni** registry'de yok; `EmbeddingRetryableError`
+   (`retrieval/embedding_pipeline.py:18`) onu ayrı bir hiyerarşide yeniden icat
+   etmiş durumda. Registry'ye alan eklemek kırıcı değildir — retry mantığı
+   gelen sprint'te birleştirilebilir.
+8. **`details["error_type"]`** (`sql_execution_errors.py:52`) bir Python sınıf
+   adı taşıyor, taksonomi kodu değil. Ad çakışması kafa karıştırıcı; yeniden
+   adlandırmak kapsam dışıydı.
+9. **Geliştirme trace DB'si migrate edilmedi.** `backend/data/nl2sql_traces.db`
+   gitignore'da; eski satırlar v1 kod adlarını taşır ve `?error_type=` filtresiyle
+   eşleşmez. Kabul edilen maliyet.
