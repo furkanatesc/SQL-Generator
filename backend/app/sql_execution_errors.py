@@ -1,13 +1,15 @@
 import sqlite3
 import sqlglot.errors
 
+from app.errors import ErrorCode
+
 class SqlExecutionError(RuntimeError):
     """
     Base class for structured SQL execution errors.
     """
     def __init__(
         self,
-        code: str,
+        code: ErrorCode,
         message: str,
         stage: str = "sql_execution",
         details: dict | None = None,
@@ -22,7 +24,7 @@ class QueryTimeoutError(SqlExecutionError):
     """Raised when query execution exceeds the configured timeout limit."""
     def __init__(self, message: str = "Query execution exceeded timeout", details: dict | None = None):
         super().__init__(
-            code="query_timeout",
+            code=ErrorCode.QUERY_TIMEOUT,
             message=message,
             stage="sql_execution",
             details=details,
@@ -32,7 +34,7 @@ class RowLimitExceededError(SqlExecutionError):
     """Raised when query execution returns more rows than the configured maximum limit."""
     def __init__(self, message: str, details: dict | None = None):
         super().__init__(
-            code="row_limit_exceeded",
+            code=ErrorCode.ROW_LIMIT_EXCEEDED,
             message=message,
             stage="sql_execution",
             details=details,
@@ -57,49 +59,49 @@ def classify_execution_error(exc: Exception) -> SqlExecutionError:
         msg = str(exc).lower()
         if "no such table" in msg:
             return SqlExecutionError(
-                code="missing_table",
+                code=ErrorCode.MISSING_TABLE,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
             )
         elif "no such column" in msg or "has no column" in msg:
             return SqlExecutionError(
-                code="missing_column",
+                code=ErrorCode.MISSING_COLUMN,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
             )
         elif "syntax error" in msg:
             return SqlExecutionError(
-                code="syntax_error",
+                code=ErrorCode.SYNTAX_ERROR,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
             )
         elif "readonly database" in msg or "read-only database" in msg:
             return SqlExecutionError(
-                code="read_only_violation",
+                code=ErrorCode.READ_ONLY_VIOLATION,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
             )
         elif "permission denied" in msg:
             return SqlExecutionError(
-                code="permission_denied",
+                code=ErrorCode.PERMISSION_DENIED,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
             )
         elif "unable to open database" in msg:
             return SqlExecutionError(
-                code="database_not_found",
+                code=ErrorCode.DATABASE_NOT_FOUND,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
             )
         else:
             return SqlExecutionError(
-                code="execution_error",
+                code=ErrorCode.EXECUTION_FAILED,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
@@ -108,7 +110,7 @@ def classify_execution_error(exc: Exception) -> SqlExecutionError:
     # 3. Sqlglot Parsing Failure mappings
     if isinstance(exc, (sqlglot.errors.ParseError, sqlglot.errors.SqlglotError)):
         return SqlExecutionError(
-            code="syntax_error",
+            code=ErrorCode.SYNTAX_ERROR,
             message=str(exc),
             stage="sql_execution",
             details=details,
@@ -119,28 +121,28 @@ def classify_execution_error(exc: Exception) -> SqlExecutionError:
         msg = str(exc).lower()
         if "write operation" in msg or "write keyword" in msg or "only read-only" in msg:
             return SqlExecutionError(
-                code="read_only_violation",
+                code=ErrorCode.READ_ONLY_VIOLATION,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
             )
         elif "empty" in msg or "no valid statement" in msg or "single statement" in msg:
             return SqlExecutionError(
-                code="syntax_error",
+                code=ErrorCode.SYNTAX_ERROR,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
             )
         elif "does not exist" in msg and "database" in msg:
             return SqlExecutionError(
-                code="database_not_found",
+                code=ErrorCode.DATABASE_NOT_FOUND,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
             )
         else:
             return SqlExecutionError(
-                code="execution_error",
+                code=ErrorCode.EXECUTION_FAILED,
                 message=str(exc),
                 stage="sql_execution",
                 details=details,
@@ -148,7 +150,7 @@ def classify_execution_error(exc: Exception) -> SqlExecutionError:
 
     # 5. Generic Exception Fallback
     return SqlExecutionError(
-        code="execution_error",
+        code=ErrorCode.EXECUTION_FAILED,
         message=str(exc),
         stage="sql_execution",
         details=details,

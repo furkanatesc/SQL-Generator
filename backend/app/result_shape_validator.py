@@ -1,5 +1,6 @@
 from typing import Any
 from app.sql_execution_errors import SqlExecutionError
+from app.errors import ErrorCode
 
 class ResultShapeValidator:
     """
@@ -13,7 +14,7 @@ class ResultShapeValidator:
         """
         if not isinstance(rows, list):
             raise SqlExecutionError(
-                code="invalid_result_shape",
+                code=ErrorCode.INVALID_RESULT_SHAPE,
                 message=f"Execution result must be a list, got {type(rows).__name__}",
                 stage="sql_execution",
                 details={"value_preview": str(rows)[:500]},
@@ -22,7 +23,7 @@ class ResultShapeValidator:
         for idx, row in enumerate(rows):
             if not isinstance(row, dict):
                 raise SqlExecutionError(
-                    code="invalid_result_shape",
+                    code=ErrorCode.INVALID_RESULT_SHAPE,
                     message=f"Row at index {idx} is not a dictionary, got {type(row).__name__}",
                     stage="sql_execution",
                     details={"index": idx, "row_preview": str(row)[:500]},
@@ -31,7 +32,7 @@ class ResultShapeValidator:
             for key in row.keys():
                 if not isinstance(key, str):
                     raise SqlExecutionError(
-                        code="invalid_result_shape",
+                        code=ErrorCode.INVALID_RESULT_SHAPE,
                         message=f"Row at index {idx} contains non-string key: {type(key).__name__}",
                         stage="sql_execution",
                         details={
