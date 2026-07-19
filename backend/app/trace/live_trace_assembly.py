@@ -8,8 +8,9 @@ Span kuralları (spec §1.4):
                {excel_parse_error, input_error} -> doğrudan ERROR span
                (attributes={"reason_code": error_type}); aksi halde SKIPPED
                (build_intent_span(None)).
-  RETRIEVAL  — error_type {schema_pruning_error, schema_pruning_exception,
-               schema_context_selection_exception} -> doğrudan ERROR span;
+  RETRIEVAL  — error_type {schema_pruning_failed, schema_pruning_crashed,
+               schema_context_selection_crashed} -> doğrudan ERROR span
+               (bu setler registry'den türetilir; Sprint 27.2);
                retrieval hiç koşmadıysa (schema_selection_trace None ve
                pruned_tables boş) -> SKIPPED (build_retrieval_span(None));
                aksi halde duck nesneyle OK/WARNING, selected_tables
@@ -31,7 +32,8 @@ Span kuralları (spec §1.4):
 Terminal tutarlılığı build_end_to_end_trace/derive_terminal tarafından
 türetilir: ilk ERROR span'in stage'i FAILED terminal_stage'i olur; hiç
 ERROR yoksa COMPLETED (son span EXECUTION). Import yüzeyi: yalnız stdlib
-(hashlib, types.SimpleNamespace, typing) + app.trace.*.
+(hashlib, types.SimpleNamespace, typing) + app.trace.* + app.errors.*
+(Sprint 27.2: app.errors yaprak katmandır, driver taşımaz).
 """
 import hashlib
 from types import SimpleNamespace
@@ -46,11 +48,17 @@ from app.trace.end_to_end_trace_builders import (
     build_retrieval_span, build_security_span, build_validation_span,
 )
 
-_INPUT_ERROR_TYPES = frozenset({"excel_parse_error", "input_error"})
-_RETRIEVAL_ERROR_TYPES = frozenset({
-    "schema_pruning_error", "schema_pruning_exception",
-    "schema_context_selection_exception",
-})
+from app.errors import ErrorCategory, codes_for_category
+
+# Sprint 27.2: bu setler ARTIK ELLE BAKILMAZ, registry'den türetilir.
+# v1'de elle yazılmış kopyalardı ve eksiktiler: sql_generation_failed ile
+# llm_api_error hiçbir sette yoktu, yani bir üretim hatası bu dallardan
+# reason_code'lu ERROR span üretmiyordu.
+_INPUT_ERROR_TYPES = codes_for_category(ErrorCategory.INPUT)
+_RETRIEVAL_ERROR_TYPES = codes_for_category(ErrorCategory.RETRIEVAL)
+
+# _SECURITY_STAGES bir STAGE setidir (kod değil) ve registry'ye girmez —
+# kategori kodun sabit özelliği, stage çalışma zamanı verisidir.
 _SECURITY_STAGES = frozenset({"sql_guardrail", "sql_sandbox_safety"})
 
 
