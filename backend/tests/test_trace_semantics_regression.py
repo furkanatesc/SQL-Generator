@@ -132,7 +132,7 @@ def test_llm_api_failure_attempt_has_validation_errors(mock_schema_manager, mock
     assert trace.attempts[0]["valid"] is False
     assert trace.attempts[0]["validation_errors"][0]["type"] == "llm_api_error"
 
-def test_schema_pruning_error(mock_schema_manager, mock_nvidia_client):
+def test_schema_pruning_failed(mock_schema_manager, mock_nvidia_client):
     store = RecordingTraceStore()
     pipeline = SQLGenerationPipeline(schema_manager=mock_schema_manager, nvidia_client=mock_nvidia_client, trace_store=store)
     

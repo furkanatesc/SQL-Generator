@@ -164,9 +164,10 @@ def test_all_pipeline_validation_error_types_are_known_taxonomy_values(mock_prom
 
 
 def test_allowlist_is_derived_from_production_enum_not_hand_maintained():
-    """v1'de bu liste elle bakılıyordu ve bayattı: pipeline'ın gerçekten emit
-    ettiği schema_context_selection_exception listede yoktu. Artık türetiliyor,
-    yani bayatlaması yapısal olarak imkânsız."""
+    """v1'de bu liste elle bakılıyordu ve bayattı: pipeline'ın o dönem emit
+    ettiği bir kod (v1 adıyla schema_context_selection_exception; v2'de
+    schema_context_selection_crashed) listede yoktu. Artık türetiliyor, yani
+    bayatlaması yapısal olarak imkânsız."""
     from app.errors import ErrorCode
     assert ALLOWED_ERROR_TYPES == {c.value for c in ErrorCode}
 

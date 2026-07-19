@@ -1,3 +1,12 @@
+"""Guardrail komut/fonksiyon sözleşmesi.
+
+Not (Sprint 27.2): reddedilen komut/fonksiyon girdileri (CALL, EXECUTE, COPY,
+VACUUM, ANALYZE ...) statement-tipi / parse katmanında elenir — DML taraması ve
+tehlikeli-fonksiyon taraması ÇALIŞMADAN önce. Bu yüzden bu testler yalnız
+{"non_select_statement", "sql_parse_error"} bekler; hiçbir `unsafe_*` kodu
+üretilmez. `unsafe_sql` bölünürken (T2) bu setlerden kod ikame edilmedi, çıkarıldı
+— eksik kod değil, o dallar bu girdilerle ulaşılamaz olduğundan.
+"""
 from app.sql_guardrail import SQLGuardrailValidator
 
 
