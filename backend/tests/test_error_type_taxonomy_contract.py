@@ -1,30 +1,13 @@
 from unittest.mock import MagicMock, patch
 
+from app.errors import ErrorCode
 from app.sql_pipeline import SQLGenerationPipeline
 from app.sql_guardrail import SQLGuardrailValidator
 
-ALLOWED_ERROR_TYPES = {
-    "input_error",
-    "excel_parse_error",
-    "schema_pruning_failed",
-    "schema_pruning_crashed",
-    "schema_context_selection_crashed",
-    "sql_generation_exhausted",
-    "llm_api_error",
-    "sql_parse_error",
-    "syntax_error",
-    "semantic_validation",
-    "semantic_validation_failed",
-    "missing_table",
-    "missing_column",
-    "unsupported_dialect",
-    "empty_sql",
-    "multiple_statements",
-    "non_select_statement",
-    "unsafe_dangerous_function",
-    "unsafe_dml_keyword",
-    "unsafe_sandbox_rejected",
-}
+# Sprint 27.2: taksonominin doğruluk kaynağı artık production'dadır
+# (app/errors/codes.py). Bu liste TÜRETİLİR — elle bakılmaz.
+# v1'de burası elle yazılıyordu ve bayattı.
+ALLOWED_ERROR_TYPES = {c.value for c in ErrorCode}
 
 
 def test_pipeline_input_error_uses_stable_error_type():
@@ -147,13 +130,13 @@ def test_all_pipeline_validation_error_types_are_known_taxonomy_values(mock_prom
     mock_response = MagicMock()
     mock_response.sql = "SELECT * FROM"  # syntax error
     mock_llm_provider.generate_sql.return_value = mock_response
-    
+
     trace_store = MagicMock(); del trace_store.save_legacy
     pipeline = SQLGenerationPipeline(
         trace_store=trace_store,
         llm_provider=mock_llm_provider
     )
-    
+
     with patch("app.sql_pipeline.SchemaPruner.prune_schema") as mock_prune:
         mock_prune.return_value = {"tables": {"users": {"columns": [{"name": "id", "type": "int", "primary_key": True}]}}}
         result = pipeline.run_pipeline(
@@ -161,21 +144,29 @@ def test_all_pipeline_validation_error_types_are_known_taxonomy_values(mock_prom
             natural_query="test query",
             max_attempts=1
         )
-        
+
     assert result["success"] is False
-    
+
     for attempt in result["attempts"]:
         for err in attempt.get("validation_errors", []):
             assert err["type"] in ALLOWED_ERROR_TYPES
             assert "stage" in err
-            
+
     trace_store.save.assert_called_once()
     trace = trace_store.save.call_args[0][0]
     trace_val_errors = getattr(trace, "sql_validation_errors", None)
     if trace_val_errors is None and isinstance(trace, dict):
         trace_val_errors = trace.get("sql_validation_errors", [])
-        
+
     for err in trace_val_errors or []:
         assert err["type"] in ALLOWED_ERROR_TYPES
         assert "stage" in err
+
+
+def test_allowlist_is_derived_from_production_enum_not_hand_maintained():
+    """v1'de bu liste elle bakılıyordu ve bayattı: pipeline'ın gerçekten emit
+    ettiği schema_context_selection_exception listede yoktu. Artık türetiliyor,
+    yani bayatlaması yapısal olarak imkânsız."""
+    from app.errors import ErrorCode
+    assert ALLOWED_ERROR_TYPES == {c.value for c in ErrorCode}
 
