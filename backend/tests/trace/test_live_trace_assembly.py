@@ -44,7 +44,7 @@ def test_excel_parse_error_terminal_intent():
 
 
 def test_retrieval_error_terminal_retrieval():
-    t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "schema_pruning_error",
+    t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "schema_pruning_failed",
                                           "success": False})
     assert t.terminal_status is TraceTerminalStatus.FAILED
     assert t.terminal_stage is TraceStageKind.RETRIEVAL
@@ -117,7 +117,7 @@ def test_intent_error_span_carries_measured_duration():
 
 
 def test_retrieval_error_span_carries_measured_duration():
-    t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "schema_pruning_error",
+    t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "schema_pruning_failed",
         "success": False, "stage_timings": {"retrieval": 17}})
     assert _span(t, TraceStageKind.RETRIEVAL).duration_ms == 17
 
@@ -155,3 +155,20 @@ def test_live_trace_assembly_module_does_not_load_stage_modules_or_drivers():
         assert drv not in newly_loaded
     assert not any(m.startswith("app.evaluation") for m in newly_loaded)
     assert not any(m.startswith("app.schema") for m in newly_loaded)
+
+
+def test_live_trace_assembly_may_import_only_trace_and_errors_packages():
+    """Sprint 27.2: import yüzeyi app.trace.* + app.errors.* ile SINIRLI.
+    app.errors yaprak katmandır (kendi purity testi: tests/errors/)."""
+    import sys
+    for mod in [m for m in list(sys.modules)
+                if m.startswith("app.trace") or m.startswith("app.errors")]:
+        del sys.modules[mod]
+
+    before = set(sys.modules)
+    import app.trace.live_trace_assembly  # noqa: F401
+    newly_loaded = {m for m in set(sys.modules) - before if m.startswith("app.")}
+
+    for mod in newly_loaded:
+        assert mod.startswith("app.trace") or mod.startswith("app.errors"), \
+            f"izinsiz app modülü yüklendi: {mod}"
