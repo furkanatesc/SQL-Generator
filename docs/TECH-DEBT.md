@@ -115,23 +115,35 @@ geçerli ama yazılı değil.
 
 ---
 
-## §4. Error taxonomy v2'nin ulaşamadığı sınırlar (Sprint 27.2) — AÇIK
+## §4. Error taxonomy v2'nin ulaşamadığı sınırlar (Sprint 27.2) — KISMEN ÇÖZÜLDÜ (27.2.1)
 
 Sprint 27.2 taksonomiyi tek registry'de topladı ama bilinçli olarak pipeline
 katmanında durdu. Kalanlar:
 
-1. **İş/API/frontend sınırı (27.2.1).** `result["error_code"]` üretiliyor ama
-   `main.py:394-405` yalnız `result["error"]`'ı (serbest metin) `job.error_message`'a
-   yazıyor. `JobDetailResponse` (`api/schemas.py:51-61`) kod alanı taşımıyor.
-   Taksonomi bu sınırda tamamen yok oluyor.
-2. **`api.ts` `detail` bug'ı (kullanıcı-görünür).** Frontend `errData.detail`
-   okuyor (`api.ts:161,174,187`), envelope ise `{"error":{"code",...}}` yolluyor
-   (`api/schemas.py:149-156`). `detail` hiçbir zaman yok → her API hata metni
-   sessizce düşüyor, kullanıcı hardcoded fallback görüyor.
-3. **`ExecutionSpanDetail.error_code` hâlâ beslenmiyor.** 27.0 spec §137 bu alanı
-   "mevcut error taxonomy kodu" için açmıştı. Enum artık gerçek bir değer
-   sağlayabiliyor ama canlı yolda EXECUTION span'i her zaman SKIPPED
-   (`live_trace_assembly.py:170-171`) — besleyecek çağrı yolu yok.
+1. ~~**İş/API/frontend sınırı (27.2.1).**~~ — **ÇÖZÜLDÜ (Sprint 27.2.1).**
+   `jobs` tablosuna `error_code TEXT` kolonu eklendi (`database.py`),
+   `update_job_status` dinamik SET-clause'a refactor edildi, `main.py` job
+   runner'ı pipeline kodunu `ErrorCode.value` string'i olarak persist ediyor,
+   `JobDetailResponse` alanı taşıyor ve frontend `Job` interface'i onu
+   alıyor. Beklenmeyen (INTERNAL) exception'da kod `NULL` kalır — registry'nin
+   INTERNAL → kod-yok tasarımıyla tutarlı. `error_code`'un UI'da GÖRÜNÜR
+   kullanımı (rozet, yerelleştirilmiş mesaj eşlemesi) hâlâ yapılmadı.
+2. ~~**`api.ts` `detail` bug'ı (kullanıcı-görünür).**~~ — **ÇÖZÜLDÜ (Sprint 27.2.1).**
+   Saf `extractApiErrorMessage` helper'ı çıkarıldı
+   (`frontend/src/utils/apiError.ts`): önce `{"error":{"message"}}` envelope'una,
+   sonra geriye dönük tolerans olarak `detail`'e bakar, ikisi de yoksa fallback
+   döner. RAG search / business-rule index / SQL-history index çağrı noktaları
+   bu helper'ı kullanıyor; kullanıcı artık backend'in gerçek mesajını görüyor.
+   Testi `frontend/tests/apiError.test.ts` (node-script; vitest hâlâ kurulu
+   değil ve frontend testleri CI'da koşmuyor — ayrı bir borç kalemi).
+3. **`ExecutionSpanDetail.error_code` hâlâ beslenmiyor — ERTELENDİ (bağımlılık).**
+   27.0 spec §137 bu alanı "mevcut error taxonomy kodu" için açmıştı. Enum artık
+   gerçek bir değer sağlayabiliyor ama **canlı pipeline SQL'i execute etmiyor**:
+   EXECUTION span'i koşulsuz `SKIPPED` (`live_trace_assembly.py:177`, 27.0 spec
+   §1.4). Beslenecek bir execution `error_code`'u YOK; SKIPPED span için altyapı
+   kurmak YAGNI ihlali olurdu. **Bu kalem taksonomi-sınır meselesi değildir;
+   canlı execution'ı etkinleştiren faza bağımlıdır** ve o fazla birlikte
+   çözülmelidir (Sprint 27.2.1'de bilinçli olarak kapsam dışı bırakıldı).
 4. **`classify_sql_error` hâlâ düzyazı ayrıştırıyor.** Sıra bug'ı düzeltildi ama
    mimari çözüm (validator'ların kod döndürmesi, mesaj eşlemek yerine)
    yapılmadı.
