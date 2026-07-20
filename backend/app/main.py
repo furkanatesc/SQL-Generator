@@ -394,7 +394,15 @@ def process_job_pipeline(job_id: str, request_id: Optional[str] = None):
             update_job_status(job_id, "completed", result_sql=res["generated_sql"])
         else:
             log_callback(f"SQL üretimi başarısız oldu: {res['error'] or 'Bilinmeyen hata'}", 5)
-            update_job_status(job_id, "failed", error_message=res["error"] or "SQL üretimi başarısız.")
+            # error_code sınırda ham string olarak taşınır (API sözleşmesi
+            # tipsiz string kod taşır, enum değil). StrEnum zaten değer olarak
+            # bind olurdu; .value açıklık ve tip değişimine karşı sağlamlık için.
+            ec = res.get("error_code")
+            update_job_status(
+                job_id, "failed",
+                error_message=res["error"] or "SQL üretimi başarısız.",
+                error_code=(ec.value if ec is not None else None),
+            )
             
     except Exception as e:
         # İptal edilmişse hata olarak kaydetme
@@ -402,6 +410,9 @@ def process_job_pipeline(job_id: str, request_id: Optional[str] = None):
         if current_job and current_job["status"] == "cancelled":
             return
         log_callback(f"Beklenmeyen hata: {str(e)}", 5)
+        # error_code bilinçli olarak GEÇİLMEZ → NULL kalır. Registry'nin
+        # INTERNAL → kod-yok tasarımıyla tutarlı: beklenmeyen bir job-runner
+        # exception'ının taksonomi kodu yoktur.
         update_job_status(job_id, "failed", error_message=str(e))
     finally:
         # Tüm SSE dinleyicilerini kapatmak için EOF sinyali gönder
