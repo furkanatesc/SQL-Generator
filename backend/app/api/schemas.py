@@ -56,6 +56,7 @@ class JobDetailResponse(BaseModel):
     previous_sql: Optional[str] = None
     result_sql: Optional[str] = None
     error_message: Optional[str] = None
+    error_code: Optional[str] = None
     dialect: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

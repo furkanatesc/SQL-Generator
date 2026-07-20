@@ -142,6 +142,7 @@
     "properties": [
       "created_at",
       "dialect",
+      "error_code",
       "error_message",
       "file_path",
       "id",
