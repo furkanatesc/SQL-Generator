@@ -165,10 +165,8 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   (INTERNAL) hatalarda kod `NULL` kalır. `update_job_status` bu sırada dinamik
   SET-clause'a refactor edildi (davranış korundu).
 
-**Bilinen sınır:** Taksonomi hâlâ iş/API/frontend sınırını geçmiyor —
-`result["error"]` → `job.error_message` dönüşümünde kod kaybolur (27.2.1).
-Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını taşır ve
-`?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
+**Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
+taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
 
 ### Changed
 - **KIRICI:** v1 hata string'lerinin bir kısmı yeniden adlandırıldı:
