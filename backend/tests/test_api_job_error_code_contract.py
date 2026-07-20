@@ -3,6 +3,7 @@
 Mevcut test_api_safe_failure_response_contract.py'deki mock desenini izler:
 app.database.* fonksiyonları patch'lenir, process_job_pipeline doğrudan çağrılır.
 """
+import uuid
 from unittest.mock import patch
 
 from app.errors import ErrorCode
@@ -144,7 +145,7 @@ HEADERS = {"X-API-Key": "sqlgen_secret_dev_key"}
 def test_job_detail_response_error_code_alanini_tasir():
     from app.database import create_job, update_job_status
 
-    job = create_job("job-errcode-api", natural_query="test")
+    job = create_job(f"job-errcode-api-{uuid.uuid4()}", natural_query="test")
     update_job_status(job["id"], "failed",
                       error_message="Sözdizimi hatası",
                       error_code="syntax_error")
@@ -157,7 +158,7 @@ def test_job_detail_response_error_code_alanini_tasir():
 def test_job_detail_error_code_yoksa_null_doner():
     from app.database import create_job
 
-    job = create_job("job-errcode-api-null", natural_query="test")
+    job = create_job(f"job-errcode-api-null-{uuid.uuid4()}", natural_query="test")
 
     res = client.get(f"/api/jobs/{job['id']}", headers=HEADERS)
     assert res.status_code == 200
