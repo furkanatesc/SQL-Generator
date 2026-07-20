@@ -35,6 +35,7 @@ def init_db():
                 previous_sql TEXT,
                 result_sql TEXT,
                 error_message TEXT,
+                error_code TEXT,
                 dialect TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -52,7 +53,12 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
-        
+        try:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN error_code TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+
         # Synonym Rules tablosu
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS synonym_rules (
@@ -167,31 +173,45 @@ def get_job(job_id: str) -> Optional[Dict[str, Any]]:
         row = cursor.fetchone()
         return dict(row) if row else None
 
-def update_job_status(job_id: str, status: str, result_sql: Optional[str] = None, error_message: Optional[str] = None) -> Dict[str, Any]:
+# update_job_status'un yazabileceği kolonlar. SET cümlesi bu sabit
+# whitelist'ten kurulur; kullanıcı girdisi kolon adına asla dönüşmez.
+_UPDATABLE_JOB_COLUMNS = ("result_sql", "error_message", "error_code")
+
+def update_job_status(
+    job_id: str,
+    status: str,
+    result_sql: Optional[str] = None,
+    error_message: Optional[str] = None,
+    error_code: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Job durumunu günceller. None geçilen alanlar DEĞİŞTİRİLMEZ.
+
+    SET cümlesi non-None alanlardan dinamik kurulur; kolon adları
+    _UPDATABLE_JOB_COLUMNS whitelist'inden gelir (SQL injection yüzeyi yok).
+    """
     import datetime
     now = datetime.datetime.utcnow().isoformat()
+    provided = {
+        "result_sql": result_sql,
+        "error_message": error_message,
+        "error_code": error_code,
+    }
+    fields = ["status = ?"]
+    values: List[Any] = [status]
+    for col in _UPDATABLE_JOB_COLUMNS:
+        if provided[col] is not None:
+            fields.append(f"{col} = ?")
+            values.append(provided[col])
+    fields.append("updated_at = ?")
+    values.append(now)
+    values.append(job_id)
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        if result_sql is not None and error_message is not None:
-            cursor.execute(
-                "UPDATE jobs SET status = ?, result_sql = ?, error_message = ?, updated_at = ? WHERE id = ?",
-                (status, result_sql, error_message, now, job_id)
-            )
-        elif result_sql is not None:
-            cursor.execute(
-                "UPDATE jobs SET status = ?, result_sql = ?, updated_at = ? WHERE id = ?",
-                (status, result_sql, now, job_id)
-            )
-        elif error_message is not None:
-            cursor.execute(
-                "UPDATE jobs SET status = ?, error_message = ?, updated_at = ? WHERE id = ?",
-                (status, error_message, now, job_id)
-            )
-        else:
-            cursor.execute(
-                "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?",
-                (status, now, job_id)
-            )
+        cursor.execute(
+            f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?",
+            values
+        )
         conn.commit()
     return get_job(job_id)
 
