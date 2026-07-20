@@ -129,3 +129,36 @@ def test_ham_string_error_code_tolere_edilir_ve_persist_edilir(
     assert args[1] == "failed"
     assert kwargs["error_code"] == "input_error"
     assert type(kwargs["error_code"]) is str
+
+
+# --- API yüzeyi: error_code response'ta görünür ---
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.main import app  # noqa: E402
+
+client = TestClient(app)
+HEADERS = {"X-API-Key": "sqlgen_secret_dev_key"}
+
+
+def test_job_detail_response_error_code_alanini_tasir():
+    from app.database import create_job, update_job_status
+
+    job = create_job("job-errcode-api", natural_query="test")
+    update_job_status(job["id"], "failed",
+                      error_message="Sözdizimi hatası",
+                      error_code="syntax_error")
+
+    res = client.get(f"/api/jobs/{job['id']}", headers=HEADERS)
+    assert res.status_code == 200
+    assert res.json()["error_code"] == "syntax_error"
+
+
+def test_job_detail_error_code_yoksa_null_doner():
+    from app.database import create_job
+
+    job = create_job("job-errcode-api-null", natural_query="test")
+
+    res = client.get(f"/api/jobs/{job['id']}", headers=HEADERS)
+    assert res.status_code == 200
+    assert res.json()["error_code"] is None

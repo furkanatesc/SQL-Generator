@@ -310,6 +310,17 @@
             ],
             "title": "Dialect"
           },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
           "error_message": {
             "anyOf": [
               {
