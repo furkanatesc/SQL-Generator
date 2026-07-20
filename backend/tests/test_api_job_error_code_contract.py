@@ -103,3 +103,29 @@ def test_basarili_job_error_code_yazmaz(
     args, kwargs = mock_update_job_status.call_args_list[-1]
     assert args[1] == "completed"
     assert "error_code" not in kwargs
+
+
+@patch("app.database.get_job", return_value=FAKE_JOB_PENDING)
+@patch("app.database.update_job_status")
+@patch("app.database.get_config", return_value="postgres")
+@patch("app.sql_pipeline.SQLGenerationPipeline.run_pipeline")
+def test_ham_string_error_code_tolere_edilir_ve_persist_edilir(
+    mock_run_pipeline, mock_get_config, mock_update_job_status, mock_get_job
+):
+    # Pipeline üretim kodu değişirse, ham string error_code gönderilebilir.
+    # Bu test, getattr defensive programlamasını pin'ler: .value çıkarmak
+    # yerine olduğu gibi geç; AttributeError'dan kaçın.
+    mock_run_pipeline.return_value = {
+        "success": False,
+        "error": "Girdi yorumlanamadı",
+        "error_code": "input_error",  # String, not ErrorCode enum
+        "generated_sql": "",
+        "attempts": [],
+    }
+
+    process_job_pipeline("job-123")
+
+    args, kwargs = mock_update_job_status.call_args_list[-1]
+    assert args[1] == "failed"
+    assert kwargs["error_code"] == "input_error"
+    assert type(kwargs["error_code"]) is str
