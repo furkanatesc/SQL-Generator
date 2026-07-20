@@ -1,3 +1,5 @@
+import { extractApiErrorMessage } from '../utils/apiError';
+
 const DEFAULT_BACKEND_URL = `http://${window.location.hostname}:8000`;
 const DEFAULT_API_KEY = 'sqlgen_secret_dev_key';
 
@@ -8,6 +10,9 @@ export interface Job {
   natural_query: string | null;
   result_sql: string | null;
   error_message: string | null;
+  /** Taksonomi kodu (backend ErrorCode.value) — şu an UI'da gösterilmiyor,
+   *  yalnız taşınıyor (Sprint 27.2.1). */
+  error_code: string | null;
   dialect?: string;
   created_at: string;
   updated_at: string;
@@ -158,7 +163,7 @@ class ApiService {
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.detail || 'RAG search execution failed');
+      throw new Error(extractApiErrorMessage(errData, 'RAG search execution failed'));
     }
     return res.json();
   }
@@ -171,7 +176,7 @@ class ApiService {
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.detail || 'Failed to index business rule');
+      throw new Error(extractApiErrorMessage(errData, 'Failed to index business rule'));
     }
     return res.json();
   }
@@ -184,7 +189,7 @@ class ApiService {
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.detail || 'Failed to index SQL history pair');
+      throw new Error(extractApiErrorMessage(errData, 'Failed to index SQL history pair'));
     }
     return res.json();
   }
