@@ -395,13 +395,13 @@ def process_job_pipeline(job_id: str, request_id: Optional[str] = None):
         else:
             log_callback(f"SQL üretimi başarısız oldu: {res['error'] or 'Bilinmeyen hata'}", 5)
             # error_code sınırda ham string olarak taşınır (API sözleşmesi
-            # tipsiz string kod taşır, enum değil). StrEnum zaten değer olarak
-            # bind olurdu; .value açıklık ve tip değişimine karşı sağlamlık için.
+            # tipsiz string kod taşır, enum değil). ErrorCode enum üyelerinden
+            # .value çıkar; ham string ise olduğu gibi geç (defensive).
             ec = res.get("error_code")
             update_job_status(
                 job_id, "failed",
                 error_message=res["error"] or "SQL üretimi başarısız.",
-                error_code=(ec.value if ec is not None else None),
+                error_code=getattr(ec, "value", ec),
             )
             
     except Exception as e:
