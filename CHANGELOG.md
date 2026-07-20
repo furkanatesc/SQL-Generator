@@ -159,6 +159,11 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   tek resmî tanımı bir test dosyasındaydı ve pipeline'ın gerçekte emit ettiği bir
   koddan (`schema_context_selection_exception`) habersizdi.
 - `run_pipeline` sonucu artık `error_code` taşıyor (`ErrorCode | None`).
+- **Job/API `error_code` alanı** (Sprint 27.2.1): pipeline'ın ürettiği taksonomi
+  kodu artık `jobs.error_code` kolonuna persist ediliyor, `GET /api/jobs/{id}`
+  yanıtında dönüyor ve frontend `Job` interface'inde taşınıyor. Beklenmeyen
+  (INTERNAL) hatalarda kod `NULL` kalır. `update_job_status` bu sırada dinamik
+  SET-clause'a refactor edildi (davranış korundu).
 
 **Bilinen sınır:** Taksonomi hâlâ iş/API/frontend sınırını geçmiyor —
 `result["error"]` → `job.error_message` dönüşümünde kod kaybolur (27.2.1).
@@ -216,6 +221,11 @@ Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını taşır ve
   artık doğru tetikleniyor. Test: `frontend/tests/graphSelection.test.ts`
   (8 test, `node --experimental-strip-types`). Kalan borç (çok büyük *bağlantılı*
   graph'lar için WebGL/virtualized render) `docs/TECH-DEBT.md` #2'de.
+- **`api.ts` hata mesajı çıkarımı** (Sprint 27.2.1): frontend backend'in
+  envelope'unda olmayan `errData.detail` alanını okuduğu için RAG search,
+  business-rule ve SQL-history indeksleme hatalarında gerçek mesaj sessizce
+  düşüyor, kullanıcı hep hardcoded fallback görüyordu. Yeni
+  `extractApiErrorMessage` helper'ı `{"error":{"message"}}` envelope'unu okuyor.
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
