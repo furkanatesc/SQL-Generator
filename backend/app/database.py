@@ -93,6 +93,22 @@ def init_db():
             )
         """)
 
+        # Feedback Tablosu (Sprint 27.3 — append-only)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feedback (
+                id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                category TEXT,
+                note TEXT,
+                corrected_sql TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feedback_job_id ON feedback (job_id)"
+        )
+
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")
@@ -244,5 +260,62 @@ def list_jobs(
                 f"SELECT * FROM jobs ORDER BY {order_clause} LIMIT ? OFFSET ?",
                 (limit, offset)
             )
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+# Feedback Helper Fonksiyonları (Sprint 27.3 — append-only)
+def create_feedback(
+    feedback_id: str,
+    job_id: str,
+    verdict: str,
+    category: Optional[str] = None,
+    note: Optional[str] = None,
+    corrected_sql: Optional[str] = None,
+) -> Dict[str, Any]:
+    """feedback tablosuna append-only bir satır ekler ve döndürür.
+
+    Enum değerleri sınırda (Pydantic) doğrulanmış PLAIN STRING olarak gelir;
+    bu fonksiyon ince persister'dır ve app.feedback taksonomisini import ETMEZ.
+    """
+    import datetime
+    now = datetime.datetime.utcnow().isoformat()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO feedback
+                (id, job_id, verdict, category, note, corrected_sql, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (feedback_id, job_id, verdict, category, note, corrected_sql, now),
+        )
+        conn.commit()
+    return get_feedback(feedback_id)
+
+
+def get_feedback(feedback_id: str) -> Optional[Dict[str, Any]]:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM feedback WHERE id = ?", (feedback_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_feedback_for_job(job_id: str) -> List[Dict[str, Any]]:
+    """Bir job'ın tüm feedback'ini kronolojik döndürür.
+
+    27.9 tüketicisi bir job'ın tüm sinyal geçmişini bu fonksiyonla okur.
+    Sıralama: created_at ASC, sonra rowid ASC. rowid tiebreak, aynı
+    created_at (coarse clock) durumunda insertion-order'ı deterministik kılar
+    — aksi halde eş-zaman-damgalı satırların sırası tanımsız kalırdı.
+    Bilinmeyen job_id → boş liste (patlamaz).
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM feedback WHERE job_id = ? "
+            "ORDER BY created_at ASC, rowid ASC",
+            (job_id,),
+        )
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
