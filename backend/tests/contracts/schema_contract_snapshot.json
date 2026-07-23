@@ -97,6 +97,52 @@
       "error"
     ]
   },
+  "FeedbackCategory": {
+    "properties": [],
+    "required": []
+  },
+  "FeedbackDetailResponse": {
+    "properties": [
+      "category",
+      "corrected_sql",
+      "created_at",
+      "id",
+      "job_id",
+      "note",
+      "verdict"
+    ],
+    "required": [
+      "created_at",
+      "id",
+      "job_id",
+      "verdict"
+    ]
+  },
+  "FeedbackEnvelopeResponse": {
+    "properties": [
+      "feedback",
+      "status"
+    ],
+    "required": [
+      "feedback",
+      "status"
+    ]
+  },
+  "FeedbackSubmitRequest": {
+    "properties": [
+      "category",
+      "corrected_sql",
+      "note",
+      "verdict"
+    ],
+    "required": [
+      "verdict"
+    ]
+  },
+  "FeedbackVerdict": {
+    "properties": [],
+    "required": []
+  },
   "FileUploadResponse": {
     "properties": [
       "job",
