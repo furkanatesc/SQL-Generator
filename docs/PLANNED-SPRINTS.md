@@ -13,9 +13,11 @@ Plan **Phase → Sprint → PR** ekseninde ilerler (sürüm/`v` etiketi kullanı
 > Yani 25.8/25.9 "iskele", 29.x "gerçek implementasyon"dur; tekrar değildir.
 
 > **Feedback / öğrenen sistem notu:** `27.3 User Feedback Capture` feedback'i
-> *toplar* ama planda bunu *tüketen* bir adım yok. "Öğrenen sistem" (value index,
-> trace mining, rule promotion) şu an planda yok; aşağıdaki "Önerilen Ek
-> Sprintler" bölümünde aday olarak değerlendiriliyor.
+> *toplar* (✅ tamam, aşağıda); bunu *tüketen* adım `27.9 Feedback Review → Rule
+> Suggestion`'dır (planlı, `get_feedback_for_job`'u okuyup kural önerir). Daha
+> ileri "öğrenen sistem" adımları (value index, trace mining, rule promotion)
+> hâlâ plan dışıdır ve aşağıdaki "Önerilen Ek Sprintler" bölümünde aday olarak
+> değerlendiriliyor.
 
 ---
 
