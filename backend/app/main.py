@@ -13,6 +13,7 @@ from app.database import (
 )
 from app.auth import verify_api_key
 from app.api.debug_traces import router as debug_traces_router
+from app.api.feedback import router as feedback_router
 from fastapi.exceptions import RequestValidationError
 from app.settings import get_settings
 from app.api.errors import http_exception_handler, validation_exception_handler, unhandled_exception_handler
@@ -75,6 +76,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(debug_traces_router)
+app.include_router(feedback_router)
 
 # CORS
 app.add_middleware(

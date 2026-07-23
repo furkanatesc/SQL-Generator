@@ -1,6 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Dict, Any, List, Literal
 from enum import Enum
+
+from app.feedback import FeedbackVerdict, FeedbackCategory
 
 
 class RuntimeConfigDiagnostics(BaseModel):
@@ -155,3 +157,41 @@ class ErrorBody(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorBody
+
+
+# Sprint 27.3 - Feedback capture schemas
+class FeedbackSubmitRequest(BaseModel):
+    verdict: FeedbackVerdict
+    category: Optional[FeedbackCategory] = None
+    note: Optional[str] = Field(default=None, max_length=2000)
+    corrected_sql: Optional[str] = Field(default=None, max_length=5000)
+
+    @model_validator(mode="after")
+    def _check_invariants(self):
+        # (2) doğru SQL'in hata kategorisi/düzeltmesi olmaz.
+        if self.verdict == FeedbackVerdict.CORRECT:
+            if self.category is not None or self.corrected_sql is not None:
+                raise ValueError(
+                    "verdict=correct ile category/corrected_sql verilemez"
+                )
+        # (3) 'other' serbest-metin gerekçe ister; aksi halde 27.9 için ölü sinyal.
+        if self.category == FeedbackCategory.OTHER and not (
+            self.note and self.note.strip()
+        ):
+            raise ValueError("category=other için note zorunludur")
+        return self
+
+
+class FeedbackDetailResponse(BaseModel):
+    id: str
+    job_id: str
+    verdict: str
+    category: Optional[str] = None
+    note: Optional[str] = None
+    corrected_sql: Optional[str] = None
+    created_at: str
+
+
+class FeedbackEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    feedback: FeedbackDetailResponse
