@@ -17,15 +17,15 @@ Bu dosya yol haritasının **tek giriş noktasıdır**. Eksen: **Phase → Sprin
 
 | Durum | Kapsam | Detay |
 |---|---|---|
-| ✅ **Tamamlandı** | Sprint 0 → **27.2.1** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) ve **Phase 7 (Security & Governance, 26.0–26.11) kapandı**. **Phase 8 devam ediyor** — 27.0 End-to-End Trace Contract + 27.1 Remaining Stage Span Builders + 27.1w Live Trace Wiring (PR #135) + 27.2 Error Taxonomy v2 (PR #136) + **27.2.1 Error Taxonomy Boundary** tamam: taksonomi `error_code` artık job/API/frontend sınırını geçiyor. `docs/SPRINT-PR-LOG.md` |
-| ▶️ **Sıradaki** | **Phase 8 · Sprint 27.3** | User Feedback Capture. `docs/PLANNED-SPRINTS.md` |
-| 🗓️ **Planlanan** | **Phase 8 → 15** (Sprint 27.3 → 34.7) | `docs/PLANNED-SPRINTS.md` |
+| ✅ **Tamamlandı** | Sprint 0 → **27.3** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) ve **Phase 7 (Security & Governance, 26.0–26.11) kapandı**. **Phase 8 devam ediyor** — 27.0 End-to-End Trace Contract + 27.1 Remaining Stage Span Builders + 27.1w Live Trace Wiring (PR #135) + 27.2 Error Taxonomy v2 (PR #136) + 27.2.1 Error Taxonomy Boundary + **27.3 User Feedback Capture** (PR #TBD) tamam: `backend/app/feedback/` taksonomisi + append-only `feedback` tablosu + `POST /api/jobs/{id}/feedback`; backend-only (GET listeleme 30.6, frontend UI 31.7, `rating` bilinçli kapsam dışı). `docs/SPRINT-PR-LOG.md` |
+| ▶️ **Sıradaki** | **Phase 8 · Sprint 27.4** | Query Replay System. `docs/PLANNED-SPRINTS.md` |
+| 🗓️ **Planlanan** | **Phase 8 → 15** (Sprint 27.4 → 34.7) | `docs/PLANNED-SPRINTS.md` |
 
 ### Planlanan fazlar (durum)
 | Phase | Tema | Sprint aralığı | Durum |
 |---|---|---|---|
 | 7 | Security & Governance | 26.x | ✅ Tamamlandı *(26.0–26.11)* |
-| 8 | Observability & Debuggability | 27.x | ▶️ Devam ediyor *(27.0–27.2.1 tamam; sıradaki 27.3)* |
+| 8 | Observability & Debuggability | 27.x | ▶️ Devam ediyor *(27.0–27.3 tamam; sıradaki 27.4)* |
 | 9 | Large Schema Production Scale | 28.x | 🗓️ Planlı |
 | 10 | Real Database Adapter Layer | 29.x | 🗓️ Planlı *(25.8/25.9 stub'larının gerçeği)* |
 | 11 | API / Backend Productization | 30.x | 🗓️ Planlı |

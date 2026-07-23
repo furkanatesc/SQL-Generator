@@ -164,6 +164,14 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   yanıtında dönüyor ve frontend `Job` interface'inde taşınıyor. Beklenmeyen
   (INTERNAL) hatalarda kod `NULL` kalır. `update_job_status` bu sırada dinamik
   SET-clause'a refactor edildi (davranış korundu).
+- **User Feedback Capture** (Sprint 27.3): bir SQL üretimine (`job`) dair
+  kullanıcı feedback'ini toplayan backend yüzeyi — `backend/app/feedback/`
+  (saf `FeedbackVerdict`/`FeedbackCategory` taksonomisi), append-only
+  `feedback` tablosu ve `POST /api/jobs/{job_id}/feedback` endpoint'i.
+  Öğrenen sistemin tohumu: `27.9` (Feedback Review → Rule Suggestion)
+  bunu `get_feedback_for_job` ile tüketecek. Bilinçli olarak backend-only:
+  HTTP GET listeleme/admin görünümü (`30.6`), frontend UI (`31.7`) ve
+  `rating` alanı bu sprintte kapsam dışı.
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
