@@ -198,6 +198,152 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "FeedbackCategory": {
+        "enum": [
+          "wrong_table",
+          "wrong_column",
+          "wrong_filter",
+          "wrong_join",
+          "wrong_aggregation",
+          "wrong_order_limit",
+          "other"
+        ],
+        "title": "FeedbackCategory",
+        "type": "string"
+      },
+      "FeedbackDetailResponse": {
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "corrected_sql": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected Sql"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "verdict",
+          "created_at"
+        ],
+        "title": "FeedbackDetailResponse",
+        "type": "object"
+      },
+      "FeedbackEnvelopeResponse": {
+        "properties": {
+          "feedback": {
+            "$ref": "#/components/schemas/FeedbackDetailResponse"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "feedback"
+        ],
+        "title": "FeedbackEnvelopeResponse",
+        "type": "object"
+      },
+      "FeedbackSubmitRequest": {
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "corrected_sql": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected Sql"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/FeedbackVerdict"
+          }
+        },
+        "required": [
+          "verdict"
+        ],
+        "title": "FeedbackSubmitRequest",
+        "type": "object"
+      },
+      "FeedbackVerdict": {
+        "enum": [
+          "correct",
+          "incorrect"
+        ],
+        "title": "FeedbackVerdict",
+        "type": "string"
+      },
       "FileUploadResponse": {
         "properties": {
           "job": {
@@ -1419,6 +1565,76 @@
           }
         ],
         "summary": "Cancel Job Execution"
+      }
+    },
+    "/api/jobs/{job_id}/feedback": {
+      "post": {
+        "operationId": "submit_feedback_api_jobs__job_id__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackSubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Submit Feedback",
+        "tags": [
+          "feedback"
+        ]
       }
     },
     "/api/jobs/{job_id}/stream": {

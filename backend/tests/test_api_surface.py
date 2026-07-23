@@ -31,6 +31,7 @@ def test_public_api_surface():
         ("GET", "/api/jobs/{job_id}"),
         ("GET", "/api/jobs/{job_id}/stream"),
         ("POST", "/api/jobs/{job_id}/cancel"),
+        ("POST", "/api/jobs/{job_id}/feedback"),
         ("GET", "/api/schema/raw"),
         ("GET", "/api/schema"),
         ("POST", "/api/schema/refresh"),
