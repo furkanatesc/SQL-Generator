@@ -17,7 +17,7 @@ Bu dosya yol haritasının **tek giriş noktasıdır**. Eksen: **Phase → Sprin
 
 | Durum | Kapsam | Detay |
 |---|---|---|
-| ✅ **Tamamlandı** | Sprint 0 → **27.3** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) ve **Phase 7 (Security & Governance, 26.0–26.11) kapandı**. **Phase 8 devam ediyor** — 27.0 End-to-End Trace Contract + 27.1 Remaining Stage Span Builders + 27.1w Live Trace Wiring (PR #135) + 27.2 Error Taxonomy v2 (PR #136) + 27.2.1 Error Taxonomy Boundary + **27.3 User Feedback Capture** (PR #TBD) tamam: `backend/app/feedback/` taksonomisi + append-only `feedback` tablosu + `POST /api/jobs/{id}/feedback`; backend-only (GET listeleme 30.6, frontend UI 31.7, `rating` bilinçli kapsam dışı). `docs/SPRINT-PR-LOG.md` |
+| ✅ **Tamamlandı** | Sprint 0 → **27.3** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) ve **Phase 7 (Security & Governance, 26.0–26.11) kapandı**. **Phase 8 devam ediyor** — 27.0 End-to-End Trace Contract + 27.1 Remaining Stage Span Builders + 27.1w Live Trace Wiring (PR #135) + 27.2 Error Taxonomy v2 (PR #136) + 27.2.1 Error Taxonomy Boundary + **27.3 User Feedback Capture** (PR #139) tamam: `backend/app/feedback/` taksonomisi + append-only `feedback` tablosu + `POST /api/jobs/{id}/feedback`; backend-only (GET listeleme 30.6, frontend UI 31.7, `rating` bilinçli kapsam dışı). `docs/SPRINT-PR-LOG.md` |
 | ▶️ **Sıradaki** | **Phase 8 · Sprint 27.4** | Query Replay System. `docs/PLANNED-SPRINTS.md` |
 | 🗓️ **Planlanan** | **Phase 8 → 15** (Sprint 27.4 → 34.7) | `docs/PLANNED-SPRINTS.md` |
 
