@@ -258,6 +258,56 @@ def test_split_issue_types_uses_category_not_stage():
     assert security_types == ("unsafe_dml_keyword",)
 
 
+def test_split_issue_types_unknown_code_from_security_stage_goes_security():
+    # Minor-1 (27.4 merge-kapisi): registry'de olmayan bir kod sql_guardrail/
+    # sql_sandbox_safety asamasindan gelirse guvenlik eksenine dusmeli — bu,
+    # baseline_extraction._belongs_to_security_axis'in ayni durumda GUVENLIKTE
+    # TUTMA muhafazakarligiyla simetriktir.
+    errors = [{"type": "unknown_new_denial", "stage": "sql_guardrail",
+               "message": "kaydedilmemis yeni bir guvenlik reddi"}]
+    validation_types, security_types = _split_issue_types(errors)
+    assert validation_types == ()
+    assert security_types == ("unknown_new_denial",)
+
+
+def test_split_issue_types_unknown_code_from_non_security_stage_goes_validation():
+    # Ayni bilinmeyen kod guvenlik-disi bir stage'den gelirse dogrulama
+    # eksenine dusmeli.
+    errors = [{"type": "unknown_semantic_issue", "stage": "semantic_validation",
+               "message": "kaydedilmemis bir dogrulama sorunu"}]
+    validation_types, security_types = _split_issue_types(errors)
+    assert validation_types == ("unknown_semantic_issue",)
+    assert security_types == ()
+
+
+def test_unknown_security_code_symmetry_yields_identical_not_regression(job_row):
+    # Minor-1 asil senaryo: biri registry'ye kaydetmeden yeni bir guvenlik
+    # reddi ekler (ör. "unknown_new_denial", stage="sql_guardrail"). Baseline
+    # bu bilinmeyen kodu guvenlik ekseninde TUTAR (_belongs_to_security_axis
+    # muhafazakarligi). Bugun de AYNI kod, ayni stage'den, hicbir sey
+    # degismemis olarak geldiginde eski (asimetrik) davranista bilinmeyen kod
+    # dogrulama eksenine dusuyor, gozlemin validation_valid'i False'a
+    # cekiyordu ve verdict yanlislikla VALIDATION_REGRESSION cikiyordu.
+    # Fix sonrasi stage tiebreak sayesinde iki taraf da guvenlik eksenine
+    # dustugu icin verdict IDENTICAL olmali.
+    store = _FakeStore([TraceRecord(
+        trace_type="end_to_end",
+        payload=_e2e_payload(tables=("orders",), valid=True,
+                             denied=("unknown_new_denial",)),
+        job_id="job-1")])
+    pipeline = _FakePipeline(
+        tables=("orders",),
+        validation_valid=False,
+        validation_errors=[{"type": "unknown_new_denial",
+                            "stage": "sql_guardrail",
+                            "message": "kaydedilmemis yeni bir guvenlik reddi"}])
+    result = replay_job("job-1", pipeline=pipeline, trace_store=store)
+    assert result.verdict == ReplayVerdict.IDENTICAL
+    assert result.security.observed_denied == ("unknown_new_denial",)
+    assert result.security.baseline_denied == ("unknown_new_denial",)
+    assert result.validation.observed_valid is True
+
+
 def test_retry_recovered_parse_error_yields_identical_not_security_recovery(job_row):
     # ASIL SENARYO (Sprint 27.4 merge-kapisi bulgusu): LLM ilk denemede bozuk
     # SQL uretir -> guardrail sql_parse_error ile reddeder (stage=
