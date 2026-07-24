@@ -9,6 +9,7 @@ from app.replay.contract import (
     ValidationDelta,
 )
 from app.replay.baseline_extraction import extract_baseline
+from app.replay.compare import compare_replay
 
 __all__ = [
     "REPLAY_CONTRACT_VERSION",
@@ -20,4 +21,5 @@ __all__ = [
     "SecurityDelta",
     "ValidationDelta",
     "extract_baseline",
+    "compare_replay",
 ]
