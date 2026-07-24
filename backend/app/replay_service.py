@@ -43,10 +43,15 @@ def _latest_baseline_payload(trace_store, job_id: str) -> Optional[Mapping[str, 
 
 
 def _input_available(job: Mapping[str, Any]) -> bool:
-    if job.get("natural_query"):
-        return True
+    """Uretimde `_stage_intent` excel_file_path'i natural_query'ye onceler
+    (bkz. sql_pipeline.py `if excel_file_path: ... elif natural_query: ...`).
+    Bu yuzden file_path doluysa uretimin kostugu yol excel dalidir; dosya
+    diskte yoksa o yol natural_query dolu olsa bile yeniden uretilemez.
+    """
     file_path = job.get("file_path")
-    return bool(file_path) and os.path.exists(file_path)
+    if file_path:
+        return os.path.exists(file_path)
+    return bool(job.get("natural_query"))
 
 
 def _split_issue_types(errors) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
@@ -86,8 +91,10 @@ def replay_job(job_id: str, *, pipeline, trace_store) -> ReplayResult:
 
     dialect = job.get("dialect") or "postgres"
     natural_query = job.get("natural_query")
-    excel_file_path = job.get("file_path") if not natural_query else None
+    excel_file_path = job.get("file_path")
 
+    # Uretim gibi ikisini de gecir; onceligi _stage_intent'e birak
+    # (bkz. sql_pipeline.py: `if excel_file_path: ... elif natural_query: ...`).
     aqr, intent_error, _ = pipeline._stage_intent(
         excel_file_path=excel_file_path, natural_query=natural_query,
         log_callback=None)
@@ -122,9 +129,13 @@ def replay_job(job_id: str, *, pipeline, trace_store) -> ReplayResult:
                                     log_callback=None)
     validation_types, security_types = _split_issue_types(outcome.validation_errors)
 
+    # Baseline ile AYNI eksen tanimi (live_trace_assembly.py:152-160):
+    # yalniz guvenlik nedeniyle reddedilen SQL, dogrulama ekseninde basarisiz SAYILMAZ.
+    observed_validation_valid = bool(outcome.valid or security_types)
+
     observed = ReplayObserved(
         retrieval_tables=observed_tables,
-        validation_valid=bool(outcome.valid),
+        validation_valid=observed_validation_valid,
         validation_issue_types=validation_types,
         security_denied=security_types,
         notes=tuple(notes))
