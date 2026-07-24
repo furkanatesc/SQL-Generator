@@ -180,7 +180,14 @@ katmanında durdu. Kalanlar:
    tutmuyor; her yeni endpoint'te elle 1 satır ekleniyor (27.3 ve 27.4'te iki kez
    yapıldı). Sessiz drift riski: set güncellenmezse yeni bir endpoint yüzey
    testinden kaçar. Çözüm: seti snapshot'tan türet ya da regen script'e ekle.
-3. **Fail olmuş job'ların üretilen SQL'i saklanmıyor** → replay'in
+3. **`live_trace_assembly` güvenlik span'ini STAGE adına göre kuruyor.** 27.4'te
+   replay tarafı 27.2 registry kategorisine geçirildi (`ErrorCategory.SECURITY`), ama
+   *emit* tarafı hâlâ stage-tabanlı: `sql_parse_error` (kategorisi `validation`,
+   retryable) canlı trace'in SECURITY span'ine `outcome="denied"` olarak yazılmaya
+   devam ediyor. Replay artık bunu süzüyor, fakat trace'in kendisi hâlâ yanıltıcı —
+   `/api/debug/traces` üzerinden bakan bir insan "güvenlik reddi" görür. Emit tarafını
+   da kategoriye taşımak 27.4 kapsamı dışıydı (27.1w yüzeyini değiştirirdi).
+4. **Fail olmuş job'ların üretilen SQL'i saklanmıyor** → replay'in
    `validation_recovery` verdict'i bugünkü veri modelinde **ulaşılamaz**, ve
    `security_regression` yalnız başarılı job'larda ölçülebilir. `jobs.result_sql`
    yalnız `"completed"` durumunda yazılıyor. Taksonomi üyesi sözleşme tamlığı için
