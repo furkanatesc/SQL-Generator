@@ -8,6 +8,7 @@ from app.replay.contract import (
     SecurityDelta,
     ValidationDelta,
 )
+from app.replay.baseline_extraction import extract_baseline
 
 __all__ = [
     "REPLAY_CONTRACT_VERSION",
@@ -18,4 +19,5 @@ __all__ = [
     "RetrievalDelta",
     "SecurityDelta",
     "ValidationDelta",
+    "extract_baseline",
 ]
