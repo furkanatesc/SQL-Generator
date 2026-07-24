@@ -172,6 +172,17 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   bunu `get_feedback_for_job` ile tüketecek. Bilinçli olarak backend-only:
   HTTP GET listeleme/admin görünümü (`30.6`), frontend UI (`31.7`) ve
   `rating` alanı bu sprintte kapsam dışı.
+- **Query Replay System** (Sprint 27.4): gecmis bir `job`, bugunun kodu ve
+  semasiyla **deterministik** olarak yeniden kosturulup (LLM'e gidilmez) o gunku
+  `end_to_end` trace baseline'iyla karsilastirilabiliyor. Yeni saf paket
+  `backend/app/replay/` verdict taksonomisini ve boyut delta'larini
+  (`retrieval`/`validation`/`security`) tasir; `POST /api/debug/jobs/{job_id}/replay`
+  sonucu 200 envelope ile dondurur (API key + `debug_endpoints_enabled` gerekir).
+  Replay **yan etkisizdir**: hicbir tabloya yazilmaz, yeni trace emit edilmez.
+  Dogrulama zinciri `SQLGenerationPipeline.validate_sql` seam'ine ayiklandi;
+  uretim davranisi degismedi. Bilincli kapsam disi: LLM'li tam re-run, replay
+  kaliciligi, toplu replay, frontend UI ve 27.1w oncesi joblar icin legacy
+  baseline fallback'i.
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
