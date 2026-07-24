@@ -5,7 +5,7 @@ LLM'e HIC gidilmez; pipeline ve trace store fake'lenir.
 import pytest
 
 from app.replay import ReplayVerdict
-from app.replay_service import ReplayJobNotFound, replay_job
+from app.replay_service import ReplayJobNotFound, _split_issue_types, replay_job
 from app.sql_pipeline import ValidationOutcome
 from app.trace.models import TraceRecord
 
@@ -242,3 +242,38 @@ def test_security_only_failure_does_not_lower_validation_valid(job_row):
     result = replay_job("job-1", pipeline=pipeline, trace_store=store)
     assert result.validation.observed_valid is True
     assert result.security.observed_denied == ("unsafe_sandbox_rejected",)
+
+
+def test_split_issue_types_uses_category_not_stage():
+    # Sprint 27.4 merge-kapisi duzeltmesi: eksen KATEGORIDEN turetilir, stage'ten
+    # degil. sql_parse_error stage="sql_guardrail" tasisa bile VALIDATION
+    # kategorisindedir; unsafe_dml_keyword ise gercekten SECURITY'dir.
+    errors = [
+        {"type": "sql_parse_error", "stage": "sql_guardrail", "message": "bozuk"},
+        {"type": "unsafe_dml_keyword", "stage": "sql_guardrail",
+         "message": "guvensiz"},
+    ]
+    validation_types, security_types = _split_issue_types(errors)
+    assert validation_types == ("sql_parse_error",)
+    assert security_types == ("unsafe_dml_keyword",)
+
+
+def test_retry_recovered_parse_error_yields_identical_not_security_recovery(job_row):
+    # ASIL SENARYO (Sprint 27.4 merge-kapisi bulgusu): LLM ilk denemede bozuk
+    # SQL uretir -> guardrail sql_parse_error ile reddeder (stage=
+    # "sql_guardrail", retryable) -> ikinci denemede temiz SELECT uretilir ->
+    # job basariyla tamamlanir. Baseline'in SECURITY span'inde bu gecici
+    # sql_parse_error "denied" olarak kalir (tum attempt'lerin birlesimi).
+    # Bugun hicbir sey degismemisken (ayni tablolar, ayni gecerli SQL, guvenlik
+    # ihlali YOK) verdict IDENTICAL olmali — SECURITY_RECOVERY DEGIL.
+    store = _FakeStore([TraceRecord(
+        trace_type="end_to_end",
+        payload=_e2e_payload(tables=("orders",), valid=True,
+                             denied=("sql_parse_error",)),
+        job_id="job-1")])
+    pipeline = _FakePipeline(tables=("orders",), validation_valid=True,
+                             validation_errors=[])
+    result = replay_job("job-1", pipeline=pipeline, trace_store=store)
+    assert result.verdict == ReplayVerdict.IDENTICAL
+    assert result.security.observed_denied == ()
+    assert result.security.baseline_denied == ()

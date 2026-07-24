@@ -8,13 +8,13 @@ import os
 from typing import Any, Mapping, Optional, Tuple
 
 from app.database import get_job
+from app.errors import ErrorCategory, UnknownErrorCodeError, category_of
 from app.replay import (
     ReplayObserved,
     ReplayResult,
     compare_replay,
     extract_baseline,
 )
-from app.trace.live_trace_assembly import _SECURITY_STAGES
 from app.trace.query import TraceQuery
 
 END_TO_END_TRACE_TYPE = "end_to_end"
@@ -53,7 +53,18 @@ def _input_available(job: Mapping[str, Any]) -> bool:
 
 
 def _split_issue_types(errors) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
-    """Uretim hata sozluklerini (anahtar: "type") dogrulama/guvenlik eksenlerine ayirir."""
+    """Uretim hata sozluklerini (anahtar: "type") dogrulama/guvenlik eksenlerine ayirir.
+
+    Eksen KATEGORIDEN turetilir, STAGE'DEN DEGIL (Sprint 27.4 merge-kapisi
+    duzeltmesi). Stage adi kategori icin guvenilir bir sinyal degildir: guardrail
+    asamasi (stage="sql_guardrail") bozuk SQL'i `sql_parse_error` ile reddedebilir
+    ve bu VALIDATION kategorisidir, guvenlik reddi degildir. Eskiden
+    `err.get("stage") in _SECURITY_STAGES` kontrolu bu tarz kodlari da guvenlik
+    eksenine dusuruyordu; LLM ilk denemede bozuk SQL uretip ikinci denemede
+    duzeltince (tipik retry yolu) gecici bir "guvenlik reddi" gorunumu
+    yaratiyordu. Kod registry'de bilinmiyorsa MUHAFAZAKAR sekilde dogrulama
+    eksenine dusurulur — guvenlik ekseni yanlislikla sismesin.
+    """
     validation, security = set(), set()
     for err in errors or ():
         if not isinstance(err, Mapping):
@@ -61,7 +72,11 @@ def _split_issue_types(errors) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
         code = err.get("type")
         if code is None:
             continue
-        if err.get("stage") in _SECURITY_STAGES:
+        try:
+            category = category_of(code)
+        except UnknownErrorCodeError:
+            category = None
+        if category is ErrorCategory.SECURITY:
             security.add(str(code))
         else:
             validation.add(str(code))

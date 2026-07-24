@@ -6,15 +6,54 @@ BILINÇLI OLARAK yereldir: app.trace.end_to_end_trace import etmek sqlite3 +
 19 app modülü çekebilir (import esleme yan etki), bu safligi bozer.
 Tek dogru basarili sabit kaynagi app/trace/end_to_end_trace.py'deki TraceStageKind
 ve TraceSpanStatus'tur; burada degisiklik varsa bu literal'ler de güncellenmelidir.
+
+app.errors ISTISNA OLARAK izinlidir (bkz. test_replay_package_purity.py):
+olculdu — app.errors yaprak katmandir, yalniz kendi alt modullerini
+(categories/codes/registry) ceker, hicbir driver/framework (sqlite3, psycopg,
+sqlglot, fastapi, pydantic...) yuklemez. app.trace ise hala YASAKTIR: paketin
+__init__'i canli pipeline'in tum bagimliliklarini eager import eder (sqlite3 +
+19 app modulu), bu da bu katmanin safligini bozar.
+
+Sprint 27.4 merge-kapisi bulgusu: SECURITY ekseni eskiden STAGE adina
+("sql_guardrail"/"sql_sandbox_safety" icinde miydi) bakiyordu. Ama bir stage
+guvenlik-disi bir kod da uretebilir — ör. guardrail asamasi bozuk SQL'i
+`sql_parse_error` ile reddeder, bu VALIDATION kategorisidir, guvenlik reddi
+DEGILDIR. LLM ilk denemede bozuk SQL uretip ikinci denemede duzeltirse, baseline
+SECURITY span'inde bu gecici `sql_parse_error` kalir (tum attempt'lerin
+birlesimi — bkz. live_trace_assembly.py:90-92) ve replay hicbir sey
+degismemisken "security_recovery" verdict'i uretir. Duzeltme: guvenlik ekseni
+artik 27.2 registry'sinin KATEGORISINE bakar (kod DOGASI, sabit), stage'e degil
+(calisma zamani verisi). Registry'de olmayan/bos reason_code'lar (fallback
+`category` dahil) MUHAFAZAKAR sekilde guvenlik ekseninde TUTULUR — gercek bir
+reddi asla dusurmemek icin.
 """
 from typing import Any, Mapping, Optional
 
+from app.errors import DESCRIPTORS, ErrorCategory, codes_for_category
 from app.replay.contract import ReplayBaseline
 
 _STAGE_RETRIEVAL = "retrieval"
 _STAGE_VALIDATION = "validation"
 _STAGE_SECURITY = "security"
 _SKIPPED = "skipped"
+
+_SECURITY_CODES = frozenset(str(code) for code in codes_for_category(ErrorCategory.SECURITY))
+_KNOWN_CODES = frozenset(str(code) for code in DESCRIPTORS)
+
+
+def _belongs_to_security_axis(reason_code: str) -> bool:
+    """Bir denied check'in reason_code'u guvenlik eksenine mi ait?
+
+    Kural MUHAFAZAKAR: bilinen ve guvenlik-disi bir registry kodu ise DUSUR
+    (ör. sql_parse_error -> validation); guvenlik kategorisindeyse ya da
+    registry'de hic yoksa/bos ise (fallback category adina dusulen hal dahil)
+    TUT — gercek bir reddi asla sessizce kaybetmemek icin.
+    """
+    if reason_code in _SECURITY_CODES:
+        return True
+    if reason_code in _KNOWN_CODES:
+        return False
+    return True
 
 
 def _spans_by_stage(payload: Mapping[str, Any]) -> dict:
@@ -75,11 +114,13 @@ def extract_baseline(
     security_denied = None
     security = _measured(by_stage.get(_STAGE_SECURITY))
     if security is not None:
-        security_denied = tuple(sorted({
+        denied_codes = {
             str(c.get("reason_code") or c.get("category") or "denied")
             for c in (_detail(security).get("checks") or ())
             if isinstance(c, Mapping) and c.get("outcome") == "denied"
-        }))
+        }
+        security_denied = tuple(sorted(
+            code for code in denied_codes if _belongs_to_security_axis(code)))
 
     return ReplayBaseline(
         trace_id=trace_payload.get("trace_id"),
