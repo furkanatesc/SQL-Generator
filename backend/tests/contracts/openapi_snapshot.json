@@ -731,6 +731,247 @@
         "title": "RelationItem",
         "type": "object"
       },
+      "ReplayDetailResponse": {
+        "properties": {
+          "baseline_trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Trace Id"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "notes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "retrieval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplayRetrievalDelta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "security": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplaySecurityDelta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplayValidationDelta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "job_id",
+          "verdict"
+        ],
+        "title": "ReplayDetailResponse",
+        "type": "object"
+      },
+      "ReplayEnvelopeResponse": {
+        "properties": {
+          "replay": {
+            "$ref": "#/components/schemas/ReplayDetailResponse"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "replay"
+        ],
+        "title": "ReplayEnvelopeResponse",
+        "type": "object"
+      },
+      "ReplayRetrievalDelta": {
+        "properties": {
+          "added": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "applicable": {
+            "title": "Applicable",
+            "type": "boolean"
+          },
+          "baseline_tables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Baseline Tables",
+            "type": "array"
+          },
+          "changed": {
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "observed_tables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Observed Tables",
+            "type": "array"
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "applicable",
+          "baseline_tables",
+          "observed_tables",
+          "added",
+          "removed",
+          "changed"
+        ],
+        "title": "ReplayRetrievalDelta",
+        "type": "object"
+      },
+      "ReplaySecurityDelta": {
+        "properties": {
+          "applicable": {
+            "title": "Applicable",
+            "type": "boolean"
+          },
+          "baseline_denied": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Baseline Denied",
+            "type": "array"
+          },
+          "changed": {
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "observed_denied": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Observed Denied",
+            "type": "array"
+          }
+        },
+        "required": [
+          "applicable",
+          "baseline_denied",
+          "observed_denied",
+          "changed"
+        ],
+        "title": "ReplaySecurityDelta",
+        "type": "object"
+      },
+      "ReplayValidationDelta": {
+        "properties": {
+          "applicable": {
+            "title": "Applicable",
+            "type": "boolean"
+          },
+          "baseline_issue_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Baseline Issue Types",
+            "type": "array"
+          },
+          "baseline_valid": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Valid"
+          },
+          "changed": {
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "observed_issue_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Observed Issue Types",
+            "type": "array"
+          },
+          "observed_valid": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Valid"
+          }
+        },
+        "required": [
+          "applicable",
+          "baseline_issue_types",
+          "observed_issue_types",
+          "changed"
+        ],
+        "title": "ReplayValidationDelta",
+        "type": "object"
+      },
       "RuntimeConfigDiagnostics": {
         "properties": {
           "api_key_configured": {
@@ -1006,6 +1247,66 @@
           }
         ],
         "summary": "Set System Config"
+      }
+    },
+    "/api/debug/jobs/{job_id}/replay": {
+      "post": {
+        "operationId": "replay_api_debug_jobs__job_id__replay_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Replay",
+        "tags": [
+          "debug-replay"
+        ]
       }
     },
     "/api/debug/traces": {

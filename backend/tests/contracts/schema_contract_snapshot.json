@@ -282,6 +282,82 @@
       "target_col"
     ]
   },
+  "ReplayDetailResponse": {
+    "properties": [
+      "baseline_trace_id",
+      "error_code",
+      "job_id",
+      "notes",
+      "retrieval",
+      "security",
+      "validation",
+      "verdict",
+      "version"
+    ],
+    "required": [
+      "job_id",
+      "verdict",
+      "version"
+    ]
+  },
+  "ReplayEnvelopeResponse": {
+    "properties": [
+      "replay",
+      "status"
+    ],
+    "required": [
+      "replay",
+      "status"
+    ]
+  },
+  "ReplayRetrievalDelta": {
+    "properties": [
+      "added",
+      "applicable",
+      "baseline_tables",
+      "changed",
+      "observed_tables",
+      "removed"
+    ],
+    "required": [
+      "added",
+      "applicable",
+      "baseline_tables",
+      "changed",
+      "observed_tables",
+      "removed"
+    ]
+  },
+  "ReplaySecurityDelta": {
+    "properties": [
+      "applicable",
+      "baseline_denied",
+      "changed",
+      "observed_denied"
+    ],
+    "required": [
+      "applicable",
+      "baseline_denied",
+      "changed",
+      "observed_denied"
+    ]
+  },
+  "ReplayValidationDelta": {
+    "properties": [
+      "applicable",
+      "baseline_issue_types",
+      "baseline_valid",
+      "changed",
+      "observed_issue_types",
+      "observed_valid"
+    ],
+    "required": [
+      "applicable",
+      "baseline_issue_types",
+      "changed",
+      "observed_issue_types"
+    ]
+  },
   "RuntimeConfigDiagnostics": {
     "properties": [
       "api_key_configured",
