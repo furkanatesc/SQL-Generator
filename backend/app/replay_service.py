@@ -14,12 +14,10 @@ from app.replay import (
     compare_replay,
     extract_baseline,
 )
+from app.trace.live_trace_assembly import _SECURITY_STAGES
 from app.trace.query import TraceQuery
 
 END_TO_END_TRACE_TYPE = "end_to_end"
-
-# Guvenlik reddi bu stage'lerden gelir (live_trace_assembly ile ayni set).
-_SECURITY_STAGES = frozenset({"sql_guardrail", "sql_sandbox_safety"})
 
 
 class ReplayJobNotFound(Exception):
@@ -86,8 +84,8 @@ def replay_job(job_id: str, *, pipeline, trace_store) -> ReplayResult:
             job_id=job_id, baseline=baseline,
             observed=ReplayObserved(
                 input_available=False,
-                notes=("job girdisi artik erisilebilir degil (natural_query bos, "
-                       "file_path yok ya da silinmis)",)))
+                notes=("job girdisi yeniden uretilemiyor: kayitli excel dosyasi "
+                       "diskte yok ya da hicbir girdi yok",)))
 
     dialect = job.get("dialect") or "postgres"
     natural_query = job.get("natural_query")

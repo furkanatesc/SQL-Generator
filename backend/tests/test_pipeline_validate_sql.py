@@ -58,6 +58,22 @@ def test_write_statement_yields_abort_disposition(pipeline):
     assert stages & {"sql_guardrail", "sql_sandbox_safety"}
 
 
+def test_sandbox_safety_rejection_yields_abort_disposition(pipeline):
+    # Guardrail'in AST/node-tipi taramasindan kacan ama SqlSafetyValidator'in
+    # string-seviyeli tokenizer kontrolunde yakalanan bir SELECT: "replace"
+    # sadece bir kolon alias'i olarak kullanildigi icin guardrail bunu bir
+    # DML/DDL node'u olarak gormez (bos guardrail_errors), ama
+    # ensure_read_only'nin adim 6 tokenizer taramasi FORBIDDEN_KEYWORDS
+    # icindeki "replace"i yakalayip ValueError firlatir. Bu, sql_pipeline'daki
+    # sandbox-safety abort dalini (guardrail'den GECIP sandbox'ta reddedilen)
+    # dogrudan kilitler.
+    outcome = pipeline.validate_sql("SELECT 1 AS replace FROM orders", PRUNED, "postgres")
+    assert outcome.valid is False
+    assert outcome.retry_disposition == "abort"
+    stages = {e.get("stage") for e in outcome.validation_errors}
+    assert stages == {"sql_sandbox_safety"}
+
+
 def test_semantic_error_yields_retry_disposition(pipeline):
     outcome = pipeline.validate_sql(
         "SELECT nonexistent_column FROM orders", PRUNED, "postgres")

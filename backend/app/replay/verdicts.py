@@ -24,4 +24,5 @@ class ReplayVerdict(StrEnum):
     VALIDATION_REGRESSION = "validation_regression"
     RETRIEVAL_DRIFT = "retrieval_drift"
     VALIDATION_RECOVERY = "validation_recovery"
+    SECURITY_RECOVERY = "security_recovery"
     IDENTICAL = "identical"

@@ -39,8 +39,11 @@ def _validation_delta(baseline: ReplayBaseline,
         return ValidationDelta(applicable=False)
     base_issues = _sorted_tuple(baseline.validation_issue_types)
     obs_issues = _sorted_tuple(observed.validation_issue_types)
-    changed = (baseline.validation_valid != observed.validation_valid
-               or base_issues != obs_issues)
+    # YALNIZ valid bayragindaki degisim `changed`i belirler. issue tipi
+    # kumeleri kiyaslanabilir degildir (bkz. ValidationDelta docstring'i):
+    # baseline TUM attempt'lerin birlesimini tasir, replay TEK bir gecis
+    # yapar — retry gerektirmis her job'da kod degismeden kume degisirdi.
+    changed = baseline.validation_valid != observed.validation_valid
     return ValidationDelta(
         applicable=True,
         baseline_valid=baseline.validation_valid,
@@ -78,17 +81,19 @@ def compare_replay(*, job_id: str, baseline: Optional[ReplayBaseline],
 
     1 input_unavailable > 2 baseline_unavailable > 3 replay_failed >
     4 security_regression > 5 validation_regression > 6 retrieval_drift >
-    7 validation_recovery > 8 identical
+    7 validation_recovery > 8 security_recovery > 9 identical
     """
     if not observed.input_available:
         return ReplayResult(
             job_id=job_id, verdict=ReplayVerdict.INPUT_UNAVAILABLE,
             baseline_trace_id=baseline.trace_id if baseline else None,
+            error_code=observed.retrieval_error_code,
             notes=tuple(observed.notes or ()))
 
     if baseline is None:
         return ReplayResult(
             job_id=job_id, verdict=ReplayVerdict.BASELINE_UNAVAILABLE,
+            error_code=observed.retrieval_error_code,
             notes=tuple(observed.notes or ()))
 
     retrieval = _retrieval_delta(baseline, observed)
@@ -113,6 +118,9 @@ def compare_replay(*, job_id: str, baseline: Optional[ReplayBaseline],
     elif (validation.applicable and not validation.baseline_valid
           and validation.observed_valid):
         verdict = ReplayVerdict.VALIDATION_RECOVERY
+    elif security.applicable and security.changed:
+        # Guvenlik durusu iyilesti (yeni red yok ama eski redler dustu).
+        verdict = ReplayVerdict.SECURITY_RECOVERY
     else:
         verdict = ReplayVerdict.IDENTICAL
 
