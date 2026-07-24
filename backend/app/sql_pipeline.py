@@ -4,6 +4,7 @@ import json
 import hashlib
 import logging
 import uuid
+from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Set, Tuple
 import sqlglot
 from sqlglot import exp as sqlglot_exp
@@ -92,6 +93,27 @@ def classify_sql_error(error_message: str, stage: str) -> Dict[str, Any]:
         "stage": stage,
         "message": error_message,
     }
+
+@dataclass
+class ValidationOutcome:
+    """validate_sql'in donusu (Sprint 27.4).
+
+    retry_disposition, writer-critic dongusunun continue/break kararini VERI
+    olarak tasir; caller akisi ondan okur. Bu alan olmazsa seam'e cikarma
+    islemi dongu davranisini sessizce degistirirdi.
+      "ok"    -> dogrulama gecti
+      "retry" -> corrector dongusu devam etsin (continue)
+      "abort" -> dongu kesilsin (break)
+    """
+
+    sql: str
+    valid: bool
+    retry_disposition: str
+    validation_errors: list = field(default_factory=list)
+    error_message: str | None = None
+    timings: dict = field(default_factory=lambda: {"validation": 0, "security": 0})
+    pretty_printed: bool = False
+
 
 class SQLGenerationPipeline:
     def __init__(self, schema_manager: SchemaManager = None, nvidia_client: NVIDIAClient = None, trace_store: TraceStore | None = None, llm_provider: LLMProvider | None = None):
@@ -309,6 +331,116 @@ class SQLGenerationPipeline:
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
         return pruned_schema, prompt_schema_context, schema_selection_trace, None, elapsed_ms
 
+    def validate_sql(
+        self,
+        sql: str,
+        pruned_schema: dict,
+        dialect: str,
+        log_callback: Optional[Any] = None,
+    ) -> ValidationOutcome:
+        """Uretim dogrulama zinciri — tek yeniden-kullanilabilir yuzey (Sprint 27.4).
+
+        Sira URETIMDEKIYLE BIREBIR: Oracle case zorlama -> guardrail ->
+        sandbox safety -> sqlglot AST -> semantik dogrulama -> pretty-print.
+        log_callback uretimde SSE'ye giden mesajlari korur; replay None gecer.
+        """
+        timings = {"validation": 0, "security": 0}
+        current_sql = sql
+
+        # ── Katman 4: Oracle Büyük Harf Zorlama (Pre-Validation) ──
+        if dialect.lower() == "oracle":
+            current_sql = enforce_oracle_case(current_sql, dialect=dialect)
+
+        # --- Guardrail Validation ---
+        t = time.perf_counter()
+        try:
+            guardrail_errors = SQLGuardrailValidator.validate(current_sql, dialect=dialect)
+        finally:
+            timings["security"] += int((time.perf_counter() - t) * 1000)
+        if guardrail_errors:
+            last_error = guardrail_errors[0]["message"]
+            if log_callback:
+                log_callback(f"Güvenlik doğrulaması (Guardrail) BAŞARISIZ: {last_error}", 4)
+            disposition = ("retry" if guardrail_errors[0]["type"] == "sql_parse_error"
+                           else "abort")
+            return ValidationOutcome(
+                sql=current_sql, valid=False, retry_disposition=disposition,
+                validation_errors=list(guardrail_errors),
+                error_message=last_error, timings=timings)
+
+        # --- Sandbox Safety Validation ---
+        t = time.perf_counter()
+        try:
+            try:
+                SqlSafetyValidator().ensure_read_only(current_sql)
+            except sqlglot.errors.ParseError:
+                # Sozdizimi hatalarini standart AST dogrulayici yakalasin
+                pass
+            except ValueError as safety_err:
+                last_error = str(safety_err)
+                if log_callback:
+                    log_callback(f"Sandbox güvenlik doğrulaması BAŞARISIZ: {last_error}", 4)
+                return ValidationOutcome(
+                    sql=current_sql, valid=False, retry_disposition="abort",
+                    validation_errors=[{
+                        "type": ErrorCode.UNSAFE_SANDBOX_REJECTED,
+                        "stage": "sql_sandbox_safety",
+                        "message": last_error,
+                    }],
+                    error_message=last_error, timings=timings)
+        finally:
+            timings["security"] += int((time.perf_counter() - t) * 1000)
+
+        # AST Doğrulama (sqlglot)
+        t = time.perf_counter()
+        try:
+            try:
+                sqlglot.parse_one(current_sql, read=dialect)
+            except sqlglot.errors.ParseError as parse_err:
+                last_error = f"SQLGLOT AST Parse Error: {str(parse_err)}"
+                if log_callback:
+                    log_callback(f"AST doğrulaması BAŞARISIZ: {last_error}", 4)
+                return ValidationOutcome(
+                    sql=current_sql, valid=False, retry_disposition="retry",
+                    validation_errors=[classify_sql_error(last_error, stage="ast_parse")],
+                    error_message=last_error, timings=timings)
+        finally:
+            timings["validation"] += int((time.perf_counter() - t) * 1000)
+
+        if log_callback:
+            log_callback("AST sözdizimi doğrulaması geçti. Şema-bazlı semantik doğrulama başlatılıyor...", 4)
+
+        # ── Katman 1 + 5: Schema-Aware Semantik Doğrulama ──
+        t = time.perf_counter()
+        sem_valid, sem_error = SQLValidator.validate(
+            current_sql, pruned_schema, dialect=dialect
+        )
+        timings["validation"] += int((time.perf_counter() - t) * 1000)
+        if not sem_valid:
+            if log_callback:
+                log_callback(f"Semantik doğrulama BAŞARISIZ (Critic döngüsüne yönlendiriliyor): {sem_error}", 4)
+            return ValidationOutcome(
+                sql=current_sql, valid=False, retry_disposition="retry",
+                validation_errors=[classify_sql_error(sem_error, stage="semantic_validation")],
+                error_message=sem_error, timings=timings)
+
+        # Tüm doğrulamalar geçti — pretty print
+        pretty_printed = False
+        t = time.perf_counter()
+        try:
+            parsed_tree = sqlglot.parse_one(current_sql, read=dialect)
+            current_sql = parsed_tree.sql(dialect=dialect, pretty=True)
+            pretty_printed = True
+        except Exception:
+            pass  # Formatlama başarısız olursa orijinal haliyle bırak
+        finally:
+            timings["validation"] += int((time.perf_counter() - t) * 1000)
+
+        return ValidationOutcome(
+            sql=current_sql, valid=True, retry_disposition="ok",
+            validation_errors=[], error_message=None,
+            timings=timings, pretty_printed=pretty_printed)
+
     def _stage_writer_critic(
         self,
         *,
@@ -401,112 +533,30 @@ class SQLGenerationPipeline:
                 if log_callback:
                     log_callback(f"Taslak SQL üretildi. sqlglot ile diyalekt ({dialect}) sözdizimi doğrulaması yapılıyor...", 4)
 
-                # ── Katman 4: Oracle Büyük Harf Zorlama (Pre-Validation) ──
-                if dialect.lower() == "oracle":
-                    current_sql = enforce_oracle_case(current_sql, dialect=dialect)
-                    attempt_info["sql"] = current_sql
+                outcome = self.validate_sql(
+                    current_sql, pruned_schema, dialect, log_callback=log_callback)
+                timings["validation"] += outcome.timings["validation"]
+                timings["security"] += outcome.timings["security"]
+                current_sql = outcome.sql
+                attempt_info["sql"] = current_sql
 
-                # --- Guardrail Validation ---
-                t = time.perf_counter()
-                try:
-                    guardrail_errors = SQLGuardrailValidator.validate(current_sql, dialect=dialect)
-                finally:
-                    timings["security"] += int((time.perf_counter() - t) * 1000)
-                if guardrail_errors:
-                    last_error = guardrail_errors[0]["message"]
+                if not outcome.valid:
+                    last_error = outcome.error_message
                     attempt_info["valid"] = False
                     attempt_info["error"] = last_error
-                    attempt_info["validation_errors"] = guardrail_errors
+                    attempt_info["validation_errors"] = outcome.validation_errors
                     result["attempts"].append(attempt_info)
-                    for err in guardrail_errors:
-                        validation_errors.append(err)
-                    if log_callback:
-                        log_callback(f"Güvenlik doğrulaması (Guardrail) BAŞARISIZ: {last_error}", 4)
-
-                    if guardrail_errors[0]["type"] == "sql_parse_error":
+                    validation_errors.extend(outcome.validation_errors)
+                    if outcome.retry_disposition == "retry":
                         continue
-                    else:
-                        break
+                    break
 
-                # --- Sandbox Safety Validation ---
-                t = time.perf_counter()
-                try:
-                    try:
-                        SqlSafetyValidator().ensure_read_only(current_sql)
-                    except sqlglot.errors.ParseError:
-                        # Let the syntax parse errors be caught standardly by the pipeline's AST validator
-                        pass
-                    except ValueError as safety_err:
-                        last_error = str(safety_err)
-                        attempt_info["valid"] = False
-                        attempt_info["error"] = last_error
-                        attempt_info["validation_errors"] = [{
-                            "type": ErrorCode.UNSAFE_SANDBOX_REJECTED,
-                            "stage": "sql_sandbox_safety",
-                            "message": last_error
-                        }]
-                        result["attempts"].append(attempt_info)
-                        validation_errors.append(attempt_info["validation_errors"][0])
-                        if log_callback:
-                            log_callback(f"Sandbox güvenlik doğrulaması BAŞARISIZ: {last_error}", 4)
-                        break
-                finally:
-                    timings["security"] += int((time.perf_counter() - t) * 1000)
-
-                # AST Doğrulama (sqlglot)
-                t = time.perf_counter()
-                try:
-                    try:
-                        sqlglot.parse_one(current_sql, read=dialect)
-                    except sqlglot.errors.ParseError as parse_err:
-                        last_error = f"SQLGLOT AST Parse Error: {str(parse_err)}"
-                        attempt_info["valid"] = False
-                        attempt_info["error"] = last_error
-                        classified_error = classify_sql_error(last_error, stage="ast_parse")
-                        attempt_info["validation_errors"] = [classified_error]
-                        result["attempts"].append(attempt_info)
-                        validation_errors.append(classified_error)
-                        if log_callback:
-                            log_callback(f"AST doğrulaması BAŞARISIZ: {last_error}", 4)
-                        continue
-                finally:
-                    timings["validation"] += int((time.perf_counter() - t) * 1000)
-
-                if log_callback:
-                    log_callback("AST sözdizimi doğrulaması geçti. Şema-bazlı semantik doğrulama başlatılıyor...", 4)
-
-                # ── Katman 1 + 5: Schema-Aware Semantik Doğrulama ──
-                t = time.perf_counter()
-                sem_valid, sem_error = SQLValidator.validate(
-                    current_sql, pruned_schema, dialect=dialect
-                )
-                timings["validation"] += int((time.perf_counter() - t) * 1000)
-                if not sem_valid:
-                    last_error = sem_error
-                    attempt_info["valid"] = False
-                    attempt_info["error"] = last_error
-                    classified_error = classify_sql_error(last_error, stage="semantic_validation")
-                    attempt_info["validation_errors"] = [classified_error]
-                    result["attempts"].append(attempt_info)
-                    validation_errors.append(classified_error)
-                    if log_callback:
-                        log_callback(f"Semantik doğrulama BAŞARISIZ (Critic döngüsüne yönlendiriliyor): {last_error}", 4)
-                    continue
-
-                # Tüm doğrulamalar geçti
-                t = time.perf_counter()
-                try:
-                    # SQL'i formatla (Pretty Print)
-                    parsed_tree = sqlglot.parse_one(current_sql, read=dialect)
-                    current_sql = parsed_tree.sql(dialect=dialect, pretty=True)
+                # last_generated_sql YALNIZ pretty-print gerceklestiyse guncellenir
+                # (bugunku davranis: atama try blogunun icindeydi).
+                if outcome.pretty_printed:
                     last_generated_sql = current_sql
-                except Exception:
-                    pass  # Formatlama başarısız olursa orijinal haliyle bırak
-                finally:
-                    timings["validation"] += int((time.perf_counter() - t) * 1000)
 
                 attempt_info["valid"] = True
-                attempt_info["sql"] = current_sql
                 result["attempts"].append(attempt_info)
                 result["success"] = True
                 result["generated_sql"] = current_sql
