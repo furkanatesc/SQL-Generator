@@ -1,15 +1,20 @@
 """end_to_end trace payload'indan baseline cikarimi (Sprint 27.4).
 
 SAF: girdi bir dict'tir, I/O yoktur, EndToEndTrace nesnesi KURULMAZ.
-app.trace.end_to_end_trace importu yalnizca stage/status literal'lerini tek
-kaynaktan okumak icindir ("retrieval", "skipped" gibi string'leri kopyalamamak).
+Stage ve status literal'leri (asagida tanimli _STAGE_* ve _SKIPPED sabitler)
+BILINÇLI OLARAK yereldir: app.trace.end_to_end_trace import etmek sqlite3 +
+19 app modülü çekebilir (import esleme yan etki), bu safligi bozer.
+Tek dogru basarili sabit kaynagi app/trace/end_to_end_trace.py'deki TraceStageKind
+ve TraceSpanStatus'tur; burada degisiklik varsa bu literal'ler de güncellenmelidir.
 """
 from typing import Any, Mapping, Optional
 
 from app.replay.contract import ReplayBaseline
-from app.trace.end_to_end_trace import TraceSpanStatus, TraceStageKind
 
-_SKIPPED = TraceSpanStatus.SKIPPED.value
+_STAGE_RETRIEVAL = "retrieval"
+_STAGE_VALIDATION = "validation"
+_STAGE_SECURITY = "security"
+_SKIPPED = "skipped"
 
 
 def _spans_by_stage(payload: Mapping[str, Any]) -> dict:
@@ -42,7 +47,7 @@ def extract_baseline(
     by_stage = _spans_by_stage(trace_payload)
 
     retrieval_tables = None
-    retrieval = _measured(by_stage.get(TraceStageKind.RETRIEVAL.value))
+    retrieval = _measured(by_stage.get(_STAGE_RETRIEVAL))
     if retrieval is not None:
         candidates = _detail(retrieval).get("candidates") or ()
         retrieval_tables = tuple(sorted({
@@ -55,7 +60,7 @@ def extract_baseline(
 
     validation_valid = None
     validation_issue_types = None
-    validation = _measured(by_stage.get(TraceStageKind.VALIDATION.value))
+    validation = _measured(by_stage.get(_STAGE_VALIDATION))
     if validation is not None:
         detail = _detail(validation)
         validation_valid = bool(detail.get("valid"))
@@ -68,7 +73,7 @@ def extract_baseline(
         }))
 
     security_denied = None
-    security = _measured(by_stage.get(TraceStageKind.SECURITY.value))
+    security = _measured(by_stage.get(_STAGE_SECURITY))
     if security is not None:
         security_denied = tuple(sorted({
             str(c.get("reason_code") or c.get("category") or "denied")
