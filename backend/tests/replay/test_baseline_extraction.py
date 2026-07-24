@@ -126,3 +126,25 @@ def test_denied_check_without_reason_code_falls_back_to_category():
                "audit_entry_hash": None}]
     baseline = extract_baseline(_payload([_security_span(checks)]))
     assert baseline.security_denied == ("sql_guardrail",)
+
+
+def test_denied_check_with_validation_category_code_excluded_from_security():
+    # Sprint 27.4 merge-kapisi bulgusu: guardrail asamasi bozuk SQL'i
+    # sql_parse_error ile reddedebilir (stage="sql_guardrail") ama bu
+    # VALIDATION kategorisidir, guvenlik reddi degildir. Bu reason_code
+    # security_denied'a GIRMEMELI.
+    checks = [{"category": "sql_guardrail", "outcome": "denied",
+               "severity": "error", "reason_code": "sql_parse_error",
+               "audit_entry_hash": None}]
+    baseline = extract_baseline(_payload([_security_span(checks)]))
+    assert baseline.security_denied == ()
+
+
+def test_denied_check_with_security_category_code_included():
+    # Gercek bir guvenlik kodu (registry kategorisi SECURITY) her zaman
+    # guvenlik eksenine girmeye devam etmeli.
+    checks = [{"category": "sql_sandbox_safety", "outcome": "denied",
+               "severity": "error", "reason_code": "unsafe_dml_keyword",
+               "audit_entry_hash": None}]
+    baseline = extract_baseline(_payload([_security_span(checks)]))
+    assert baseline.security_denied == ("unsafe_dml_keyword",)
