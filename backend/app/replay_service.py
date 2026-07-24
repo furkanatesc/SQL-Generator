@@ -15,6 +15,7 @@ from app.replay import (
     compare_replay,
     extract_baseline,
 )
+from app.trace.live_trace_assembly import _SECURITY_STAGES
 from app.trace.query import TraceQuery
 
 END_TO_END_TRACE_TYPE = "end_to_end"
@@ -55,15 +56,27 @@ def _input_available(job: Mapping[str, Any]) -> bool:
 def _split_issue_types(errors) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
     """Uretim hata sozluklerini (anahtar: "type") dogrulama/guvenlik eksenlerine ayirir.
 
-    Eksen KATEGORIDEN turetilir, STAGE'DEN DEGIL (Sprint 27.4 merge-kapisi
+    Eksen ONCELIKLE KATEGORIDEN turetilir, STAGE'DEN DEGIL (Sprint 27.4 merge-kapisi
     duzeltmesi). Stage adi kategori icin guvenilir bir sinyal degildir: guardrail
     asamasi (stage="sql_guardrail") bozuk SQL'i `sql_parse_error` ile reddedebilir
     ve bu VALIDATION kategorisidir, guvenlik reddi degildir. Eskiden
     `err.get("stage") in _SECURITY_STAGES` kontrolu bu tarz kodlari da guvenlik
     eksenine dusuruyordu; LLM ilk denemede bozuk SQL uretip ikinci denemede
     duzeltince (tipik retry yolu) gecici bir "guvenlik reddi" gorunumu
-    yaratiyordu. Kod registry'de bilinmiyorsa MUHAFAZAKAR sekilde dogrulama
-    eksenine dusurulur — guvenlik ekseni yanlislikla sismesin.
+    yaratiyordu.
+
+    Kod registry'de BILINMIYORSA (henuz kaydedilmemis yeni bir kod) STAGE
+    tiebreak olarak kullanilir: stage `_SECURITY_STAGES` icindeyse (sql_guardrail,
+    sql_sandbox_safety) guvenlik eksenine, degilse dogrulama eksenine dusurulur.
+    Bu, baseline tarafindaki (`app/replay/baseline_extraction.py::
+    _belongs_to_security_axis`) muhafazakarlikla SIMETRIKTIR: orada da bilinmeyen/
+    registry-disi bir reason_code guvenlik ekseninde TUTULUR — gercek bir guvenlik
+    reddini asla dusurmemek icin. Baseline'i "muhafazakar tut", gozlemi
+    "muhafazakar dusur" yaparsak, biri registry'ye kaydetmeden yeni bir guvenlik
+    reddi eklediginde (ör. sql_guardrail asamasindan gelen bilinmeyen bir kod)
+    baseline guvenlikte kalir ama gozlem dogrulamaya duser — hicbir sey
+    degismemisken sahte bir `validation_regression` cikar. Stage'i tiebreak
+    yapmak iki tarafi da ayni yone (guvenlik) egerek bu asimetriyi kapatir.
     """
     validation, security = set(), set()
     for err in errors or ():
@@ -77,6 +90,8 @@ def _split_issue_types(errors) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
         except UnknownErrorCodeError:
             category = None
         if category is ErrorCategory.SECURITY:
+            security.add(str(code))
+        elif category is None and err.get("stage") in _SECURITY_STAGES:
             security.add(str(code))
         else:
             validation.add(str(code))
