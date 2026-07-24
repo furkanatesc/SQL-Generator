@@ -69,8 +69,11 @@ class _FakePipeline:
         self._validation_valid = validation_valid
         self._validation_errors = validation_errors or []
         self.validate_calls = []
+        self.intent_calls = []
 
     def _stage_intent(self, *, excel_file_path, natural_query, log_callback):
+        self.intent_calls.append(
+            {"excel_file_path": excel_file_path, "natural_query": natural_query})
         if not natural_query and not excel_file_path:
             return None, {"message": "bos", "error_type": "input_error"}, 0
         return {"natural_query": natural_query or "excel"}, None, 0
@@ -198,3 +201,44 @@ def test_validation_regression_maps_error_type_axis(job_row):
     assert result.verdict == ReplayVerdict.VALIDATION_REGRESSION
     # uretim tarafinda eksen adi "type", trace tarafinda "category" idi
     assert result.validation.observed_issue_types == ("missing_column",)
+
+
+def test_excel_branch_runs_when_both_inputs_present(monkeypatch):
+    # Uretimde /api/files/upload hem file hem natural_query'yi ayni job'a
+    # yazabilir; _stage_intent excel'i onceler. Adaptor da ayni yolu
+    # kosmali — natural_query'yi atlayip excel_file_path'i None'a
+    # dusurmemeli.
+    row = {
+        "id": "job-4", "status": "completed", "file_path": "/var/uploads/job-4.xlsx",
+        "natural_query": "en cok satan urunler", "previous_sql": None,
+        "result_sql": "SELECT 1", "error_message": None, "error_code": None,
+        "dialect": "postgres", "created_at": "x", "updated_at": "x",
+    }
+    monkeypatch.setattr("app.replay_service.get_job", lambda job_id: row)
+    monkeypatch.setattr("app.replay_service.os.path.exists", lambda p: True)
+
+    store = _FakeStore([TraceRecord(trace_type="end_to_end",
+                                    payload=_e2e_payload(), job_id="job-4")])
+    pipeline = _FakePipeline()
+    replay_job("job-4", pipeline=pipeline, trace_store=store)
+
+    assert len(pipeline.intent_calls) == 1
+    assert pipeline.intent_calls[0]["excel_file_path"] is not None
+    assert pipeline.intent_calls[0]["excel_file_path"] == "/var/uploads/job-4.xlsx"
+    assert pipeline.intent_calls[0]["natural_query"] == "en cok satan urunler"
+
+
+def test_security_only_failure_does_not_lower_validation_valid(job_row):
+    # live_trace_assembly.py:152-160 ile ayni eksen kurali: yalniz guvenlik
+    # nedeniyle reddedilen SQL dogrulama ekseninde basarisiz SAYILMAZ.
+    store = _FakeStore([TraceRecord(trace_type="end_to_end",
+                                    payload=_e2e_payload(valid=True),
+                                    job_id="job-1")])
+    pipeline = _FakePipeline(
+        validation_valid=False,
+        validation_errors=[{"type": "unsafe_sandbox_rejected",
+                            "stage": "sql_sandbox_safety",
+                            "message": "guvensiz sorgu"}])
+    result = replay_job("job-1", pipeline=pipeline, trace_store=store)
+    assert result.validation.observed_valid is True
+    assert result.security.observed_denied == ("unsafe_sandbox_rejected",)
