@@ -161,3 +161,27 @@ katmanında durdu. Kalanlar:
 9. **Geliştirme trace DB'si migrate edilmedi.** `backend/data/nl2sql_traces.db`
    gitignore'da; eski satırlar v1 kod adlarını taşır ve `?error_type=` filtresiyle
    eşleşmez. Kabul edilen maliyet.
+
+---
+
+## §5. Sprint 27.4 (Query Replay System) devirleri — AÇIK
+
+1. **Purity guard'ları aynı süreçte ölçüyor (kardeş paketler).** 27.4'te
+   `app/replay/` guard'ı taze bir alt sürece (`subprocess`) taşındı, çünkü aynı
+   süreçte `sys.modules` cache'i sızıntıyı maskeliyordu: whole-branch review
+   `baseline_extraction.py`'ye kasten `app.trace` importu enjekte etti ve guard
+   **tam suite'te tamamen yeşil kaldı** (yalnız izole koşuda fail etti). Aynı
+   yapısal kusur `backend/tests/errors/test_errors_package_purity.py` ve
+   `backend/tests/feedback/test_feedback_package_purity.py` içinde **hâlâ var** —
+   o iki yaprak paketin saflığı bugün ölçülmüyor sayılır. Aynı subprocess desenine
+   taşınmaları gerekiyor.
+2. **`test_api_surface.py`'deki `expected_routes` seti OpenAPI snapshot'ından
+   türemiyor.** `backend/scripts/generate_contract_snapshots.py` onu senkron
+   tutmuyor; her yeni endpoint'te elle 1 satır ekleniyor (27.3 ve 27.4'te iki kez
+   yapıldı). Sessiz drift riski: set güncellenmezse yeni bir endpoint yüzey
+   testinden kaçar. Çözüm: seti snapshot'tan türet ya da regen script'e ekle.
+3. **Fail olmuş job'ların üretilen SQL'i saklanmıyor** → replay'in
+   `validation_recovery` verdict'i bugünkü veri modelinde **ulaşılamaz**, ve
+   `security_regression` yalnız başarılı job'larda ölçülebilir. `jobs.result_sql`
+   yalnız `"completed"` durumunda yazılıyor. Taksonomi üyesi sözleşme tamlığı için
+   korunuyor; gerçek çözüm ayrı bir kalem (bkz. 27.4 spec §8).
