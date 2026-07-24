@@ -137,13 +137,62 @@ def test_dimension_not_applicable_when_observed_missing_it():
     assert result.verdict == ReplayVerdict.IDENTICAL
 
 
-def test_security_recovery_is_reported_as_change_but_not_regression():
+def test_security_recovery_is_reported_as_change_and_named_as_recovery():
+    # 27.4 whole-branch review: eskiden bu senaryo 'identical' donuyordu — bir
+    # debug aracinin guvenlik durusu iyilesmesini "hicbir sey degismedi" gibi
+    # gostermesi kabul edilemezdi. Simdi kendi verdict'iyle adlandiriliyor.
     result = compare_replay(
         job_id="j1",
         baseline=_baseline(security_denied=("unsafe_sandbox_rejected",)),
         observed=_observed(security_denied=()))
     assert result.security.changed is True
+    assert result.verdict == ReplayVerdict.SECURITY_RECOVERY
+
+
+def test_identical_requires_all_three_deltas_unchanged():
+    # identical yalniz retrieval/validation/security'nin UCU DE
+    # changed=False oldugu durumda donmeli; herhangi biri changed=True ise
+    # baska bir verdict adlandirmali (bkz. SECURITY_RECOVERY testi).
+    result = compare_replay(job_id="j1", baseline=_baseline(), observed=_observed())
     assert result.verdict == ReplayVerdict.IDENTICAL
+    assert result.retrieval.changed is False
+    assert result.validation.changed is False
+    assert result.security.changed is False
+
+
+def test_validation_issue_type_drift_alone_does_not_change_validation_delta():
+    # FIX 2: baseline'in issue-type kumesi TUM attempt'lerin birlesimidir,
+    # replay TEK bir gecis yapar. valid bayragi ayni kalirken issue tipleri
+    # farkli olsa bile (retry sonrasi basarili olmus bir job gibi) bu YANLIS
+    # POZITIF uretmemeli.
+    result = compare_replay(
+        job_id="j1",
+        baseline=_baseline(validation_valid=True,
+                           validation_issue_types=("missing_column",)),
+        observed=_observed(validation_valid=True, validation_issue_types=()))
+    assert result.validation.changed is False
+    assert result.validation.baseline_issue_types == ("missing_column",)
+    assert result.validation.observed_issue_types == ()
+    assert result.verdict == ReplayVerdict.IDENTICAL
+
+
+def test_error_code_carried_on_baseline_unavailable():
+    # FIX 4: registry kodu (asil aksiyon sinyali) erken donuslerde
+    # dusmemeli — "sessiz dusurme yok" ilkesi.
+    result = compare_replay(
+        job_id="j1", baseline=None,
+        observed=_observed(retrieval_error_code="schema_pruning_failed"))
+    assert result.verdict == ReplayVerdict.BASELINE_UNAVAILABLE
+    assert result.error_code == "schema_pruning_failed"
+
+
+def test_error_code_carried_on_input_unavailable():
+    result = compare_replay(
+        job_id="j1", baseline=_baseline(),
+        observed=_observed(input_available=False,
+                           retrieval_error_code="schema_pruning_failed"))
+    assert result.verdict == ReplayVerdict.INPUT_UNAVAILABLE
+    assert result.error_code == "schema_pruning_failed"
 
 
 def test_result_version_and_job_id_are_set():
