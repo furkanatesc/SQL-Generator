@@ -1,12 +1,13 @@
 """app.replay saflik guard'i (Sprint 27.4 T1).
 
-app.replay yaprak katmandir: stdlib + app.trace.end_to_end_trace + app.errors
-disinda hicbir sey import etmez. Kardes guard'lar:
+app.replay yaprak katmandir: YALNIZ stdlib import eder, hicbir app.* modülü
+(app.trace dahil) import etmez. Stage/status literal'leri yerel sabit olarak
+tanimlanir (import esleme yan etkisi: sqlite3 + 19 app modülü). Kardes guard'lar:
 test_feedback_package_purity.py, test_errors_package_purity.py.
 """
 import sys
 
-_ALLOWED_APP_PREFIXES = ("app.replay", "app.trace.end_to_end_trace", "app.errors")
+_ALLOWED_APP_PREFIXES = ("app.replay",)
 
 
 def test_replay_package_imports_no_unexpected_app_modules_and_no_drivers():
@@ -23,11 +24,11 @@ def test_replay_package_imports_no_unexpected_app_modules_and_no_drivers():
             m for m in newly_loaded
             if m.startswith("app.")
             and not any(m == p or m.startswith(p + ".") for p in _ALLOWED_APP_PREFIXES)
-            and m not in ("app", "app.trace")
+            and m != "app"
         ]
         assert leaked_app == [], f"app.replay sizdirdi: {leaked_app}"
 
-        for drv in ("psycopg", "psycopg2", "oracledb", "cx_Oracle", "sqlglot",
+        for drv in ("sqlite3", "psycopg", "psycopg2", "oracledb", "cx_Oracle", "sqlglot",
                     "fastapi", "pydantic"):
             assert drv not in newly_loaded, f"app.replay {drv} yukledi"
     finally:
