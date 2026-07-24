@@ -195,3 +195,46 @@ class FeedbackDetailResponse(BaseModel):
 class FeedbackEnvelopeResponse(BaseModel):
     status: Literal["success"]
     feedback: FeedbackDetailResponse
+
+
+# Sprint 27.4 - Query replay schemas (alanlar PLAIN str; enum sinir gecmez)
+class ReplayRetrievalDelta(BaseModel):
+    applicable: bool
+    baseline_tables: List[str]
+    observed_tables: List[str]
+    added: List[str]
+    removed: List[str]
+    changed: bool
+
+
+class ReplayValidationDelta(BaseModel):
+    applicable: bool
+    baseline_valid: Optional[bool] = None
+    observed_valid: Optional[bool] = None
+    baseline_issue_types: List[str]
+    observed_issue_types: List[str]
+    changed: bool
+
+
+class ReplaySecurityDelta(BaseModel):
+    applicable: bool
+    baseline_denied: List[str]
+    observed_denied: List[str]
+    changed: bool
+
+
+class ReplayDetailResponse(BaseModel):
+    version: str
+    job_id: str
+    verdict: str
+    baseline_trace_id: Optional[str] = None
+    retrieval: Optional[ReplayRetrievalDelta] = None
+    validation: Optional[ReplayValidationDelta] = None
+    security: Optional[ReplaySecurityDelta] = None
+    error_code: Optional[str] = None
+    notes: List[str] = []
+
+
+class ReplayEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    replay: ReplayDetailResponse
