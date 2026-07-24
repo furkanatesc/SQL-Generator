@@ -36,7 +36,18 @@ class RetrievalDelta:
 
 @dataclass(frozen=True)
 class ValidationDelta:
-    """SQL'in gecerliligindeki fark. issue MESAJLARI karsilastirmaya girmez."""
+    """SQL'in gecerliligindeki fark. issue MESAJLARI karsilastirmaya girmez.
+
+    ASIMETRI (Sprint 27.4 whole-branch review): baseline_issue_types canli
+    yoldan gelir ve TUM attempt'lerin birlesimidir (bkz.
+    live_trace_assembly.py:71-76, 90-92 — _attempt_issues her attempt'i
+    birlestirir). observed_issue_types ise replay'in TEK bir SQL'i TEK bir kez
+    dogrulamasindan gelir. Bu iki kume karsilastirilabilir DEGILDIR — retry
+    gerektirmis her job'da (ör. attempt-1 missing_column, attempt-2 basarili)
+    kume farkli olur ama kod hic degismemis olabilir. Bu yuzden `changed`
+    YALNIZ validation_valid bayraginin degisimine dayanir; issue tipi kumeleri
+    yalniz BILGI amaclidir, karsilastirmayi SURUKLEMEZ.
+    """
 
     applicable: bool = True
     baseline_valid: Optional[bool] = None
