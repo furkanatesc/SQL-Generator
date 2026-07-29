@@ -32,3 +32,6 @@ backend/data/
 data/*.db
 sqlgen.db
 *.db.backup
+
+# Graphify
+graphify-out/
