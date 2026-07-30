@@ -238,3 +238,52 @@ class ReplayDetailResponse(BaseModel):
 class ReplayEnvelopeResponse(BaseModel):
     status: Literal["success"]
     replay: ReplayDetailResponse
+
+
+# Sprint 27.5 - Debug bundle schemas (alanlar PLAIN str/dict; enum sinir gecmez)
+class BundleJobInfoResponse(BaseModel):
+    status: Optional[str] = None
+    dialect: Optional[str] = None
+    error_code: Optional[str] = None
+    has_natural_query: bool = False
+    has_excel_input: bool = False
+    result_sql_present: bool = False
+
+
+class BundleSqlInfoResponse(BaseModel):
+    generated_sql: Optional[str] = None
+    last_generated_sql: Optional[str] = None
+    sql_valid: Optional[bool] = None
+    attempts: List[Any] = []
+    sql_validation_errors: List[Any] = []
+
+
+class BundleSchemaInfoResponse(BaseModel):
+    selected_tables: List[str] = []
+    schema_hash: Optional[str] = None
+    table_count: int = 0
+
+
+class BundleMetaResponse(BaseModel):
+    bundle_contract_version: str
+    replay_contract_version: Optional[str] = None
+    trace_contract_version: Optional[str] = None
+    dialect: Optional[str] = None
+
+
+class BundleDetailResponse(BaseModel):
+    version: str
+    job_id: str
+    job: BundleJobInfoResponse
+    trace: Optional[dict] = None
+    sql: Optional[BundleSqlInfoResponse] = None
+    replay: Optional[dict] = None
+    schema_: Optional[BundleSchemaInfoResponse] = Field(default=None, alias="schema")
+    meta: Optional[BundleMetaResponse] = None
+
+    model_config = {"populate_by_name": True}
+
+
+class BundleEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    bundle: BundleDetailResponse

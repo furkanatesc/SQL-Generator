@@ -26,6 +26,281 @@
         "title": "Body_upload_excel_file_api_files_upload_post",
         "type": "object"
       },
+      "BundleDetailResponse": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/BundleJobInfoResponse"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleMetaResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "replay": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replay"
+          },
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleSchemaInfoResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sql": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleSqlInfoResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trace": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "job_id",
+          "job"
+        ],
+        "title": "BundleDetailResponse",
+        "type": "object"
+      },
+      "BundleEnvelopeResponse": {
+        "properties": {
+          "bundle": {
+            "$ref": "#/components/schemas/BundleDetailResponse"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "bundle"
+        ],
+        "title": "BundleEnvelopeResponse",
+        "type": "object"
+      },
+      "BundleJobInfoResponse": {
+        "properties": {
+          "dialect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dialect"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "has_excel_input": {
+            "default": false,
+            "title": "Has Excel Input",
+            "type": "boolean"
+          },
+          "has_natural_query": {
+            "default": false,
+            "title": "Has Natural Query",
+            "type": "boolean"
+          },
+          "result_sql_present": {
+            "default": false,
+            "title": "Result Sql Present",
+            "type": "boolean"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "BundleJobInfoResponse",
+        "type": "object"
+      },
+      "BundleMetaResponse": {
+        "properties": {
+          "bundle_contract_version": {
+            "title": "Bundle Contract Version",
+            "type": "string"
+          },
+          "dialect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dialect"
+          },
+          "replay_contract_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replay Contract Version"
+          },
+          "trace_contract_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Contract Version"
+          }
+        },
+        "required": [
+          "bundle_contract_version"
+        ],
+        "title": "BundleMetaResponse",
+        "type": "object"
+      },
+      "BundleSchemaInfoResponse": {
+        "properties": {
+          "schema_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Hash"
+          },
+          "selected_tables": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Tables",
+            "type": "array"
+          },
+          "table_count": {
+            "default": 0,
+            "title": "Table Count",
+            "type": "integer"
+          }
+        },
+        "title": "BundleSchemaInfoResponse",
+        "type": "object"
+      },
+      "BundleSqlInfoResponse": {
+        "properties": {
+          "attempts": {
+            "default": [],
+            "items": {},
+            "title": "Attempts",
+            "type": "array"
+          },
+          "generated_sql": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Sql"
+          },
+          "last_generated_sql": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Generated Sql"
+          },
+          "sql_valid": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sql Valid"
+          },
+          "sql_validation_errors": {
+            "default": [],
+            "items": {},
+            "title": "Sql Validation Errors",
+            "type": "array"
+          }
+        },
+        "title": "BundleSqlInfoResponse",
+        "type": "object"
+      },
       "BusinessRuleIndexRequest": {
         "properties": {
           "rule_id": {
@@ -1247,6 +1522,66 @@
           }
         ],
         "summary": "Set System Config"
+      }
+    },
+    "/api/debug/jobs/{job_id}/bundle": {
+      "get": {
+        "operationId": "bundle_api_debug_jobs__job_id__bundle_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Bundle",
+        "tags": [
+          "debug-bundle"
+        ]
       }
     },
     "/api/debug/jobs/{job_id}/replay": {
