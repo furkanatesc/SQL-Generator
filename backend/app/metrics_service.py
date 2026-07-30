@@ -4,7 +4,7 @@ KIRLI katman: RAW trace store'a dokunur. Saf aggregation app.metrics icindedir.
 Hesaplama YAN ETKISIZDIR: hicbir sey yazilmaz, trace emit edilmez, LLM'e gidilmez.
 Metrikler hassas DEGILDIR (sayim + kapali registry kodu + sure) -> REDAKSIYON YOK.
 """
-from typing import Any, Mapping, Optional
+from typing import Mapping, Optional
 
 from app.metrics import MetricsWindow, compute_metrics
 from app.trace.query import TraceQuery
@@ -30,7 +30,7 @@ def compute_metrics_for_window(*, trace_store,
 
     payloads = []
     for r in rows:
-        payload = r["payload"] if isinstance(r, Mapping) else getattr(r, "payload", None)
+        payload = r.get("payload") if isinstance(r, Mapping) else getattr(r, "payload", None)
         if isinstance(payload, Mapping):
             payloads.append(payload)
 

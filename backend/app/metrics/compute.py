@@ -14,7 +14,13 @@ from app.metrics.contract import (
     MetricsWindow, OutcomeMetrics,
 )
 
+# PROMPT ve EXECUTION asamalari kirilimda kasitli haric (spec kapsam disi §2).
 _STAGES = ("intent", "retrieval", "generation", "security", "validation")
+
+# app.trace'ten MIRROR'lanmis (saf katman app.trace import edemez): guvenlik
+# span'inde bir check bu outcome'a sahipse ERROR sayilir (bkz.
+# end_to_end_trace_builders.py::_DENY_OUTCOMES).
+_SECURITY_DENY_OUTCOMES = frozenset({"denied", "error"})
 
 
 def _percentile(sorted_vals: list, p: float) -> Optional[float]:
@@ -27,6 +33,26 @@ def _percentile(sorted_vals: list, p: float) -> Optional[float]:
 
 def _inc(counter: dict, key) -> None:
     counter[key] = counter.get(key, 0) + 1
+
+
+def _error_codes_from_span(span) -> list:
+    # Once attributes.reason_code (INTENT/RETRIEVAL canli yolu); yoksa typed detail.
+    attrs = span.get("attributes") or {}
+    code = attrs.get("reason_code")
+    if code:
+        return [code]
+    codes = []
+    detail = span.get("detail") or {}
+    for issue in detail.get("issues") or []:            # VALIDATION
+        rc = (issue or {}).get("reason_code")
+        if rc:
+            codes.append(rc)
+    for check in detail.get("checks") or []:            # SECURITY (yalniz deny)
+        if (check or {}).get("outcome") in _SECURITY_DENY_OUTCOMES:
+            rc = (check or {}).get("reason_code")
+            if rc:
+                codes.append(rc)
+    return codes
 
 
 def compute_metrics(payloads: List[Mapping], window: MetricsWindow) -> MetricsReport:
@@ -43,22 +69,20 @@ def compute_metrics(payloads: List[Mapping], window: MetricsWindow) -> MetricsRe
     outcome = OutcomeMetrics(total=total, terminal_status=ts_counts,
                              success_rate=success_rate)
 
-    # --- errors (ERROR span'lerin reason_code'u) ---
+    # --- errors (ERROR span'lerin kodu: attributes.reason_code veya typed detail) ---
     by_code: dict = {}
     by_category: dict = {}
     for pl in payloads:
         for span in pl.get("spans", []) or []:
             if span.get("status") != "error":
                 continue
-            code = (span.get("attributes") or {}).get("reason_code")
-            if not code:
-                continue
-            _inc(by_code, code)
-            try:
-                category = category_of(code).value
-            except UnknownErrorCodeError:
-                category = "unknown"
-            _inc(by_category, category)
+            for code in _error_codes_from_span(span):
+                _inc(by_code, code)
+                try:
+                    category = category_of(code).value
+                except UnknownErrorCodeError:
+                    category = "unknown"
+                _inc(by_category, category)
     errors = ErrorMetrics(by_code=by_code, by_category=by_category)
 
     # --- latency (trace-kok total_duration_ms) ---
