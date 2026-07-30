@@ -16,6 +16,7 @@ from app.api.debug_traces import router as debug_traces_router
 from app.api.feedback import router as feedback_router
 from app.api.debug_replay import router as debug_replay_router
 from app.api.debug_bundle_api import router as debug_bundle_router
+from app.api.metrics_api import router as metrics_router
 from fastapi.exceptions import RequestValidationError
 from app.settings import get_settings
 from app.api.errors import http_exception_handler, validation_exception_handler, unhandled_exception_handler
@@ -81,6 +82,7 @@ app.include_router(debug_traces_router)
 app.include_router(feedback_router)
 app.include_router(debug_replay_router)
 app.include_router(debug_bundle_router)
+app.include_router(metrics_router)
 
 # CORS
 app.add_middleware(

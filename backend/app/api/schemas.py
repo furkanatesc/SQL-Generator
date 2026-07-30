@@ -287,3 +287,48 @@ class BundleDetailResponse(BaseModel):
 class BundleEnvelopeResponse(BaseModel):
     status: Literal["success"]
     bundle: BundleDetailResponse
+
+
+# Sprint 27.6 - Metrics contract schemas (alanlar PLAIN dict/str; enum sinir gecmez)
+class MetricsWindowResponse(BaseModel):
+    created_after: Optional[str] = None
+    created_before: Optional[str] = None
+    dialect: Optional[str] = None
+    trace_count: int
+    truncated: bool
+    scan_cap: int
+
+
+class MetricsOutcomeResponse(BaseModel):
+    total: int
+    terminal_status: dict
+    success_rate: Optional[float] = None
+
+
+class MetricsErrorsResponse(BaseModel):
+    by_code: dict
+    by_category: dict
+
+
+class MetricsLatencyResponse(BaseModel):
+    count: int
+    p50: Optional[float] = None
+    p95: Optional[float] = None
+    p99: Optional[float] = None
+    min: Optional[float] = None
+    max: Optional[float] = None
+    mean: Optional[float] = None
+
+
+class MetricsDetailResponse(BaseModel):
+    version: str
+    window: MetricsWindowResponse
+    outcome: MetricsOutcomeResponse
+    errors: MetricsErrorsResponse
+    latency_ms: MetricsLatencyResponse
+    stages: dict
+
+
+class MetricsEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    metrics: MetricsDetailResponse
