@@ -6,3 +6,4 @@ from app.metrics.contract import (  # noqa: F401
     LatencyMetrics,
     MetricsReport,
 )
+from app.metrics.compute import compute_metrics  # noqa: F401
