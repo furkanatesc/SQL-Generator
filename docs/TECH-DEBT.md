@@ -213,3 +213,18 @@ katmanında durdu. Kalanlar:
    bırakıldı (27.5 spec); gerçek DDL snapshot ihtiyacı doğarsa ayrı bir
    persistence kalemi gerekir. *İlgili Dosya:*
    `backend/app/debug_bundle/{contract,projectors}.py`
+
+---
+
+## §7. Sprint 27.6 (Metrics Contract) devirleri — AÇIK
+
+1. **`scan_cap` (10000) üstündeki pencerelerde metrikler tam popülasyon
+   yerine çekilen alt küme üzerinden hesaplanır.** `metrics_service.py:13,20-39`
+   RAW trace store'dan `scan_cap + 1` limitiyle fetch eder; pencere bu sınırı
+   aşarsa `truncated=true` bayrağı doğru şekilde işaretlenir, ama `compute_metrics`
+   yine de yalnızca ilk `scan_cap` kaydı görür — `success_rate`/`by_code`/
+   percentile'lar tam popülasyonu değil, kesilmiş alt kümeyi yansıtır. Tam
+   doğruluk için DB-side aggregation (COUNT/GROUP BY, percentile query'leri)
+   gerekir; şu an yok — bilinçli kapsam dışı (27.6 spec), `scan_cap`'in
+   query parametresinden ayarlanabilir olması da aynı nedenle ertelendi.
+   *İlgili Dosya:* `backend/app/metrics_service.py:13-39`
