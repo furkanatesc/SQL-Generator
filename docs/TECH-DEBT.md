@@ -192,3 +192,24 @@ katmanında durdu. Kalanlar:
    `security_regression` yalnız başarılı job'larda ölçülebilir. `jobs.result_sql`
    yalnız `"completed"` durumunda yazılıyor. Taksonomi üyesi sözleşme tamlığı için
    korunuyor; gerçek çözüm ayrı bir kalem (bkz. 27.4 spec §8).
+
+---
+
+## §6. Sprint 27.5 (Debug Bundle Export) devirleri — AÇIK
+
+1. **`_latest_debug_trace` `trace_type` filtresi olmadan `limit=5` kullanıyor.**
+   `bundle_service.py:38-47` job'ın en yeni 5 trace kaydını çekip aralarında
+   `end_to_end` OLMAYANI arıyor. Bir job'a ait `end_to_end` trace sayısı debug
+   trace'ten önce 5'i geçerse (örn. tekrarlanan replay/export çağrıları veya
+   çok adımlı retry döngüsü ek `end_to_end` kaydı biriktirirse), asıl debug
+   trace pencerenin dışında kalır ve bundle'ın `sql` bölümü `null` döner. Gerçek
+   çözüm: sorguyu debug trace türüne göre filtrelemek (store adaptöründe
+   `trace_type != end_to_end` desteği gerekiyor) ya da limiti büyütmek.
+   *İlgili Dosya:* `backend/app/bundle_service.py:38-47`
+2. **Şema bölümü tam DDL snapshot'ı taşımıyor.** `BundleSchemaInfo`
+   (`backend/app/debug_bundle/contract.py:54-61`) yalnız `selected_tables` (isim
+   listesi) + `schema_hash` taşır; kolon/tip/FK detayları bundle'a hiç girmez,
+   çünkü tam DDL snapshot hiçbir yerde persist edilmiyor. Bilinçli kapsam dışı
+   bırakıldı (27.5 spec); gerçek DDL snapshot ihtiyacı doğarsa ayrı bir
+   persistence kalemi gerekir. *İlgili Dosya:*
+   `backend/app/debug_bundle/{contract,projectors}.py`
