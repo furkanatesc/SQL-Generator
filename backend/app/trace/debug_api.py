@@ -1,27 +1,9 @@
 import datetime as dt
-from typing import Any, List, Optional
+from typing import List, Optional
 from app.trace.models import NL2SQLTrace, TraceRecord
 from app.trace.store import TraceStore
 from app.trace.query import TraceQuery
-from app.trace.redaction import redact_sensitive
-
-def redact_sensitive_dict(d: Any) -> Any:
-    """
-    Recursively scans and redacts any dictionary keys containing credential words,
-    and runs recursively through sub-dictionaries and lists.
-    """
-    if isinstance(d, dict):
-        res = {}
-        for k, v in d.items():
-            k_lower = str(k).lower()
-            if any(word in k_lower for word in ["api_key", "password", "token", "secret", "api-key"]):
-                res[k] = "[REDACTED]"
-            else:
-                res[k] = redact_sensitive_dict(v)
-        return res
-    elif isinstance(d, list):
-        return [redact_sensitive_dict(item) for item in d]
-    return d
+from app.trace.redaction import redact_sensitive, redact_sensitive_text, redact_sensitive_dict  # noqa: F401
 
 def serialize_trace_for_debug(trace: TraceRecord | NL2SQLTrace) -> dict:
     """
