@@ -911,6 +911,244 @@
         "title": "JobsListResponse",
         "type": "object"
       },
+      "MetricsDetailResponse": {
+        "properties": {
+          "errors": {
+            "$ref": "#/components/schemas/MetricsErrorsResponse"
+          },
+          "latency_ms": {
+            "$ref": "#/components/schemas/MetricsLatencyResponse"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/MetricsOutcomeResponse"
+          },
+          "stages": {
+            "additionalProperties": true,
+            "title": "Stages",
+            "type": "object"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/MetricsWindowResponse"
+          }
+        },
+        "required": [
+          "version",
+          "window",
+          "outcome",
+          "errors",
+          "latency_ms",
+          "stages"
+        ],
+        "title": "MetricsDetailResponse",
+        "type": "object"
+      },
+      "MetricsEnvelopeResponse": {
+        "properties": {
+          "metrics": {
+            "$ref": "#/components/schemas/MetricsDetailResponse"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "metrics"
+        ],
+        "title": "MetricsEnvelopeResponse",
+        "type": "object"
+      },
+      "MetricsErrorsResponse": {
+        "properties": {
+          "by_category": {
+            "additionalProperties": true,
+            "title": "By Category",
+            "type": "object"
+          },
+          "by_code": {
+            "additionalProperties": true,
+            "title": "By Code",
+            "type": "object"
+          }
+        },
+        "required": [
+          "by_code",
+          "by_category"
+        ],
+        "title": "MetricsErrorsResponse",
+        "type": "object"
+      },
+      "MetricsLatencyResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "p50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50"
+          },
+          "p95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95"
+          },
+          "p99": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P99"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "MetricsLatencyResponse",
+        "type": "object"
+      },
+      "MetricsOutcomeResponse": {
+        "properties": {
+          "success_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Rate"
+          },
+          "terminal_status": {
+            "additionalProperties": true,
+            "title": "Terminal Status",
+            "type": "object"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "terminal_status"
+        ],
+        "title": "MetricsOutcomeResponse",
+        "type": "object"
+      },
+      "MetricsWindowResponse": {
+        "properties": {
+          "created_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created After"
+          },
+          "created_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created Before"
+          },
+          "dialect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dialect"
+          },
+          "scan_cap": {
+            "title": "Scan Cap",
+            "type": "integer"
+          },
+          "trace_count": {
+            "title": "Trace Count",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "trace_count",
+          "truncated",
+          "scan_cap"
+        ],
+        "title": "MetricsWindowResponse",
+        "type": "object"
+      },
       "RAGSearchRequest": {
         "properties": {
           "collection": {
@@ -1641,6 +1879,95 @@
         "summary": "Replay",
         "tags": [
           "debug-replay"
+        ]
+      }
+    },
+    "/api/debug/metrics": {
+      "get": {
+        "operationId": "metrics_api_debug_metrics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "created_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dialect",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dialect"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Metrics",
+        "tags": [
+          "debug-metrics"
         ]
       }
     },

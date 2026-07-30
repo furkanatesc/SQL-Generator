@@ -308,6 +308,84 @@
       "status"
     ]
   },
+  "MetricsDetailResponse": {
+    "properties": [
+      "errors",
+      "latency_ms",
+      "outcome",
+      "stages",
+      "version",
+      "window"
+    ],
+    "required": [
+      "errors",
+      "latency_ms",
+      "outcome",
+      "stages",
+      "version",
+      "window"
+    ]
+  },
+  "MetricsEnvelopeResponse": {
+    "properties": [
+      "metrics",
+      "status"
+    ],
+    "required": [
+      "metrics",
+      "status"
+    ]
+  },
+  "MetricsErrorsResponse": {
+    "properties": [
+      "by_category",
+      "by_code"
+    ],
+    "required": [
+      "by_category",
+      "by_code"
+    ]
+  },
+  "MetricsLatencyResponse": {
+    "properties": [
+      "count",
+      "max",
+      "mean",
+      "min",
+      "p50",
+      "p95",
+      "p99"
+    ],
+    "required": [
+      "count"
+    ]
+  },
+  "MetricsOutcomeResponse": {
+    "properties": [
+      "success_rate",
+      "terminal_status",
+      "total"
+    ],
+    "required": [
+      "terminal_status",
+      "total"
+    ]
+  },
+  "MetricsWindowResponse": {
+    "properties": [
+      "created_after",
+      "created_before",
+      "dialect",
+      "scan_cap",
+      "trace_count",
+      "truncated"
+    ],
+    "required": [
+      "scan_cap",
+      "trace_count",
+      "truncated"
+    ]
+  },
   "RAGSearchRequest": {
     "properties": [
       "collection",
