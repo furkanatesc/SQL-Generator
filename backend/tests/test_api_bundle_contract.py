@@ -55,3 +55,25 @@ def test_bundle_returns_404_when_debug_disabled(fake_bundle, monkeypatch):
     monkeypatch.setattr("app.api.debug_bundle_api.get_settings", lambda: _Off())
     r = client.get("/api/debug/jobs/job-1/bundle", headers=HEADERS)
     assert r.status_code == 404
+
+
+def test_bundle_schema_field_serializes_with_reserved_name_alias(fake_bundle):
+    # Regresyon: BundleDetailResponse.schema_ Pydantic'te alias="schema" ile
+    # tanimli (schema() metoduyla cakismasin diye). Bu test payload'da schema
+    # NULL DEGIL gercek bir dict vererek response_model'in JSON anahtarini
+    # gercekten "schema" olarak serialize ettigini uctan uca dogrular - onceki
+    # testlerin hepsi schema=None kullaniyordu, bu yuzden alias'in sessizce
+    # "schema_"e donmesi hicbirini kirmazdi.
+    fake_bundle(payload={
+        "version": "debug_bundle_v1", "job_id": "job-1",
+        "job": {"status": "completed"}, "trace": None,
+        "sql": None, "replay": {"verdict": "identical"},
+        "schema": {"selected_tables": ["orders"], "schema_hash": "h1", "table_count": 1},
+        "meta": {"bundle_contract_version": "debug_bundle_v1"},
+    })
+    r = client.get("/api/debug/jobs/job-1/bundle", headers=HEADERS)
+    assert r.status_code == 200
+    body = r.json()
+    assert "schema" in body["bundle"]
+    assert "schema_" not in body["bundle"]
+    assert body["bundle"]["schema"]["selected_tables"] == ["orders"]
