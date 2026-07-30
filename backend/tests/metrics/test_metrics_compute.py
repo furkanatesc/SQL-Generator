@@ -50,6 +50,54 @@ def test_errors_by_code_and_category_with_unknown_bucket():
     assert sum(r["errors"]["by_category"].values()) == 3
 
 
+def test_errors_validation_code_from_typed_detail_issues():
+    # Gercek VALIDATION span sekli: kod attributes'ta DEGIL, detail.issues[]'te.
+    span = {
+        "stage": "validation", "status": "error", "duration_ms": 1,
+        "attributes": {},
+        "detail": {"valid": False, "issues": [
+            {"category": "validation", "stage": "validation",
+             "severity": "error", "reason_code": "missing_column"},
+        ]},
+    }
+    payloads = [_trace("failed", 5, [span])]
+    r = compute_metrics(payloads, _w(1)).to_payload()
+    assert r["errors"]["by_code"]["missing_column"] == 1
+    assert r["errors"]["by_category"]["validation"] == 1
+
+
+def test_errors_security_deny_code_from_typed_detail_checks():
+    # Gercek SECURITY span sekli: kod detail.checks[]'te; yalniz deny outcome sayilir.
+    span = {
+        "stage": "security", "status": "error", "duration_ms": 1,
+        "attributes": {},
+        "detail": {"checks": [
+            {"category": "security", "outcome": "denied", "severity": "error",
+             "reason_code": "unsafe_dml_keyword", "audit_entry_hash": "h1"},
+            {"category": "security", "outcome": "flagged", "severity": "warning",
+             "reason_code": "should_not_count", "audit_entry_hash": "h2"},
+        ]},
+    }
+    payloads = [_trace("failed", 5, [span])]
+    r = compute_metrics(payloads, _w(1)).to_payload()
+    assert r["errors"]["by_code"]["unsafe_dml_keyword"] == 1
+    assert "should_not_count" not in r["errors"]["by_code"]
+    assert r["errors"]["by_category"]["security"] == 1
+    assert sum(r["errors"]["by_code"].values()) == 1
+
+
+def test_errors_attributes_reason_code_path_still_works_for_intent_and_retrieval():
+    payloads = [
+        _trace("failed", 5, [_span("intent", "error", "input_error")]),
+        _trace("failed", 5, [_span("retrieval", "error", "schema_pruning_failed")]),
+    ]
+    r = compute_metrics(payloads, _w(2)).to_payload()
+    assert r["errors"]["by_code"]["input_error"] == 1
+    assert r["errors"]["by_code"]["schema_pruning_failed"] == 1
+    assert r["errors"]["by_category"]["input"] == 1
+    assert r["errors"]["by_category"]["retrieval"] == 1
+
+
 def test_latency_nearest_rank_percentiles():
     payloads = [_trace("completed", ms, [_span("intent", "ok")]) for ms in (40, 10, 30, 20)]
     lat = compute_metrics(payloads, _w(4)).to_payload()["latency_ms"]
