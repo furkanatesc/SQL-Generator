@@ -8,6 +8,73 @@
       "file"
     ]
   },
+  "BundleDetailResponse": {
+    "properties": [
+      "job",
+      "job_id",
+      "meta",
+      "replay",
+      "schema",
+      "sql",
+      "trace",
+      "version"
+    ],
+    "required": [
+      "job",
+      "job_id",
+      "version"
+    ]
+  },
+  "BundleEnvelopeResponse": {
+    "properties": [
+      "bundle",
+      "status"
+    ],
+    "required": [
+      "bundle",
+      "status"
+    ]
+  },
+  "BundleJobInfoResponse": {
+    "properties": [
+      "dialect",
+      "error_code",
+      "has_excel_input",
+      "has_natural_query",
+      "result_sql_present",
+      "status"
+    ],
+    "required": []
+  },
+  "BundleMetaResponse": {
+    "properties": [
+      "bundle_contract_version",
+      "dialect",
+      "replay_contract_version",
+      "trace_contract_version"
+    ],
+    "required": [
+      "bundle_contract_version"
+    ]
+  },
+  "BundleSchemaInfoResponse": {
+    "properties": [
+      "schema_hash",
+      "selected_tables",
+      "table_count"
+    ],
+    "required": []
+  },
+  "BundleSqlInfoResponse": {
+    "properties": [
+      "attempts",
+      "generated_sql",
+      "last_generated_sql",
+      "sql_valid",
+      "sql_validation_errors"
+    ],
+    "required": []
+  },
   "BusinessRuleIndexRequest": {
     "properties": [
       "rule_id",
