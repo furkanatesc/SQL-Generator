@@ -6,3 +6,4 @@ from app.debug_bundle.contract import (  # noqa: F401
     BundleMeta,
     DebugBundle,
 )
+from app.debug_bundle.compose import compose_bundle  # noqa: F401
