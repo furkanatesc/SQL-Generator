@@ -281,3 +281,37 @@ bilinçli olarak ertelendi (sessiz düşürme yok).
    `metrics.errors` (span-kod bazlı) — ikisi de doğru ama toplamları farklı; sözleşme
    dokümanına bir cümle notu değer.
    *İlgili Dosya:* `backend/app/api/dashboard_api.py`, `backend/app/dashboard/compose.py`
+
+---
+
+## §9. Sprint 27.8 (Cost & LLM Usage Telemetry) devirleri — AÇIK
+
+Opus whole-branch review verdict'i **SHIP** (0 Critical, 0 bloke; 27.6 span-şekli tuzağı
+YOK — extraction gerçek üreticiyle eşleşir); aşağıdakiler bilinçli ertelendi (sessiz
+düşürme yok).
+
+1. **Retry token eksik-sayımı (yapısal, en önemli).** `end_to_end` trace **tek**
+   GENERATION span taşır; writer-critic retry döngüsündeki birden çok LLM çağrısından
+   yalnız yakalanan (son) generation'ın token'ları payload'a iner. Retry'lı işlerde
+   `total_tokens`/`estimated_cost` **eksik tahmin** edilir. Bu trace-contract'ın yapısal
+   sınırı; per-attempt token yakalama ayrı bir iş (gelecek trace-contract revizyonu,
+   kapsam dışı).
+   *İlgili Dosya:* `backend/app/trace/end_to_end_trace_builders.py` (`build_generation_span`), `backend/app/llm_usage/compute.py` (`generation_events`)
+
+2. **`scan_cap` üstü alt-küme + zaman-serisi zero-fill yok.** Pencere `scan_cap`'i (10000)
+   aşarsa kullanım/maliyet çekilen alt küme üzerinden; `truncated=true` işaretlenir ama
+   tam doğruluk DB-side aggregation ister (§7/§8 ile aynı kök). Zaman-serisi boş bucket'ları
+   atlar (zero-fill yok); tüketici seyrek bucket'ları kendi doldurur. Bilinçli kapsam dışı.
+   *İlgili Dosya:* `backend/app/llm_usage_service.py`, `backend/app/llm_usage/compute.py`
+
+3. **`model_id=None` olan generation üç yüzeyde tutarsız işlenir (Minor — review bulgusu).**
+   Bir GENERATION span `model_id=None` taşırsa (provider model adını vermezse): (a)
+   `totals.unpriced_request_count` onu sayar; (b) `pricing.models_missing_price` onu
+   **listelemez** (`seen_models` falsy `None`'ı düşürür — model-seviyesi, yalnız adlı);
+   (c) `by_model`'da `"unknown"` satırı olarak `estimated_cost=None` ile görünür. Yanlış
+   değil (fiyatlanacak model adı yok) ama `unpriced_request_count` (request-seviyesi) ile
+   `models_missing_price` (model-seviyesi) arasında uzlaşmayan küçük bir boşluk var. Düşük
+   olasılık (model-siz generation nadir); `by_model` yine ortaya koyar. Çözüm (ops.):
+   None-model olayı varken `models_missing_price`'a `"unknown"` eklemek ya da bu ayrımı
+   dokümante etmek.
+   *İlgili Dosya:* `backend/app/llm_usage/compute.py` (`compute_llm_usage` — `unpriced`/`seen_models`)
