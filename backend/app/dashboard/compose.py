@@ -3,17 +3,21 @@
 I/O yok. datetime.now() ASLA cagrilmaz; yalnizca VAR OLAN damgalar floor'lanir.
 Percentile NEAREST-RANK'tir (ceil(p*n)). app.metrics/app.errors izinli; app.trace ASLA.
 """
+import dataclasses
 from datetime import timezone
 from math import ceil
 from typing import Optional, Tuple
 
 from app.dashboard.contract import (
+    DASHBOARD_CONTRACT_VERSION,
+    DashboardReport,
     FeedbackSummary,
     RecentTrace,
     TimeseriesBucket,
     TopError,
 )
 from app.errors import UnknownErrorCodeError, category_of
+from app.metrics import MetricsWindow, compute_metrics
 
 MAX_TIMESERIES_BUCKETS = 500
 
@@ -109,3 +113,26 @@ def shape_recent(trace_items, recent_limit: int) -> Tuple[RecentTrace, ...]:
             total_duration_ms=payload.get("total_duration_ms"),
             created_at=created_iso))
     return tuple(out)
+
+
+def compose_dashboard(*, trace_items, feedback_rows, window_base, bucket: str,
+                      top_n: int, recent_limit: int) -> DashboardReport:
+    payloads = [payload for _created_at, payload in trace_items]
+    metrics_window = MetricsWindow(
+        created_after=window_base.created_after,
+        created_before=window_base.created_before,
+        dialect=window_base.dialect, trace_count=window_base.trace_count,
+        truncated=window_base.truncated, scan_cap=window_base.scan_cap)
+    metrics = compute_metrics(payloads, metrics_window).to_payload()
+
+    ts_buckets, ts_truncated = bucket_timeseries(trace_items, bucket)
+    window = dataclasses.replace(window_base, timeseries_truncated=ts_truncated)
+
+    return DashboardReport(
+        version=DASHBOARD_CONTRACT_VERSION,
+        window=window,
+        metrics=metrics,
+        timeseries=ts_buckets,
+        top_errors=top_errors(metrics, top_n),
+        feedback=summarize_feedback(feedback_rows),
+        recent_activity=shape_recent(trace_items, recent_limit))
