@@ -7,3 +7,4 @@ from app.dashboard.contract import (  # noqa: F401
     RecentTrace,
     DashboardReport,
 )
+from app.dashboard.compose import bucket_timeseries, MAX_TIMESERIES_BUCKETS  # noqa: F401
