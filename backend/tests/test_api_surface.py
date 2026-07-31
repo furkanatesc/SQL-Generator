@@ -36,6 +36,7 @@ def test_public_api_surface():
         ("GET", "/api/debug/jobs/{job_id}/bundle"),
         ("GET", "/api/debug/metrics"),
         ("GET", "/api/debug/dashboard"),
+        ("GET", "/api/debug/llm-usage"),
         ("GET", "/api/schema/raw"),
         ("GET", "/api/schema"),
         ("POST", "/api/schema/refresh"),
