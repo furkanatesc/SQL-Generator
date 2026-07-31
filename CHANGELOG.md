@@ -16,11 +16,14 @@ Tamamlanan işlerin sprint/PR detayı için `docs/SPRINT-PR-LOG.md`, geçici
 
 ---
 
-## [Unreleased] — Sprint 20–25 · retrieval / prompting / execution hattı (2026-06-05 → günümüz)
+## [Unreleased] — Sprint 20 → 27.7 · retrieval/prompting/execution + Phase 7 Security & Governance + Phase 8 Observability (2026-06-05 → günümüz)
 
 v1 baseline'ı sonrası retrieval, prompting ve execution-accuracy altyapısının
-sözleşme (contract) odaklı geliştirilmesi. Bu fazdaki çıktıların çoğu hâlâ
-contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
+sözleşme (contract) odaklı geliştirilmesi (Sprint 20–25, çoğu contract/stub
+seviyesinde), ardından **Phase 7 (Security & Governance, 26.0–26.11)** güvenlik
+contract'ları ve **Phase 8 (Observability & Debuggability, 27.0–27.7)** — canlı
+trace, hata taksonomisi, feedback, replay, debug bundle, metrics ve dashboard
+gerçek debug-gated endpoint'leriyle. Durum için `ROADMAP.md`'deki tabloya bakın.
 
 ### Added
 - **Şema sözleşmesi ve ilişki motoru** (Sprint 20): şema sözleşmesi ve cross-db
@@ -136,6 +139,45 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   listede olmayan yazan fonksiyon işaretlenmez (gerçek çözüm allowlist / `pg_proc`
   metadata → sonraki sprint). Gerçek parser/EXPLAIN, execution, sensitive/PII
   policy, audit, approval, API/UI, tenant/RBAC/AuthN bu sprintte **yok**.
+- **Sensitive Table / Column Policy** (Sprint 26.4): beyan-tabanlı (declaration-driven)
+  hassas tablo/kolon gate'i — `evaluate()` → ALLOW/DENY/REQUIRES_APPROVAL + eşleşen
+  tablo/kolon ve hassasiyet seviyesi sinyali. Hibrit: explicit beyan = sound, SQL'den
+  tablo/kolon çıkarımı = best-effort. Immutable, secret-free.
+  `backend/app/security/sql_sensitive_data_policy.py`.
+- **PII / PHI Detection Contract** (Sprint 26.5): heuristik PII/PHI **detector**
+  (sinyal, gate değil) — kategori + PII/PHI veri-sınıfı + confidence. 3 katman:
+  declared = sound; identifier-isim + literal-değer/Luhn = best-effort. Secret-free
+  (ham değer sızmaz). `backend/app/security/sql_pii_phi_detection.py`.
+- **Audit Event Contract** (Sprint 26.6): deterministik, secret-free audit kaydı +
+  tamper-evident SHA-256 hash-chain. 26.0–26.5 sonuçlarını tek immutable `AuditEvent`'e
+  normalize eden 6 builder; `verify_chain` mutation/reorder/insert/delete yakalar
+  (integrity-evident; non-repudiation Phase 13). `backend/app/security/audit_event.py`.
+- **Approval Workflow Contract** (Sprint 26.7): saf deterministik approval state machine
+  (I/O & clock yok, time/id caller-supplied, frozen). PENDING + terminal durumlar;
+  fail-closed quorum N-of-M + SoD (requester≠approver) + duplicate-vote guard +
+  single-reject veto + terminal immutability; audit interlock.
+  `backend/app/security/approval_workflow.py`.
+- **Prompt-Injection / NL Abuse Defense** (Sprint 26.8): Phase 7'nin **doğal dili**
+  (SQL değil) inceleyen ilk contract'ı — kaynak-duyarlı detector (6 `InjectionCategory`,
+  DIRECT/INDIRECT kaynak, confidence + ALLOW/REVIEW/BLOCK disposition), NFKC normalize +
+  **Türkçe-güvenli** obfuscation sinyali (homoglyph yalnız Cyrillic/Greek). Audit
+  interlock. OWASP LLM01:2025. `backend/app/security/prompt_injection_defense.py`.
+- **Result-Set Privacy & Row/Size Limits** (Sprint 26.9): **post-execution** sonuç
+  kümesi üzerinde hibrit — limit **GATE** (ALLOW/TRUNCATE/DENY: `max_rows`/`max_bytes`/
+  `max_columns` + `truncate_allowed`) + advisory PII/PHI privacy **sinyali** (26.5
+  value-scan reuse). Audit interlock. `backend/app/security/result_set_privacy_limits.py`.
+- **Connection Credential Vault** (Sprint 26.10): saf, secret-free governance contract —
+  bir call context'in bir connection `secret_ref`'i **resolve** edip edemeyeceğine karar
+  veren gate + ham-secret sızıntısı advisory sinyali. Ham parola/connection-string/token
+  asla tutulmaz/saklanmaz/çözülmez; yalnız *referans* + *karar*. 6 boyut deterministik
+  öncelik, audit interlock, PEP 562 lazy export (driver-isolation korunur).
+  `backend/app/security/connection_credential_vault.py`.
+- **Policy / Security Eval** (Sprint 26.11 · Phase 7 sonu): 26.0–26.10 güvenlik
+  contract'ları üzerinde saf, secret-free **meta-evaluation harness**
+  (`backend/app/evaluation/` — `app.security` driver-free kalır). 11 projector +
+  enum-purity invariant, 22 blessed golden case, coverage introspection, PASS/WARN/FAIL
+  gate. **Phase 7 (Security & Governance) burada kapanır.** *(26.4–26.11 local
+  squash-merge'ler → main; son commit `69d86c3`)*
 - **Observability: Canlı Uçtan Uca Trace (Sprint 27.1w)**: 27.0/27.1'in saf
   `EndToEndTrace` sözleşmesi canlı pipeline'a örüldü — HTTP `X-Request-ID`
   arka plan job'ına taşınır (yoksa `req_` önekiyle üretilir), her stage
@@ -183,6 +225,29 @@ contract/stub seviyesindedir; durum için `ROADMAP.md`'deki tabloya bakın.
   uretim davranisi degismedi. Bilincli kapsam disi: LLM'li tam re-run, replay
   kaliciligi, toplu replay, frontend UI ve 27.1w oncesi joblar icin legacy
   baseline fallback'i.
+- **Debug Bundle Export** (Sprint 27.5): bir `job`'ın tüm debug bağlamını (o günkü
+  `end_to_end` trace + REDAKTE SQL/attempts/validation_errors + 27.4 replay'i **inline**
+  koşturarak + seçilen şema özeti + sürüm metadata) tek JSON envelope'da toplayan, hata
+  raporuna eklenebilir, **yan etkisiz** export. `GET /api/debug/jobs/{job_id}/bundle`
+  (API key + `debug_endpoints_enabled` ile gated). İki trace ayrımı: `end_to_end`
+  secret-free (hash-only) → trace+schema bölümleri; debug trace → redakte SQL bölümü.
+  Saf `backend/app/debug_bundle/` + `bundle_service.py`. (PR #143)
+- **Metrics Contract** (Sprint 27.6): bir zaman penceresindeki `end_to_end` trace'leri
+  toplayan **versiyonlu** metrik raporu — hacim&sonuç (`terminal_status` dağılımı +
+  `success_rate`), hata taksonomisi (`by_code`/`by_category`, bilinmeyen→`unknown`),
+  latency (**nearest-rank** p50/p95/p99), stage kırılımı. `GET /api/debug/metrics`
+  (debug-gated, 200 envelope). Metrikler hassas değil → redaksiyon yok; boş pencere →
+  200 + sıfırlar. Saf `backend/app/metrics/` (`app.errors` izinli) + `metrics_service.py`
+  (bounded fetch + `truncated`). (PR #144)
+- **Admin Observability Dashboard Backend** (Sprint 27.7): 27.6 metrik snapshot'ini
+  **zaman-serisi bucketing** (hour/day floor, nearest-rank p95, en-yeni-N cap) + **top
+  hatalar** + **feedback özeti** + **son aktivite** ile tek kompozit JSON'da birleştiren,
+  **yan etkisiz** `GET /api/debug/dashboard` (debug-gated, 200 envelope). Saf
+  `backend/app/dashboard/` **27.6 `compute_metrics`'i reuse eder** (span'leri yeniden
+  okumaz; purity: yalnız stdlib + `app.errors` + `app.metrics`, `app.trace.*` yasak) +
+  `dashboard_service.py` (**tek** trace fetch → metrics+timeseries+recent + yeni
+  `database.list_feedback`). Determinist (`datetime.now()` yok — var olan damgalar
+  floor'lanır); sessiz kesme yok (`truncated`/`timeseries_truncated`). (PR #145)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
