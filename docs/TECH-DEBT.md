@@ -228,3 +228,56 @@ katmanında durdu. Kalanlar:
    gerekir; şu an yok — bilinçli kapsam dışı (27.6 spec), `scan_cap`'in
    query parametresinden ayarlanabilir olması da aynı nedenle ertelendi.
    *İlgili Dosya:* `backend/app/metrics_service.py:13-39`
+
+---
+
+## §8. Sprint 27.7 (Admin Observability Dashboard Backend) devirleri — AÇIK
+
+Opus whole-branch review verdict'i **SHIP** (0 Critical, 0 bloke); aşağıdakiler
+bilinçli olarak ertelendi (sessiz düşürme yok).
+
+1. **`feedback` bölümü ile trace bölümleri (`metrics`/`timeseries`/`recent`) aynı
+   istekte FARKLI zaman penceresi yansıtabilir (naive-timestamp sınırlarında).**
+   *(Review bulgusu #1 — Important.)* `dashboard_service.build_dashboard` tek bir
+   `created_after`/`created_before` sınırını iki tüketiciye fan-out eder ama
+   filtreleme yolları farklı: (a) trace tarafı `TraceQuery` → `sqlite_store` sınırı
+   `datetime.fromisoformat(...).astimezone(utc)` ile normalize eder → **naive** bir
+   sınır sunucunun **yerel** saati sayılıp kayar; (b) `database.list_feedback` sınırı
+   ham string olarak **leksikografik** karşılaştırır ve `feedback.created_at`
+   `datetime.utcnow().isoformat()` (naive-UTC) saklanır. Sunucu UTC+3 iken
+   `?created_after=2026-07-31T00:00:00` trace'leri `2026-07-30T21:00:00Z`'den, feedback'i
+   `2026-07-31T00:00:00` UTC-clock'tan filtreler → tek `window` başlığı altında 3 saat
+   daha geniş bir trace penceresi. **Kök neden büyük ölçüde pre-existing altyapı**
+   (store'un naive→yerel davranışı + feedback'in naive-UTC saklaması); 27.7 yalnızca
+   sınırı ikisine dağıtır. İkincil kenar: tam-saniye sınırında offset'li sınır string'i
+   (`...+00:00`) offset'siz feedback damgasından uzun→büyük sıralanır, `>=` sınır satırını
+   yanlışlıkla dışlar. **Çözüm:** ya sınırların offset-aware ISO olması dokümante edilir,
+   ya da adaptör feedback sınırını trace yoluyla aynı normalize eder (altyapı-geneli
+   timestamp uyumlaştırması). Yaklaşık bir debug/gözlemlenebilirlik aracı için bloke değil.
+   *İlgili Dosya:* `backend/app/dashboard_service.py:29-30,49-51`, `backend/app/database.py` (`list_feedback`)
+
+2. **`feedback` `scan_cap`'te (10000) sessizce kesilir; `feedback_truncated` bayrağı
+   YOK.** *(Review bulgusu #2 — Minor.)* Trace (`truncated`) ve timeseries
+   (`timeseries_truncated`) eksenlerinin aksine feedback için kesme sinyali yok; bir
+   pencere >10k feedback satırı içerirse `feedback.total` sessizce kapaklanır — "sessiz
+   kesme yok" invariant'ının feedback ekseni için yumuşak ihlali. Düşük olasılık; bayrak
+   ya da dokümante not gerekir.
+   *İlgili Dosya:* `backend/app/dashboard_service.py:49-51`
+
+3. **`scan_cap` üstü pencerelerde timeseries/metrics/top_errors tam popülasyon yerine
+   çekilen alt küme üzerinden hesaplanır** (§7 ile aynı kök; dashboard 27.6'yı reuse
+   ettiği için aynı sınırı devralır). `truncated=true` işaretlenir ama tam doğruluk
+   DB-side aggregation ister. Zaman-serisi **zero-fill** yok (boş bucket'lar atlanır) —
+   tüketici seyrek buckets'ı kendi doldurmalı. Bilinçli kapsam dışı (27.7 spec).
+   *İlgili Dosya:* `backend/app/dashboard_service.py`, `backend/app/dashboard/compose.py`
+
+4. **Küçük sağlamlık/semantik notları (Review #3–#5, hepsi Minor):** (a) debug kapalıyken
+   geçersiz `bucket` 404 yerine 422 döner (param validation gate'ten önce çalışır →
+   endpoint varlığını sızdırır; sibling `metrics_api` aynı in-handler desenini paylaşır
+   ama kısıtlı param'ı yok). (b) `_floor_iso` `created_at`'in datetime olduğunu varsayar
+   (`shape_recent`'teki `hasattr(...,"isoformat")` guard'ı yok) — string `created_at`
+   yalnız defensive dict-record dalından gelirse `AttributeError`; gerçek üretici string
+   döndürmez, tutarsızlık kozmetik. (c) bucket `error_count` (terminal-status bazlı) ≠
+   `metrics.errors` (span-kod bazlı) — ikisi de doğru ama toplamları farklı; sözleşme
+   dokümanına bir cümle notu değer.
+   *İlgili Dosya:* `backend/app/api/dashboard_api.py`, `backend/app/dashboard/compose.py`
