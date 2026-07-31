@@ -18,3 +18,4 @@ from app.llm_usage.compute import (  # noqa: F401
     finish_reason_counts,
     bucket_usage_timeseries,
 )
+from app.llm_usage.compute import compute_llm_usage  # noqa: F401
