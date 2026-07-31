@@ -9,3 +9,4 @@ from app.dashboard.contract import (  # noqa: F401
 )
 from app.dashboard.compose import bucket_timeseries, MAX_TIMESERIES_BUCKETS  # noqa: F401
 from app.dashboard.compose import top_errors, summarize_feedback, shape_recent  # noqa: F401
+from app.dashboard.compose import compose_dashboard  # noqa: F401
