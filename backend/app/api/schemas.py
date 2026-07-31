@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import Optional, Dict, Any, List, Literal
 from enum import Enum
 
@@ -388,3 +388,82 @@ class DashboardDetailResponse(BaseModel):
 class DashboardEnvelopeResponse(BaseModel):
     status: Literal["success"]
     dashboard: DashboardDetailResponse
+
+
+# Sprint 27.8 - LLM usage/cost schemas (alanlar PLAIN dict/str/float; enum sinir gecmez)
+class UsageWindowResponse(BaseModel):
+    created_after: Optional[str] = None
+    created_before: Optional[str] = None
+    bucket: str
+    trace_count: int
+    generation_count: int
+    truncated: bool
+    scan_cap: int
+    timeseries_truncated: bool
+
+
+class UsageTotalsResponse(BaseModel):
+    request_count: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost: Optional[float] = None
+    unpriced_request_count: int
+
+
+class ModelUsageResponse(BaseModel):
+    # model_id, Pydantic v2'nin 'model_' korumali ad-alaniyla cakisir; kapatilir.
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_id: str
+    request_count: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost: Optional[float] = None
+
+
+class ProviderUsageResponse(BaseModel):
+    provider_id: str
+    request_count: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost: Optional[float] = None
+
+
+class LatencyStatsResponse(BaseModel):
+    count: int
+    p50: Optional[float] = None
+    p95: Optional[float] = None
+    p99: Optional[float] = None
+
+
+class UsageBucketResponse(BaseModel):
+    bucket_start: str
+    request_count: int
+    total_tokens: int
+    estimated_cost: Optional[float] = None
+
+
+class PricingInfoResponse(BaseModel):
+    models_priced: List[str]
+    models_missing_price: List[str]
+
+
+class LLMUsageDetailResponse(BaseModel):
+    version: str
+    currency: str
+    window: UsageWindowResponse
+    totals: UsageTotalsResponse
+    by_model: List[ModelUsageResponse]
+    by_provider: List[ProviderUsageResponse]
+    latency_ms: LatencyStatsResponse
+    finish_reasons: dict
+    timeseries: List[UsageBucketResponse]
+    pricing: PricingInfoResponse
+
+
+class LLMUsageEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    usage: LLMUsageDetailResponse

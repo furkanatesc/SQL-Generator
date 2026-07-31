@@ -369,6 +369,53 @@
       "status"
     ]
   },
+  "LLMUsageDetailResponse": {
+    "properties": [
+      "by_model",
+      "by_provider",
+      "currency",
+      "finish_reasons",
+      "latency_ms",
+      "pricing",
+      "timeseries",
+      "totals",
+      "version",
+      "window"
+    ],
+    "required": [
+      "by_model",
+      "by_provider",
+      "currency",
+      "finish_reasons",
+      "latency_ms",
+      "pricing",
+      "timeseries",
+      "totals",
+      "version",
+      "window"
+    ]
+  },
+  "LLMUsageEnvelopeResponse": {
+    "properties": [
+      "status",
+      "usage"
+    ],
+    "required": [
+      "status",
+      "usage"
+    ]
+  },
+  "LatencyStatsResponse": {
+    "properties": [
+      "count",
+      "p50",
+      "p95",
+      "p99"
+    ],
+    "required": [
+      "count"
+    ]
+  },
   "MetricsDetailResponse": {
     "properties": [
       "errors",
@@ -445,6 +492,50 @@
       "scan_cap",
       "trace_count",
       "truncated"
+    ]
+  },
+  "ModelUsageResponse": {
+    "properties": [
+      "completion_tokens",
+      "estimated_cost",
+      "model_id",
+      "prompt_tokens",
+      "request_count",
+      "total_tokens"
+    ],
+    "required": [
+      "completion_tokens",
+      "model_id",
+      "prompt_tokens",
+      "request_count",
+      "total_tokens"
+    ]
+  },
+  "PricingInfoResponse": {
+    "properties": [
+      "models_missing_price",
+      "models_priced"
+    ],
+    "required": [
+      "models_missing_price",
+      "models_priced"
+    ]
+  },
+  "ProviderUsageResponse": {
+    "properties": [
+      "completion_tokens",
+      "estimated_cost",
+      "prompt_tokens",
+      "provider_id",
+      "request_count",
+      "total_tokens"
+    ],
+    "required": [
+      "completion_tokens",
+      "prompt_tokens",
+      "provider_id",
+      "request_count",
+      "total_tokens"
     ]
   },
   "RAGSearchRequest": {
@@ -645,6 +736,56 @@
       "category",
       "code",
       "count"
+    ]
+  },
+  "UsageBucketResponse": {
+    "properties": [
+      "bucket_start",
+      "estimated_cost",
+      "request_count",
+      "total_tokens"
+    ],
+    "required": [
+      "bucket_start",
+      "request_count",
+      "total_tokens"
+    ]
+  },
+  "UsageTotalsResponse": {
+    "properties": [
+      "completion_tokens",
+      "estimated_cost",
+      "prompt_tokens",
+      "request_count",
+      "total_tokens",
+      "unpriced_request_count"
+    ],
+    "required": [
+      "completion_tokens",
+      "prompt_tokens",
+      "request_count",
+      "total_tokens",
+      "unpriced_request_count"
+    ]
+  },
+  "UsageWindowResponse": {
+    "properties": [
+      "bucket",
+      "created_after",
+      "created_before",
+      "generation_count",
+      "scan_cap",
+      "timeseries_truncated",
+      "trace_count",
+      "truncated"
+    ],
+    "required": [
+      "bucket",
+      "generation_count",
+      "scan_cap",
+      "timeseries_truncated",
+      "trace_count",
+      "truncated"
     ]
   },
   "ValidationError": {
