@@ -264,7 +264,7 @@ gerçek debug-gated endpoint'leriyle. Durum için `ROADMAP.md`'deki tabloya bak�
   `unpriced_request_count` (sessiz boşluk yok). Kullanım/maliyet hassas değil →
   redaksiyon yok. Determinist; `truncated`/`timeseries_truncated`; boş pencere → 200.
   **Bilinen sınır (TECH-DEBT §9):** trace tek GENERATION span taşıdığından retry'lı
-  işlerde token/maliyet eksik-sayımı. (PR TBD)
+  işlerde token/maliyet eksik-sayımı. (PR #146)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
