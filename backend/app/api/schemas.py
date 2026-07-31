@@ -332,3 +332,59 @@ class MetricsDetailResponse(BaseModel):
 class MetricsEnvelopeResponse(BaseModel):
     status: Literal["success"]
     metrics: MetricsDetailResponse
+
+
+# Sprint 27.7 - Admin dashboard schemas (alanlar PLAIN dict/str; enum sinir gecmez)
+class DashboardWindowResponse(BaseModel):
+    created_after: Optional[str] = None
+    created_before: Optional[str] = None
+    dialect: Optional[str] = None
+    trace_count: int
+    truncated: bool
+    scan_cap: int
+    bucket: str
+    timeseries_truncated: bool
+
+
+class TimeseriesBucketResponse(BaseModel):
+    bucket_start: str
+    total: int
+    success_rate: Optional[float] = None
+    error_count: int
+    p95_ms: Optional[float] = None
+
+
+class TopErrorResponse(BaseModel):
+    code: str
+    category: str
+    count: int
+
+
+class FeedbackSummaryResponse(BaseModel):
+    total: int
+    by_verdict: dict
+    by_category: dict
+
+
+class RecentTraceResponse(BaseModel):
+    job_id: Optional[str] = None
+    trace_id: Optional[str] = None
+    terminal_status: Optional[str] = None
+    dialect: Optional[str] = None
+    total_duration_ms: Optional[float] = None
+    created_at: Optional[str] = None
+
+
+class DashboardDetailResponse(BaseModel):
+    version: str
+    window: DashboardWindowResponse
+    metrics: dict
+    timeseries: List[TimeseriesBucketResponse]
+    top_errors: List[TopErrorResponse]
+    feedback: FeedbackSummaryResponse
+    recent_activity: List[RecentTraceResponse]
+
+
+class DashboardEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    dashboard: DashboardDetailResponse

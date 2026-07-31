@@ -418,6 +418,141 @@
         "title": "CustomRelationsUpdate",
         "type": "object"
       },
+      "DashboardDetailResponse": {
+        "properties": {
+          "feedback": {
+            "$ref": "#/components/schemas/FeedbackSummaryResponse"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "recent_activity": {
+            "items": {
+              "$ref": "#/components/schemas/RecentTraceResponse"
+            },
+            "title": "Recent Activity",
+            "type": "array"
+          },
+          "timeseries": {
+            "items": {
+              "$ref": "#/components/schemas/TimeseriesBucketResponse"
+            },
+            "title": "Timeseries",
+            "type": "array"
+          },
+          "top_errors": {
+            "items": {
+              "$ref": "#/components/schemas/TopErrorResponse"
+            },
+            "title": "Top Errors",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/DashboardWindowResponse"
+          }
+        },
+        "required": [
+          "version",
+          "window",
+          "metrics",
+          "timeseries",
+          "top_errors",
+          "feedback",
+          "recent_activity"
+        ],
+        "title": "DashboardDetailResponse",
+        "type": "object"
+      },
+      "DashboardEnvelopeResponse": {
+        "properties": {
+          "dashboard": {
+            "$ref": "#/components/schemas/DashboardDetailResponse"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "dashboard"
+        ],
+        "title": "DashboardEnvelopeResponse",
+        "type": "object"
+      },
+      "DashboardWindowResponse": {
+        "properties": {
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "created_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created After"
+          },
+          "created_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created Before"
+          },
+          "dialect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dialect"
+          },
+          "scan_cap": {
+            "title": "Scan Cap",
+            "type": "integer"
+          },
+          "timeseries_truncated": {
+            "title": "Timeseries Truncated",
+            "type": "boolean"
+          },
+          "trace_count": {
+            "title": "Trace Count",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "trace_count",
+          "truncated",
+          "scan_cap",
+          "bucket",
+          "timeseries_truncated"
+        ],
+        "title": "DashboardWindowResponse",
+        "type": "object"
+      },
       "DisabledRelationsUpdate": {
         "properties": {
           "relations": {
@@ -609,6 +744,31 @@
           "verdict"
         ],
         "title": "FeedbackSubmitRequest",
+        "type": "object"
+      },
+      "FeedbackSummaryResponse": {
+        "properties": {
+          "by_category": {
+            "additionalProperties": true,
+            "title": "By Category",
+            "type": "object"
+          },
+          "by_verdict": {
+            "additionalProperties": true,
+            "title": "By Verdict",
+            "type": "object"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_verdict",
+          "by_category"
+        ],
+        "title": "FeedbackSummaryResponse",
         "type": "object"
       },
       "FeedbackVerdict": {
@@ -1216,6 +1376,78 @@
         "title": "ReadinessResponse",
         "type": "object"
       },
+      "RecentTraceResponse": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "dialect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dialect"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "terminal_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Status"
+          },
+          "total_duration_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Duration Ms"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          }
+        },
+        "title": "RecentTraceResponse",
+        "type": "object"
+      },
       "RelationItem": {
         "properties": {
           "source": {
@@ -1586,6 +1818,74 @@
         "title": "SortOrder",
         "type": "string"
       },
+      "TimeseriesBucketResponse": {
+        "properties": {
+          "bucket_start": {
+            "title": "Bucket Start",
+            "type": "string"
+          },
+          "error_count": {
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "p95_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Ms"
+          },
+          "success_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Rate"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bucket_start",
+          "total",
+          "error_count"
+        ],
+        "title": "TimeseriesBucketResponse",
+        "type": "object"
+      },
+      "TopErrorResponse": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "category",
+          "count"
+        ],
+        "title": "TopErrorResponse",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -1760,6 +2060,133 @@
           }
         ],
         "summary": "Set System Config"
+      }
+    },
+    "/api/debug/dashboard": {
+      "get": {
+        "operationId": "dashboard_api_debug_dashboard_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "created_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dialect",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dialect"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bucket",
+            "required": false,
+            "schema": {
+              "default": "day",
+              "enum": [
+                "hour",
+                "day"
+              ],
+              "title": "Bucket",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "top_n",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Top N",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "recent_limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Recent Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Dashboard",
+        "tags": [
+          "debug-dashboard"
+        ]
       }
     },
     "/api/debug/jobs/{job_id}/bundle": {
