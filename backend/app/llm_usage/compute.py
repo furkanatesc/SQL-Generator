@@ -3,15 +3,20 @@
 I/O yok. datetime.now() ASLA cagrilmaz; yalnizca VAR OLAN created_at floor'lanir.
 Percentile NEAREST-RANK'tir (ceil(p*n)). Yalniz stdlib + app.llm_usage.contract/pricing.
 """
+import dataclasses
 from datetime import timezone
 from math import ceil
 from typing import Optional, Tuple
 
 from app.llm_usage.contract import (
+    LLM_USAGE_CONTRACT_VERSION,
+    LLMUsageReport,
     LatencyStats,
     ModelUsage,
+    PricingInfo,
     ProviderUsage,
     UsageBucket,
+    UsageTotals,
 )
 from app.llm_usage.pricing import cost_for
 
@@ -145,3 +150,36 @@ def bucket_usage_timeseries(events, bucket: str, price_table) -> Tuple[Tuple[Usa
         buckets.append(UsageBucket(bucket_start=start, request_count=len(evs),
                                    total_tokens=total, estimated_cost=est))
     return tuple(buckets), truncated
+
+
+def compute_llm_usage(*, trace_items, window, currency: str, price_table, bucket: str) -> LLMUsageReport:
+    events = generation_events(trace_items)
+
+    prompt = _sum_tokens(events, "prompt_tokens")
+    completion = _sum_tokens(events, "completion_tokens")
+    total = _sum_tokens(events, "total_tokens")
+    priced_costs = [c for c in (_event_cost(e, price_table) for e in events) if c is not None]
+    est_total = round(sum(priced_costs), 6) if priced_costs else 0.0
+    unpriced = sum(1 for e in events if price_table.get(e.get("model_id")) is None)
+    totals = UsageTotals(request_count=len(events), prompt_tokens=prompt,
+                         completion_tokens=completion, total_tokens=total,
+                         estimated_cost=est_total, unpriced_request_count=unpriced)
+
+    by_model = aggregate_usage(events, "model_id", price_table, ModelUsage)
+    by_provider = aggregate_usage(events, "provider_id", price_table, ProviderUsage)
+    latency = latency_stats(events)
+    finish = finish_reason_counts(events)
+    ts_buckets, ts_truncated = bucket_usage_timeseries(events, bucket, price_table)
+
+    seen_models = {e.get("model_id") for e in events if e.get("model_id")}
+    priced_models = tuple(sorted(m for m in seen_models if m in price_table))
+    missing_models = tuple(sorted(m for m in seen_models if m not in price_table))
+    pricing = PricingInfo(models_priced=priced_models, models_missing_price=missing_models)
+
+    window = dataclasses.replace(window, generation_count=len(events),
+                                 timeseries_truncated=ts_truncated)
+
+    return LLMUsageReport(
+        version=LLM_USAGE_CONTRACT_VERSION, currency=currency, window=window,
+        totals=totals, by_model=by_model, by_provider=by_provider,
+        latency_ms=latency, finish_reasons=finish, timeseries=ts_buckets, pricing=pricing)
