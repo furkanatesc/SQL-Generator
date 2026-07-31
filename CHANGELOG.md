@@ -16,7 +16,7 @@ Tamamlanan işlerin sprint/PR detayı için `docs/SPRINT-PR-LOG.md`, geçici
 
 ---
 
-## [Unreleased] — Sprint 20 → 27.7 · retrieval/prompting/execution + Phase 7 Security & Governance + Phase 8 Observability (2026-06-05 → günümüz)
+## [Unreleased] — Sprint 20 → 27.8 · retrieval/prompting/execution + Phase 7 Security & Governance + Phase 8 Observability (2026-06-05 → günümüz)
 
 v1 baseline'ı sonrası retrieval, prompting ve execution-accuracy altyapısının
 sözleşme (contract) odaklı geliştirilmesi (Sprint 20–25, çoğu contract/stub
@@ -248,6 +248,23 @@ gerçek debug-gated endpoint'leriyle. Durum için `ROADMAP.md`'deki tabloya bak�
   `dashboard_service.py` (**tek** trace fetch → metrics+timeseries+recent + yeni
   `database.list_feedback`). Determinist (`datetime.now()` yok — var olan damgalar
   floor'lanır); sessiz kesme yok (`truncated`/`timeseries_truncated`). (PR #145)
+- **Cost & LLM Usage Telemetry** (Sprint 27.8): bir zaman penceresindeki `end_to_end`
+  trace'lerin **GENERATION span**'lerinden LLM kullanımını (request sayısı, prompt/
+  completion/total token, latency, finish_reason) toplayan ve **konfigüre edilebilir
+  fiyat tablosuyla** tahmini maliyet üreten, **yan etkisiz** `GET /api/debug/llm-usage`
+  (debug-gated, 200 envelope). Yeni pipeline enstrümantasyonu YOK — kullanım verisi
+  27.1w'den beri GENERATION span `detail`'inde (`provider_id/model_id/finish_reason/
+  prompt_tokens/completion_tokens/total_tokens` + `duration_ms`) zaten yakalanıyor. Saf
+  yaprak paket `backend/app/llm_usage/` (`contract` + toleranslı `pricing` + `compute`;
+  purity **yalnız stdlib** — `app.trace.*`/`app.errors` asla) + adaptör
+  `app/llm_usage_service.py` (tek trace fetch + fiyat tablosu `get_config('llm_pricing')`
+  JSON'undan; geçersiz → boş tablo). Yanıt: totals + model/provider kırılımı + latency
+  (nearest-rank p50/p95/p99) + finish_reason dağılımı + zaman-serisi. Maliyet =
+  `token × per-1M fiyat`; fiyatsız model → cost `null` + `models_missing_price` +
+  `unpriced_request_count` (sessiz boşluk yok). Kullanım/maliyet hassas değil →
+  redaksiyon yok. Determinist; `truncated`/`timeseries_truncated`; boş pencere → 200.
+  **Bilinen sınır (TECH-DEBT §9):** trace tek GENERATION span taşıdığından retry'lı
+  işlerde token/maliyet eksik-sayımı. (PR TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
