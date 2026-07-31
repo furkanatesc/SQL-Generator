@@ -319,3 +319,29 @@ def get_feedback_for_job(job_id: str) -> List[Dict[str, Any]]:
         )
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
+
+
+def list_feedback(created_after: Optional[str] = None,
+                  created_before: Optional[str] = None,
+                  limit: int = 10000) -> List[Dict[str, Any]]:
+    """Pencere-bazli feedback satirlari (27.7 dashboard tuketicisi icin).
+
+    created_at ISO string'leri leksikografik karsilastirilir (ISO-8601 sirali).
+    Siralama created_at DESC, rowid DESC — coarse clock esitliginde insertion-order'i
+    deterministik kilar. Ince persister; app.feedback taksonomisini import ETMEZ.
+    """
+    where = []
+    params: list = []
+    if created_after is not None:
+        where.append("created_at >= ?")
+        params.append(created_after)
+    if created_before is not None:
+        where.append("created_at <= ?")
+        params.append(created_before)
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"SELECT * FROM feedback {clause} ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (*params, limit))
+        return [dict(row) for row in cursor.fetchall()]
