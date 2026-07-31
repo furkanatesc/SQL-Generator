@@ -1071,6 +1071,134 @@
         "title": "JobsListResponse",
         "type": "object"
       },
+      "LLMUsageDetailResponse": {
+        "properties": {
+          "by_model": {
+            "items": {
+              "$ref": "#/components/schemas/ModelUsageResponse"
+            },
+            "title": "By Model",
+            "type": "array"
+          },
+          "by_provider": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderUsageResponse"
+            },
+            "title": "By Provider",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "finish_reasons": {
+            "additionalProperties": true,
+            "title": "Finish Reasons",
+            "type": "object"
+          },
+          "latency_ms": {
+            "$ref": "#/components/schemas/LatencyStatsResponse"
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/PricingInfoResponse"
+          },
+          "timeseries": {
+            "items": {
+              "$ref": "#/components/schemas/UsageBucketResponse"
+            },
+            "title": "Timeseries",
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/UsageTotalsResponse"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/UsageWindowResponse"
+          }
+        },
+        "required": [
+          "version",
+          "currency",
+          "window",
+          "totals",
+          "by_model",
+          "by_provider",
+          "latency_ms",
+          "finish_reasons",
+          "timeseries",
+          "pricing"
+        ],
+        "title": "LLMUsageDetailResponse",
+        "type": "object"
+      },
+      "LLMUsageEnvelopeResponse": {
+        "properties": {
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/LLMUsageDetailResponse"
+          }
+        },
+        "required": [
+          "status",
+          "usage"
+        ],
+        "title": "LLMUsageEnvelopeResponse",
+        "type": "object"
+      },
+      "LatencyStatsResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "p50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50"
+          },
+          "p95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95"
+          },
+          "p99": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P99"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "LatencyStatsResponse",
+        "type": "object"
+      },
       "MetricsDetailResponse": {
         "properties": {
           "errors": {
@@ -1307,6 +1435,118 @@
           "scan_cap"
         ],
         "title": "MetricsWindowResponse",
+        "type": "object"
+      },
+      "ModelUsageResponse": {
+        "properties": {
+          "completion_tokens": {
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "prompt_tokens": {
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "request_count": {
+            "title": "Request Count",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model_id",
+          "request_count",
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens"
+        ],
+        "title": "ModelUsageResponse",
+        "type": "object"
+      },
+      "PricingInfoResponse": {
+        "properties": {
+          "models_missing_price": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models Missing Price",
+            "type": "array"
+          },
+          "models_priced": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models Priced",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models_priced",
+          "models_missing_price"
+        ],
+        "title": "PricingInfoResponse",
+        "type": "object"
+      },
+      "ProviderUsageResponse": {
+        "properties": {
+          "completion_tokens": {
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "prompt_tokens": {
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "provider_id": {
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "request_count": {
+            "title": "Request Count",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider_id",
+          "request_count",
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens"
+        ],
+        "title": "ProviderUsageResponse",
         "type": "object"
       },
       "RAGSearchRequest": {
@@ -1886,6 +2126,144 @@
         "title": "TopErrorResponse",
         "type": "object"
       },
+      "UsageBucketResponse": {
+        "properties": {
+          "bucket_start": {
+            "title": "Bucket Start",
+            "type": "string"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "request_count": {
+            "title": "Request Count",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bucket_start",
+          "request_count",
+          "total_tokens"
+        ],
+        "title": "UsageBucketResponse",
+        "type": "object"
+      },
+      "UsageTotalsResponse": {
+        "properties": {
+          "completion_tokens": {
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "prompt_tokens": {
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "request_count": {
+            "title": "Request Count",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "title": "Total Tokens",
+            "type": "integer"
+          },
+          "unpriced_request_count": {
+            "title": "Unpriced Request Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_count",
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens",
+          "unpriced_request_count"
+        ],
+        "title": "UsageTotalsResponse",
+        "type": "object"
+      },
+      "UsageWindowResponse": {
+        "properties": {
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "created_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created After"
+          },
+          "created_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created Before"
+          },
+          "generation_count": {
+            "title": "Generation Count",
+            "type": "integer"
+          },
+          "scan_cap": {
+            "title": "Scan Cap",
+            "type": "integer"
+          },
+          "timeseries_truncated": {
+            "title": "Timeseries Truncated",
+            "type": "boolean"
+          },
+          "trace_count": {
+            "title": "Trace Count",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bucket",
+          "trace_count",
+          "generation_count",
+          "truncated",
+          "scan_cap",
+          "timeseries_truncated"
+        ],
+        "title": "UsageWindowResponse",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -2306,6 +2684,93 @@
         "summary": "Replay",
         "tags": [
           "debug-replay"
+        ]
+      }
+    },
+    "/api/debug/llm-usage": {
+      "get": {
+        "operationId": "llm_usage_api_debug_llm_usage_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "created_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bucket",
+            "required": false,
+            "schema": {
+              "default": "day",
+              "enum": [
+                "hour",
+                "day"
+              ],
+              "title": "Bucket",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LLMUsageEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Llm Usage",
+        "tags": [
+          "debug-llm-usage"
         ]
       }
     },
