@@ -7,7 +7,13 @@ from datetime import timezone
 from math import ceil
 from typing import Optional, Tuple
 
-from app.dashboard.contract import TimeseriesBucket
+from app.dashboard.contract import (
+    FeedbackSummary,
+    RecentTrace,
+    TimeseriesBucket,
+    TopError,
+)
+from app.errors import UnknownErrorCodeError, category_of
 
 MAX_TIMESERIES_BUCKETS = 500
 
@@ -62,3 +68,44 @@ def bucket_timeseries(trace_items, bucket_kind: str) -> Tuple[Tuple[TimeseriesBu
             bucket_start=start, total=total, success_rate=success_rate,
             error_count=error_count, p95_ms=_percentile(durations, 0.95)))
     return tuple(buckets), truncated
+
+
+def top_errors(metrics_payload, top_n: int) -> Tuple[TopError, ...]:
+    by_code = (metrics_payload.get("errors") or {}).get("by_code") or {}
+    # sayiya gore AZALAN, esitlikte kod ARTAN (determinist)
+    ranked = sorted(by_code.items(), key=lambda kv: (-kv[1], kv[0]))[:top_n]
+    out = []
+    for code, count in ranked:
+        try:
+            category = category_of(code).value
+        except UnknownErrorCodeError:
+            category = "unknown"
+        out.append(TopError(code=code, category=category, count=count))
+    return tuple(out)
+
+
+def summarize_feedback(rows) -> FeedbackSummary:
+    by_verdict: dict = {}
+    by_category: dict = {}
+    for r in rows or ():
+        verdict = r.get("verdict")
+        if verdict:
+            by_verdict[verdict] = by_verdict.get(verdict, 0) + 1
+        category = r.get("category")
+        if category:  # None/bos kategori (or. correct verdict) atlanir
+            by_category[category] = by_category.get(category, 0) + 1
+    return FeedbackSummary(total=len(rows or ()), by_verdict=by_verdict, by_category=by_category)
+
+
+def shape_recent(trace_items, recent_limit: int) -> Tuple[RecentTrace, ...]:
+    out = []
+    for created_at, payload in list(trace_items)[:recent_limit]:
+        created_iso = created_at.isoformat() if hasattr(created_at, "isoformat") else created_at
+        out.append(RecentTrace(
+            job_id=payload.get("job_id"),
+            trace_id=payload.get("trace_id"),
+            terminal_status=payload.get("terminal_status"),
+            dialect=payload.get("dialect"),
+            total_duration_ms=payload.get("total_duration_ms"),
+            created_at=created_iso))
+    return tuple(out)
