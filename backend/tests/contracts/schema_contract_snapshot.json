@@ -137,6 +137,55 @@
       "relations"
     ]
   },
+  "DashboardDetailResponse": {
+    "properties": [
+      "feedback",
+      "metrics",
+      "recent_activity",
+      "timeseries",
+      "top_errors",
+      "version",
+      "window"
+    ],
+    "required": [
+      "feedback",
+      "metrics",
+      "recent_activity",
+      "timeseries",
+      "top_errors",
+      "version",
+      "window"
+    ]
+  },
+  "DashboardEnvelopeResponse": {
+    "properties": [
+      "dashboard",
+      "status"
+    ],
+    "required": [
+      "dashboard",
+      "status"
+    ]
+  },
+  "DashboardWindowResponse": {
+    "properties": [
+      "bucket",
+      "created_after",
+      "created_before",
+      "dialect",
+      "scan_cap",
+      "timeseries_truncated",
+      "trace_count",
+      "truncated"
+    ],
+    "required": [
+      "bucket",
+      "scan_cap",
+      "timeseries_truncated",
+      "trace_count",
+      "truncated"
+    ]
+  },
   "DisabledRelationsUpdate": {
     "properties": [
       "relations"
@@ -204,6 +253,18 @@
     ],
     "required": [
       "verdict"
+    ]
+  },
+  "FeedbackSummaryResponse": {
+    "properties": [
+      "by_category",
+      "by_verdict",
+      "total"
+    ],
+    "required": [
+      "by_category",
+      "by_verdict",
+      "total"
     ]
   },
   "FeedbackVerdict": {
@@ -413,6 +474,17 @@
       "upload_dir_writable"
     ]
   },
+  "RecentTraceResponse": {
+    "properties": [
+      "created_at",
+      "dialect",
+      "job_id",
+      "terminal_status",
+      "total_duration_ms",
+      "trace_id"
+    ],
+    "required": []
+  },
   "RelationItem": {
     "properties": [
       "source",
@@ -548,6 +620,32 @@
   "SortOrder": {
     "properties": [],
     "required": []
+  },
+  "TimeseriesBucketResponse": {
+    "properties": [
+      "bucket_start",
+      "error_count",
+      "p95_ms",
+      "success_rate",
+      "total"
+    ],
+    "required": [
+      "bucket_start",
+      "error_count",
+      "total"
+    ]
+  },
+  "TopErrorResponse": {
+    "properties": [
+      "category",
+      "code",
+      "count"
+    ],
+    "required": [
+      "category",
+      "code",
+      "count"
+    ]
   },
   "ValidationError": {
     "properties": [
