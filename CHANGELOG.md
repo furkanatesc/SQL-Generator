@@ -16,14 +16,15 @@ Tamamlanan işlerin sprint/PR detayı için `docs/SPRINT-PR-LOG.md`, geçici
 
 ---
 
-## [Unreleased] — Sprint 20 → 27.9 · retrieval/prompting/execution + Phase 7 Security & Governance + Phase 8 Observability (2026-06-05 → günümüz)
+## [Unreleased] — Sprint 20 → 27.10 · retrieval/prompting/execution + Phase 7 Security & Governance + Phase 8 Observability (2026-06-05 → günümüz)
 
 v1 baseline'ı sonrası retrieval, prompting ve execution-accuracy altyapısının
 sözleşme (contract) odaklı geliştirilmesi (Sprint 20–25, çoğu contract/stub
 seviyesinde), ardından **Phase 7 (Security & Governance, 26.0–26.11)** güvenlik
-contract'ları ve **Phase 8 (Observability & Debuggability, 27.0–27.7)** — canlı
-trace, hata taksonomisi, feedback, replay, debug bundle, metrics ve dashboard
-gerçek debug-gated endpoint'leriyle. Durum için `ROADMAP.md`'deki tabloya bakın.
+contract'ları ve **Phase 8 (Observability & Debuggability, 27.0–27.10)** — canlı
+trace, hata taksonomisi, feedback, replay, debug bundle, metrics, dashboard
+gerçek debug-gated endpoint'leriyle ve **per-release accuracy regression gate**
+ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
 
 ### Added
 - **Şema sözleşmesi ve ilişki motoru** (Sprint 20): şema sözleşmesi ve cross-db
@@ -280,6 +281,26 @@ gerçek debug-gated endpoint'leriyle. Durum için `ROADMAP.md`'deki tabloya bak�
   indeksler; redaksiyon YOK (amaç ham SQL'i onaya sunmak). Bilinçli kapsam dışı:
   onay/persistence-state (idempotency yok), LLM/semantik genelleme + synonym türetme
   (yalnız literal eşleşme), `scan_cap` üstü DB-side tam-populasyon, frontend UI. (PR #147)
+- **Per-Release Accuracy Regression Gate** (Sprint 27.10 · Phase 8 sonu): mevcut
+  deterministik golden eval raporunu (`app.eval.run_eval --profile golden`)
+  tüketen, **yan etkisiz** CLI/CI regresyon gate'i — debug endpoint **değil**.
+  Saf yaprak paket `evals/regression_gate.py` (`compare_regression` + baseline
+  helper'ları) + kirli CLI `evals/regression_gate_cli.py` (gate çalıştırma +
+  `--update-baseline`, exit `0`/`1`/`2`) + seeded append-only
+  `evals/baselines/history.json` (`v1.0.0`) + `backend-ci.yml`'e yeni regresyon-gate
+  adımı. Karşılaştırma `baseline ∩ current` (ortak case) kümesi üzerinde: per-case
+  **sıfır-tolerans** birincil (herhangi bir ortak case geçerken düşerse regresyon) +
+  aggregate pass-rate ikincil; reason önceliği per-case > aggregate > bootstrap;
+  drift (case kümesi değişimi) **bilgi amaçlıdır**, regresyon sayılmaz. Boş/yok
+  baseline → **bootstrap yeşil** (exit 0 — ilk sürüm için karşılaştıracak bir şey
+  yok). Full suite 2400 passed/9 skipped. **Bilinçli kapsam dışı:** gerçek-LLM
+  accuracy (deterministik sahte pipeline üzerinde çalışır → kod-kaynaklı
+  regresyonu yakalar, model doğruluğunu değil; subsystem C execution harness'ı
+  ayrı kalem), debug endpoint, sürüm etiketinin git-tag'den runtime'da otomatik
+  okunması (`--version` operatör tarafından elle verilir), CI'da baseline'ın
+  otomatik güncellenmesi (`--update-baseline` release'te elle çağrılmalı),
+  frontend UI. **Bununla Phase 8 (Observability & Debuggability) kapanır.**
+  (PR TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
