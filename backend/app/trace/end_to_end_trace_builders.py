@@ -112,7 +112,8 @@ def build_intent_span(result, *, duration_ms: Optional[float] = None) -> TraceSp
     normalized_query or signal value/reason. None result -> SKIPPED.
     """
     if result is None:
-        return TraceSpan(stage=TraceStageKind.INTENT, status=TraceSpanStatus.SKIPPED)
+        return TraceSpan(stage=TraceStageKind.INTENT, status=TraceSpanStatus.SKIPPED,
+                         duration_ms=duration_ms)
     intent = getattr(result, "intent", None)
     if intent is None:
         raise EndToEndTraceError("intent result missing .intent")
@@ -144,7 +145,8 @@ def build_retrieval_span(result, *, duration_ms: Optional[float] = None) -> Trac
     candidate .text or the query text. None -> SKIPPED; k_returned==0 -> WARNING.
     """
     if result is None:
-        return TraceSpan(stage=TraceStageKind.RETRIEVAL, status=TraceSpanStatus.SKIPPED)
+        return TraceSpan(stage=TraceStageKind.RETRIEVAL, status=TraceSpanStatus.SKIPPED,
+                         duration_ms=duration_ms)
     candidates = tuple(
         RetrievalCandidateRef(
             object_id=_status_str(getattr(c, "object_id", None)),
@@ -174,7 +176,8 @@ def build_prompt_span(gen_input, *, duration_ms: Optional[float] = None) -> Trac
     rendered_prompt/raw_query/normalized_query. None -> SKIPPED.
     """
     if gen_input is None:
-        return TraceSpan(stage=TraceStageKind.PROMPT, status=TraceSpanStatus.SKIPPED)
+        return TraceSpan(stage=TraceStageKind.PROMPT, status=TraceSpanStatus.SKIPPED,
+                         duration_ms=duration_ms)
     detail = PromptSpanDetail(
         prompt_sha256=getattr(gen_input, "prompt_sha256", None),
         prompt_char_count=getattr(gen_input, "prompt_char_count", None),
@@ -201,7 +204,8 @@ def build_generation_span(provider_result, *, duration_ms: Optional[float] = Non
     duration_ms falls back to response.latency_ms when not supplied.
     """
     if provider_result is None:
-        return TraceSpan(stage=TraceStageKind.GENERATION, status=TraceSpanStatus.SKIPPED)
+        return TraceSpan(stage=TraceStageKind.GENERATION, status=TraceSpanStatus.SKIPPED,
+                         duration_ms=duration_ms)
     response = getattr(provider_result, "response", None) or provider_result
     finish_reason = _status_str(getattr(response, "finish_reason", None))
     output_sha256 = (getattr(provider_result, "output_sha256", None)
@@ -240,7 +244,8 @@ def build_validation_span(issues, *, valid, sql_sha256: Optional[str] = None,
     ERROR; valid with issues -> WARNING; clean -> OK.
     """
     if issues is None:
-        return TraceSpan(stage=TraceStageKind.VALIDATION, status=TraceSpanStatus.SKIPPED)
+        return TraceSpan(stage=TraceStageKind.VALIDATION, status=TraceSpanStatus.SKIPPED,
+                         duration_ms=duration_ms)
     normalized = tuple(
         ValidationIssue(
             category=(_status_str(getattr(e, "category", None)
