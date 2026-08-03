@@ -16,7 +16,7 @@ Tamamlanan işlerin sprint/PR detayı için `docs/SPRINT-PR-LOG.md`, geçici
 
 ---
 
-## [Unreleased] — Sprint 20 → 27.8 · retrieval/prompting/execution + Phase 7 Security & Governance + Phase 8 Observability (2026-06-05 → günümüz)
+## [Unreleased] — Sprint 20 → 27.9 · retrieval/prompting/execution + Phase 7 Security & Governance + Phase 8 Observability (2026-06-05 → günümüz)
 
 v1 baseline'ı sonrası retrieval, prompting ve execution-accuracy altyapısının
 sözleşme (contract) odaklı geliştirilmesi (Sprint 20–25, çoğu contract/stub
@@ -265,6 +265,21 @@ gerçek debug-gated endpoint'leriyle. Durum için `ROADMAP.md`'deki tabloya bak�
   redaksiyon yok. Determinist; `truncated`/`timeseries_truncated`; boş pencere → 200.
   **Bilinen sınır (TECH-DEBT §9):** trace tek GENERATION span taşıdığından retry'lı
   işlerde token/maliyet eksik-sayımı. (PR #146)
+- **Feedback Review → Rule Suggestion** (Sprint 27.9): kullanıcı feedback'ini (27.3
+  `feedback` tablosu + 27.7 `list_feedback`) aday `{natural_query → SQL}` kural/örnek
+  önerisine çeviren, **yan etkisiz** `GET /api/debug/rule-suggestions` (debug-gated,
+  200 envelope). İki kind: correction (`verdict=incorrect` + dolu `corrected_sql`) /
+  confirmation (`verdict=correct` + dolu job `result_sql`); ineligible sebep önceliği
+  `missing_job > missing_natural_query > missing_sql`. Saf yaprak paket
+  `backend/app/rule_suggestions/` (frozen contract + SIRALI `to_payload`; saf
+  `classify_item`/`compute_rule_suggestions` — dedup `(natural_query, suggested_sql,
+  kind)`, support-count ranking, `by_kind`/`by_category` kırılımları; purity **yalnız
+  stdlib**, `app.feedback`/`app.trace.*` asla) + adaptör `app/rule_suggestions_service.py`
+  (`list_feedback`+`get_job` korelasyonu, job-cache, `scan_cap=10000`). Bilinçli olarak
+  yalnızca **ÖNERİR**: insan `POST /api/rag/index/sql-history` ile ayrıca onaylar/
+  indeksler; redaksiyon YOK (amaç ham SQL'i onaya sunmak). Bilinçli kapsam dışı:
+  onay/persistence-state (idempotency yok), LLM/semantik genelleme + synonym türetme
+  (yalnız literal eşleşme), `scan_cap` üstü DB-side tam-populasyon, frontend UI. (PR TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
