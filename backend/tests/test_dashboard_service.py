@@ -94,3 +94,31 @@ def test_accepts_dict_shaped_records(monkeypatch):
     rec = {"payload": _payload(), "created_at": datetime(2026, 7, 31, tzinfo=timezone.utc)}
     out = build_dashboard(trace_store=_FakeStore(records=[rec]))
     assert out["window"]["trace_count"] == 1
+
+
+def test_feedback_truncated_flag(monkeypatch):
+    # scan_cap'i asan feedback -> feedback_truncated True, feedback.total == scan_cap (§8.2)
+    big = [{"id": f"f{i}", "job_id": f"j{i}", "verdict": "correct",
+            "category": None, "created_at": "2026-08-01T00:00:00"} for i in range(5)]
+
+    def _lf(created_after=None, created_before=None, limit=10000):
+        return list(big)[:limit]
+    monkeypatch.setattr("app.dashboard_service.list_feedback", _lf)
+
+    out = build_dashboard(trace_store=_FakeStore(records=[]), scan_cap=3)
+    assert out["window"]["feedback_truncated"] is True
+    assert out["feedback"]["total"] == 3
+
+
+def test_feedback_not_truncated_flag(monkeypatch):
+    # scan_cap'i asmayan feedback -> feedback_truncated False (§8.2)
+    small = [{"id": "f1", "job_id": "j1", "verdict": "correct",
+              "category": None, "created_at": "2026-08-01T00:00:00"}]
+
+    def _lf(created_after=None, created_before=None, limit=10000):
+        return list(small)[:limit]
+    monkeypatch.setattr("app.dashboard_service.list_feedback", _lf)
+
+    out = build_dashboard(trace_store=_FakeStore(records=[]), scan_cap=3)
+    assert out["window"]["feedback_truncated"] is False
+    assert out["feedback"]["total"] == 1

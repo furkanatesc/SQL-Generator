@@ -47,6 +47,8 @@ def _floor_iso(created_at, bucket_kind: str) -> str:
 def bucket_timeseries(trace_items, bucket_kind: str) -> Tuple[Tuple[TimeseriesBucket, ...], bool]:
     groups: dict = {}
     for created_at, payload in trace_items:
+        if created_at is None or not hasattr(created_at, "tzinfo"):
+            continue   # datetime olmayan created_at timeseries'e girmez (§8.4b)
         start = _floor_iso(created_at, bucket_kind)
         groups.setdefault(start, []).append(payload)
 
