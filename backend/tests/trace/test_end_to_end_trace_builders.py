@@ -193,6 +193,12 @@ def test_intent_none_is_skipped():
     assert span.detail is None
 
 
+def test_intent_span_carries_duration_when_skipped():
+    span = build_intent_span(None, duration_ms=2.0)
+    assert span.status == TraceSpanStatus.SKIPPED
+    assert span.duration_ms == 2.0
+
+
 def test_intent_carries_no_raw_query():
     span = build_intent_span(_intent(has_filter=True))
     assert not hasattr(span.detail, "normalized_query")
@@ -247,6 +253,12 @@ def test_retrieval_none_is_skipped():
     assert span.detail is None
 
 
+def test_retrieval_span_carries_duration_when_skipped():
+    span = build_retrieval_span(None, duration_ms=2.0)
+    assert span.status == TraceSpanStatus.SKIPPED
+    assert span.duration_ms == 2.0
+
+
 def test_retrieval_carries_no_candidate_text():
     span = build_retrieval_span(_retrieval())
     assert "alice" not in repr(span.detail)
@@ -286,6 +298,12 @@ def test_prompt_none_is_skipped():
     span = build_prompt_span(None)
     assert span.status == TraceSpanStatus.SKIPPED
     assert span.detail is None
+
+
+def test_prompt_span_carries_duration_when_skipped():
+    span = build_prompt_span(None, duration_ms=2.0)
+    assert span.status == TraceSpanStatus.SKIPPED
+    assert span.duration_ms == 2.0
 
 
 def test_prompt_carries_no_raw_prompt():
@@ -352,6 +370,12 @@ def test_generation_none_is_skipped():
     assert span.detail is None
 
 
+def test_generation_span_carries_duration_when_skipped():
+    span = build_generation_span(None, duration_ms=2.0)
+    assert span.status == TraceSpanStatus.SKIPPED
+    assert span.duration_ms == 2.0
+
+
 def test_generation_carries_no_raw_sql():
     span = build_generation_span(_gen_result())
     assert "SELECT" not in repr(span.detail).upper()
@@ -398,6 +422,12 @@ def test_validation_none_is_skipped():
     span = build_validation_span(None, valid=True)
     assert span.status == TraceSpanStatus.SKIPPED
     assert span.detail is None
+
+
+def test_validation_span_carries_duration_when_skipped():
+    span = build_validation_span(None, valid=True, duration_ms=2.0)
+    assert span.status == TraceSpanStatus.SKIPPED
+    assert span.duration_ms == 2.0
 
 
 def test_validation_carries_no_message():
