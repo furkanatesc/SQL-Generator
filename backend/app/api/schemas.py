@@ -467,3 +467,43 @@ class LLMUsageDetailResponse(BaseModel):
 class LLMUsageEnvelopeResponse(BaseModel):
     status: Literal["success"]
     usage: LLMUsageDetailResponse
+
+
+# Sprint 27.9 - Feedback -> rule suggestion schemas (alanlar PLAIN str/list/dict/int)
+class SuggestionWindowResponse(BaseModel):
+    created_after: Optional[str] = None
+    created_before: Optional[str] = None
+    feedback_count: int
+    eligible_count: int
+    suggestion_count: int
+    truncated: bool
+    scan_cap: int
+
+
+class RuleSuggestionResponse(BaseModel):
+    natural_query: str
+    suggested_sql: str
+    kind: str
+    categories: List[str]
+    support_count: int
+    feedback_ids: List[str]
+    job_ids: List[str]
+
+
+class IneligibleResponse(BaseModel):
+    total: int
+    reasons: dict
+
+
+class RuleSuggestionsDetailResponse(BaseModel):
+    version: str
+    window: SuggestionWindowResponse
+    suggestions: List[RuleSuggestionResponse]
+    by_kind: dict
+    by_category: dict
+    ineligible: IneligibleResponse
+
+
+class RuleSuggestionsEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    suggestions: RuleSuggestionsDetailResponse
