@@ -300,7 +300,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   okunması (`--version` operatör tarafından elle verilir), CI'da baseline'ın
   otomatik güncellenmesi (`--update-baseline` release'te elle çağrılmalı),
   frontend UI. **Bununla Phase 8 (Observability & Debuggability) kapanır.**
-  (PR TBD)
+  (PR #148)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
