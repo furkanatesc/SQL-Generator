@@ -173,7 +173,11 @@ def compute_llm_usage(*, trace_items, window, currency: str, price_table, bucket
 
     seen_models = {e.get("model_id") for e in events if e.get("model_id")}
     priced_models = tuple(sorted(m for m in seen_models if m in price_table))
-    missing_models = tuple(sorted(m for m in seen_models if m not in price_table))
+    missing_models = sorted(m for m in seen_models if m not in price_table)
+    if any(not e.get("model_id") for e in events):
+        # null-model olay unpriced sayilir (SS9.3): by_model "unknown" satiriyla uzlas
+        missing_models = sorted(set(missing_models) | {"unknown"})
+    missing_models = tuple(missing_models)
     pricing = PricingInfo(models_priced=priced_models, models_missing_price=missing_models)
 
     window = dataclasses.replace(window, generation_count=len(events),
