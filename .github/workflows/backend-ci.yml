@@ -80,6 +80,10 @@ jobs:
         run: |
           python -m evals.eval_gate_cli /tmp/golden_eval_report.json
 
+      - name: Run accuracy regression gate on generated golden report
+        run: |
+          python -m evals.regression_gate_cli /tmp/golden_eval_report.json
+
       - name: Build backend Docker image
         run: |
           docker build -t sqlgen-backend:test .
