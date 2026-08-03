@@ -59,6 +59,15 @@ def test_bad_report_returns_2(tmp_path):
     assert main([str(bad), "--baseline", str(tmp_path / "h.json")]) == 2
 
 
+def test_malformed_results_entry_returns_2(tmp_path):
+    bad = tmp_path / "r.json"
+    # results girdisi 'passed' alani eksik -> bad-input (2), regresyon (1) DEGIL
+    bad.write_text(json.dumps({
+        "total": 1, "passed": 1, "failed": 0, "pass_rate": 1.0,
+        "results": [{"id": "a"}], "failed_cases": []}), encoding="utf-8")
+    assert main([str(bad), "--baseline", str(tmp_path / "h.json")]) == 2
+
+
 def test_missing_report_returns_2(tmp_path):
     assert main([str(tmp_path / "nope.json")]) == 2
 
@@ -78,10 +87,13 @@ def test_update_baseline_appends(tmp_path, capsys):
 
 def test_update_baseline_requires_version(tmp_path):
     report = tmp_path / "r.json"
+    baseline = tmp_path / "h.json"
     _write_report(report, [("a", True)])
-    rc = main([str(report), "--baseline", str(tmp_path / "h.json"),
+    rc = main([str(report), "--baseline", str(baseline),
                "--update-baseline"])
     assert rc == 2
+    # Hata sonrasi baseline dosyasi olusturulmamis olmali
+    assert not baseline.exists()
 
 
 def test_update_baseline_duplicate_version_returns_2(tmp_path):
@@ -89,10 +101,14 @@ def test_update_baseline_duplicate_version_returns_2(tmp_path):
     hist = tmp_path / "history.json"
     _write_report(report, [("a", True)])
     _seed_history(hist, "v1.0.0", ["a"], ["a"])
+    # Hata oncesi history'nin baytlari
+    before = hist.read_text(encoding="utf-8")
     rc = main([str(report), "--baseline", str(hist),
                "--update-baseline", "--version", "v1.0.0",
                "--timestamp", "2026-08-03T00:00:00Z"])
     assert rc == 2
+    # Hata sonrasi history degismemis olmali
+    assert hist.read_text(encoding="utf-8") == before
 
 
 def test_max_pass_rate_drop_flag_parsed(tmp_path, capsys):
