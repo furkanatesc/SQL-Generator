@@ -48,6 +48,19 @@ def test_compute_deterministic():
     assert compute_llm_usage(**_args()).to_payload() == compute_llm_usage(**_args()).to_payload()
 
 
+def test_null_model_reconciled_in_models_missing_price():
+    # SS9.3: model_id=None olan generation olayi unpriced_request_count'a
+    # ve by_model "unknown" satirina girer; models_missing_price de ayni
+    # "unknown" ile uzlasmali (yoksa uc yuzey birbiriyle celisir).
+    items = [_item(10, _gen(None, 100, 0, 100))]
+    p = compute_llm_usage(trace_items=items, window=_win(1), currency="USD",
+                          price_table={}, bucket="day").to_payload()
+    assert p["totals"]["unpriced_request_count"] >= 1
+    assert "unknown" in p["pricing"]["models_missing_price"]
+    unknown_row = next(m for m in p["by_model"] if m["model_id"] == "unknown")
+    assert unknown_row["estimated_cost"] is None
+
+
 def test_compute_empty_window():
     p = compute_llm_usage(trace_items=[], window=_win(0), currency="USD",
                           price_table={}, bucket="day").to_payload()
