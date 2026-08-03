@@ -303,6 +303,16 @@
       "version"
     ]
   },
+  "IneligibleResponse": {
+    "properties": [
+      "reasons",
+      "total"
+    ],
+    "required": [
+      "reasons",
+      "total"
+    ]
+  },
   "JobCreateRequest": {
     "properties": [
       "natural_query",
@@ -666,6 +676,54 @@
       "observed_issue_types"
     ]
   },
+  "RuleSuggestionResponse": {
+    "properties": [
+      "categories",
+      "feedback_ids",
+      "job_ids",
+      "kind",
+      "natural_query",
+      "suggested_sql",
+      "support_count"
+    ],
+    "required": [
+      "categories",
+      "feedback_ids",
+      "job_ids",
+      "kind",
+      "natural_query",
+      "suggested_sql",
+      "support_count"
+    ]
+  },
+  "RuleSuggestionsDetailResponse": {
+    "properties": [
+      "by_category",
+      "by_kind",
+      "ineligible",
+      "suggestions",
+      "version",
+      "window"
+    ],
+    "required": [
+      "by_category",
+      "by_kind",
+      "ineligible",
+      "suggestions",
+      "version",
+      "window"
+    ]
+  },
+  "RuleSuggestionsEnvelopeResponse": {
+    "properties": [
+      "status",
+      "suggestions"
+    ],
+    "required": [
+      "status",
+      "suggestions"
+    ]
+  },
   "RuntimeConfigDiagnostics": {
     "properties": [
       "api_key_configured",
@@ -711,6 +769,24 @@
   "SortOrder": {
     "properties": [],
     "required": []
+  },
+  "SuggestionWindowResponse": {
+    "properties": [
+      "created_after",
+      "created_before",
+      "eligible_count",
+      "feedback_count",
+      "scan_cap",
+      "suggestion_count",
+      "truncated"
+    ],
+    "required": [
+      "eligible_count",
+      "feedback_count",
+      "scan_cap",
+      "suggestion_count",
+      "truncated"
+    ]
   },
   "TimeseriesBucketResponse": {
     "properties": [
