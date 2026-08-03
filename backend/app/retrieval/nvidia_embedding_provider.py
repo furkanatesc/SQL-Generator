@@ -5,7 +5,7 @@ class NVIDIAEmbeddingProvider:
     """
     Adapter around the existing NVIDIAEmbeddingClient to fit the EmbeddingProvider interface.
     """
-    def __init__(self, api_key: str = None, model_id: str = "nvidia/llama-nemotron-embed-1b-v2", dimension: int = 1024):
+    def __init__(self, api_key: str = None, model_id: str = "nvidia/llama-nemotron-embed-1b-v2", dimension: int = 2048):  # Nemotron gömü boyutu (rag_manager ile hizalı)
         from app.rag_manager import NVIDIAEmbeddingClient
         self.provider_id = "nvidia"
         self.model_id = model_id
