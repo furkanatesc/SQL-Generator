@@ -391,7 +391,7 @@ taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrat
   düzeltildi (bu dokümanlar zaten yok, `README` zaten koddaki değerlerle
   uyumlu). Full suite 2410 passed/9 skipped. Diğer TECH-DEBT kalemleri (§2,
   §4.3–4.9, §5.3/5.4, §6, §7, §8.1/8.3, §9.1/9.2, §10, §11) bilinçli olarak
-  AÇIK bırakıldı (sessiz düşürme yok). (PR TBD)
+  AÇIK bırakıldı (sessiz düşürme yok). (PR #149)
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
