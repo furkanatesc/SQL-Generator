@@ -315,3 +315,40 @@ düşürme yok).
    None-model olayı varken `models_missing_price`'a `"unknown"` eklemek ya da bu ayrımı
    dokümante etmek.
    *İlgili Dosya:* `backend/app/llm_usage/compute.py` (`compute_llm_usage` — `unpriced`/`seen_models`)
+
+---
+
+## §10. Sprint 27.9 (Feedback Review → Rule Suggestion) devirleri — AÇIK
+
+Aşağıdakiler bilinçli ertelendi (sessiz düşürme yok); `GET /api/debug/rule-suggestions`
+tasarım gereği yalnızca **öneri üretir**, hiçbir şey yazmaz.
+
+1. **Onay-farkında değil / idempotency yok.** Öneri raporu `feedback`+`jobs` tablolarını
+   her çağrıda yeniden tarar; bir öneri insan tarafından `POST /api/rag/index/sql-history`
+   ile onaylanıp RAG'a indekslense bile, kaynak feedback satırları hâlâ pencerede olduğu
+   sürece **aynı öneri tekrar görünür**. Onay/red durumu hiçbir yerde persist edilmez —
+   ne `rule_suggestions` katmanında ne de feedback tablosunda. Gerçek çözüm ayrı bir
+   onay-state sözleşmesi ister (kapsam dışı).
+   *İlgili Dosya:* `backend/app/rule_suggestions_service.py`, `backend/app/rule_suggestions/compute.py`
+
+2. **Yalnız literal eşleşme — semantik genelleme/synonym türetme yok.** Dedup anahtarı
+   `(natural_query, suggested_sql, kind)` tam string eşitliğiyle çalışır; "İstanbul'daki
+   müşteriler" ile "İstanbul'da yaşayan müşteriler" gibi anlamca eşdeğer ama harfiyen
+   farklı sorgular ayrı öneri olarak kalır (support_count bölünür). LLM/embedding-tabanlı
+   semantik gruplama ve synonym türetme bilinçli olarak kapsam dışı; insan RAG'a
+   indekslerken bu genellemeyi elle yapar.
+   *İlgili Dosya:* `backend/app/rule_suggestions/compute.py` (`compute_rule_suggestions` — dedup key)
+
+3. **`scan_cap` üstü alt-küme.** Pencere `SCAN_CAP=10000` feedback satırını aşarsa öneri
+   yalnızca çekilen alt küme üzerinden hesaplanır; `window.truncated=true` işaretlenir
+   (sessiz kesme yok) ama tam doğruluk DB-side aggregation ister — 27.6/27.7/27.8 ile
+   aynı yapısal kök (§7/§8/§9).
+   *İlgili Dosya:* `backend/app/rule_suggestions_service.py` (`SCAN_CAP`)
+
+4. **Confirmation önerisi `result_sql`'i okuma-anından alır.** `verdict=correct` bir
+   feedback için confirmation önerisinin `suggested_sql`'i, feedback anındaki değil,
+   **rapor çağrıldığı andaki** `job.result_sql`'dir (job daha sonra farklı bir SQL ile
+   güncellenmişse — ör. replay/re-run — öneri o güncel değeri yansıtır, feedback verildiği
+   andaki SQL'i değil). Job satırları pratikte immutable olduğundan düşük olasılıklı ama
+   yapısal bir varsayım.
+   *İlgili Dosya:* `backend/app/rule_suggestions/compute.py` (`classify_item` — confirmation dalı)
