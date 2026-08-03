@@ -94,3 +94,30 @@ def compare_regression(current_report: dict, baseline: Optional[dict],
                     "common_count": len(common),
                     "baseline_total": baseline["total"]},
     }
+
+
+def build_baseline_entry(report: dict, *, version: str, timestamp: str) -> dict:
+    """Golden rapordan tek bir baseline kaydi uretir (sirali case listeleri; verilen ts)."""
+    results = report["results"]
+    case_ids = sorted({r["id"] for r in results})
+    passing_case_ids = sorted({r["id"] for r in results if r["passed"]})
+    return {
+        "version": version,
+        "timestamp": timestamp,
+        "total": report["total"],
+        "pass_rate": report["pass_rate"],
+        "case_ids": case_ids,
+        "passing_case_ids": passing_case_ids,
+    }
+
+
+def select_latest_baseline(history: list) -> Optional[dict]:
+    """history.json'daki son (en yeni) kaydi dondurur; bos ise None."""
+    return history[-1] if history else None
+
+
+def append_baseline(history: list, entry: dict) -> list:
+    """Yeni kaydi append'ler; ayni version zaten varsa ValueError. Girdiyi degistirmez."""
+    if any(existing["version"] == entry["version"] for existing in history):
+        raise ValueError(f"Baseline version already exists: {entry['version']}")
+    return [*history, entry]

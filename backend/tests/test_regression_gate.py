@@ -87,3 +87,50 @@ def test_deterministic_same_input_same_output():
 
 def test_default_policy_shape():
     assert DEFAULT_REGRESSION_POLICY == {"max_pass_rate_drop": 0.0}
+
+
+import pytest
+from evals.regression_gate import (
+    build_baseline_entry, select_latest_baseline, append_baseline,
+)
+
+
+def test_build_baseline_entry_sorted_and_split():
+    report = _report([("b", True), ("a", True), ("c", False)])
+    entry = build_baseline_entry(report, version="v1.2.0", timestamp="2026-08-03T00:00:00Z")
+    assert entry["version"] == "v1.2.0"
+    assert entry["timestamp"] == "2026-08-03T00:00:00Z"
+    assert entry["total"] == 3
+    assert entry["case_ids"] == ["a", "b", "c"]          # SIRALI, tumu
+    assert entry["passing_case_ids"] == ["a", "b"]        # SIRALI, gecen alt-kume
+    assert entry["pass_rate"] == report["pass_rate"]
+
+
+def test_select_latest_baseline():
+    assert select_latest_baseline([]) is None
+    h = [{"version": "v1.0.0"}, {"version": "v1.1.0"}]
+    assert select_latest_baseline(h)["version"] == "v1.1.0"
+
+
+def test_append_baseline_appends_new():
+    entry = build_baseline_entry(_report([("a", True)]), version="v1.0.0",
+                                 timestamp="2026-08-03T00:00:00Z")
+    h2 = append_baseline([], entry)
+    assert len(h2) == 1 and h2[0]["version"] == "v1.0.0"
+
+
+def test_append_baseline_rejects_duplicate_version():
+    e1 = build_baseline_entry(_report([("a", True)]), version="v1.0.0",
+                              timestamp="2026-08-03T00:00:00Z")
+    with pytest.raises(ValueError):
+        append_baseline([e1], e1)
+
+
+def test_append_baseline_does_not_mutate_input():
+    e1 = build_baseline_entry(_report([("a", True)]), version="v1.0.0",
+                              timestamp="2026-08-03T00:00:00Z")
+    e2 = build_baseline_entry(_report([("a", True)]), version="v1.1.0",
+                              timestamp="2026-08-03T00:00:00Z")
+    original = [e1]
+    append_baseline(original, e2)
+    assert original == [e1]      # girdi degismedi
