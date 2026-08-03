@@ -17,15 +17,15 @@ Bu dosya yol haritasının **tek giriş noktasıdır**. Eksen: **Phase → Sprin
 
 | Durum | Kapsam | Detay |
 |---|---|---|
-| ✅ **Tamamlandı** | Sprint 0 → **27.8** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) ve **Phase 7 (Security & Governance, 26.0–26.11) kapandı**. **Phase 8 devam ediyor** — 27.0 End-to-End Trace Contract + 27.1 Remaining Stage Span Builders + 27.1w Live Trace Wiring (PR #135) + 27.2 Error Taxonomy v2 (PR #136) + 27.2.1 Error Taxonomy Boundary + **27.3 User Feedback Capture** (PR #139) + **27.4 Query Replay System** (PR #141) + **27.5 Debug Bundle Export** (PR #143) + **27.6 Metrics Contract** (PR #144) + **27.7 Admin Observability Dashboard Backend** (PR #145) + **27.8 Cost & LLM Usage Telemetry** (PR #146) tamam. 27.5: yan etkisiz debug bundle (`GET /api/debug/jobs/{id}/bundle`). 27.6: pencere-bazlı versiyonlu metrik raporu (`GET /api/debug/metrics`). 27.7: 27.6 metriklerini birleştiren kompozit `GET /api/debug/dashboard`. 27.8: GENERATION span'lerinden LLM kullanımı + konfigüre edilebilir fiyat tablosuyla maliyet (`GET /api/debug/llm-usage`) — hepsi debug-gated, yan etkisiz. `docs/SPRINT-PR-LOG.md` |
-| ▶️ **Sıradaki** | **Phase 8 · Sprint 27.9** | Feedback Review → Rule Suggestion. `docs/PLANNED-SPRINTS.md` |
-| 🗓️ **Planlanan** | **Phase 8 → 15** (Sprint 27.9 → 34.7) | `docs/PLANNED-SPRINTS.md` |
+| ✅ **Tamamlandı** | Sprint 0 → **27.9** | `v1.0.0` yayınlandı (tag `9907cd3`, 2026-06-18). Phase 6 (adapter stub'ları, #125/#126) ve **Phase 7 (Security & Governance, 26.0–26.11) kapandı**. **Phase 8 devam ediyor** — 27.0 End-to-End Trace Contract + 27.1 Remaining Stage Span Builders + 27.1w Live Trace Wiring (PR #135) + 27.2 Error Taxonomy v2 (PR #136) + 27.2.1 Error Taxonomy Boundary + **27.3 User Feedback Capture** (PR #139) + **27.4 Query Replay System** (PR #141) + **27.5 Debug Bundle Export** (PR #143) + **27.6 Metrics Contract** (PR #144) + **27.7 Admin Observability Dashboard Backend** (PR #145) + **27.8 Cost & LLM Usage Telemetry** (PR #146) + **27.9 Feedback Review → Rule Suggestion** (PR TBD) tamam. 27.5: yan etkisiz debug bundle (`GET /api/debug/jobs/{id}/bundle`). 27.6: pencere-bazlı versiyonlu metrik raporu (`GET /api/debug/metrics`). 27.7: 27.6 metriklerini birleştiren kompozit `GET /api/debug/dashboard`. 27.8: GENERATION span'lerinden LLM kullanımı + konfigüre edilebilir fiyat tablosuyla maliyet (`GET /api/debug/llm-usage`). 27.9: kullanıcı feedback'ini (27.3/27.7) aday `{natural_query→SQL}` kural önerisine çeviren yan etkisiz `GET /api/debug/rule-suggestions` — hepsi debug-gated, yan etkisiz. `docs/SPRINT-PR-LOG.md` |
+| ▶️ **Sıradaki** | **Phase 8 · Sprint 27.10** | Per-Release Accuracy Regression Gate. `docs/PLANNED-SPRINTS.md` |
+| 🗓️ **Planlanan** | **Phase 8 → 15** (Sprint 27.10 → 34.7) | `docs/PLANNED-SPRINTS.md` |
 
 ### Planlanan fazlar (durum)
 | Phase | Tema | Sprint aralığı | Durum |
 |---|---|---|---|
 | 7 | Security & Governance | 26.x | ✅ Tamamlandı *(26.0–26.11)* |
-| 8 | Observability & Debuggability | 27.x | ▶️ Devam ediyor *(27.0–27.8 tamam; sıradaki 27.9)* |
+| 8 | Observability & Debuggability | 27.x | ▶️ Devam ediyor *(27.0–27.9 tamam; sıradaki 27.10)* |
 | 9 | Large Schema Production Scale | 28.x | 🗓️ Planlı |
 | 10 | Real Database Adapter Layer | 29.x | 🗓️ Planlı *(25.8/25.9 stub'larının gerçeği)* |
 | 11 | API / Backend Productization | 30.x | 🗓️ Planlı |
