@@ -1,6 +1,28 @@
 import os
 import json
+from pathlib import Path
 from app.main import app
+
+_CONTRACTS_DIR = Path(__file__).resolve().parent / "contracts"
+_HTTP_VERBS = {"get", "post", "put", "patch", "delete", "options", "head", "trace"}
+
+
+def _snapshot_api_routes() -> set:
+    """OpenAPI snapshot'indaki (METHOD_UPPER, path) ciftleri — tek kaynak."""
+    snap = json.loads((_CONTRACTS_DIR / "openapi_snapshot.json").read_text(encoding="utf-8"))
+    return {(method.upper(), path)
+            for path, item in snap["paths"].items()
+            for method in item if method in _HTTP_VERBS}
+
+
+# OpenAPI paths'te yer almayan framework/doc route'lari (Starlette/FastAPI otomatik).
+# Yeni bir uygulama endpoint'i BURAYA girmez; yalnizca framework route'lari.
+FRAMEWORK_ROUTES = {
+    ("GET", "/openapi.json"), ("HEAD", "/openapi.json"),
+    ("GET", "/docs"), ("HEAD", "/docs"),
+    ("GET", "/docs/oauth2-redirect"), ("HEAD", "/docs/oauth2-redirect"),
+    ("GET", "/redoc"), ("HEAD", "/redoc"),
+}
 
 def test_public_api_surface():
     # Discover routes at runtime including HTTP methods
@@ -9,51 +31,10 @@ def test_public_api_surface():
         methods = getattr(route, "methods", None) or set()
         for method in methods:
             discovered_routes.add((method.upper(), route.path))
-    
-    # Expected routes snapshot (source of truth inventory)
-    expected_routes = {
-        ("GET", "/openapi.json"),
-        ("HEAD", "/openapi.json"),
-        ("GET", "/docs"),
-        ("HEAD", "/docs"),
-        ("GET", "/docs/oauth2-redirect"),
-        ("HEAD", "/docs/oauth2-redirect"),
-        ("GET", "/redoc"),
-        ("HEAD", "/redoc"),
-        ("GET", "/api/debug/traces"),
-        ("GET", "/api/debug/traces/{trace_id}"),
-        ("GET", "/health"),
-        ("GET", "/api/configs/{key}"),
-        ("POST", "/api/configs/{key}"),
-        ("POST", "/api/files/upload"),
-        ("POST", "/api/jobs/without-file"),
-        ("GET", "/api/jobs"),
-        ("GET", "/api/jobs/{job_id}"),
-        ("GET", "/api/jobs/{job_id}/stream"),
-        ("POST", "/api/jobs/{job_id}/cancel"),
-        ("POST", "/api/jobs/{job_id}/feedback"),
-        ("POST", "/api/debug/jobs/{job_id}/replay"),
-        ("GET", "/api/debug/jobs/{job_id}/bundle"),
-        ("GET", "/api/debug/metrics"),
-        ("GET", "/api/debug/dashboard"),
-        ("GET", "/api/debug/llm-usage"),
-        ("GET", "/api/debug/rule-suggestions"),
-        ("GET", "/api/schema/raw"),
-        ("GET", "/api/schema"),
-        ("POST", "/api/schema/refresh"),
-        ("GET", "/api/schema/custom-relations"),
-        ("POST", "/api/schema/custom-relations"),
-        ("GET", "/api/schema/disabled-relations"),
-        ("POST", "/api/schema/disabled-relations"),
-        ("GET", "/api/schema/filters"),
-        ("POST", "/api/schema/filters"),
-        ("GET", "/api/rag/stats"),
-        ("POST", "/api/rag/search"),
-        ("POST", "/api/rag/index/business-rule"),
-        ("POST", "/api/rag/index/sql-history"),
-        ("GET", "/ready")
-    }
-    
+
+    # Expected routes: OpenAPI snapshot'indan turetilir + framework route'lari (tek kaynak)
+    expected_routes = _snapshot_api_routes() | FRAMEWORK_ROUTES
+
     # Verify exact match (no endpoints/methods added or removed)
     assert discovered_routes == expected_routes, (
         f"API Surface Mismatch!\n"
