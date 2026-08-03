@@ -352,3 +352,46 @@ tasarım gereği yalnızca **öneri üretir**, hiçbir şey yazmaz.
    andaki SQL'i değil). Job satırları pratikte immutable olduğundan düşük olasılıklı ama
    yapısal bir varsayım.
    *İlgili Dosya:* `backend/app/rule_suggestions/compute.py` (`classify_item` — confirmation dalı)
+
+---
+
+## §11. Sprint 27.10 (Per-Release Accuracy Regression Gate) devirleri — AÇIK
+
+`evals/regression_gate_cli.py` yalnızca CLI/CI yüzeyinde çalışır; aşağıdakiler
+bilinçli ertelendi (sessiz düşürme yok).
+
+1. **Aggregate-per-case örtüşmesi.** Karşılaştırma iki katman taşır — per-case
+   sıfır-tolerans (birincil) ve aggregate pass-rate (ikincil) — ama deterministik
+   sahte pipeline'da per-case katman zaten sıfır-toleranslı olduğundan, aggregate
+   dalının *tek başına* (per-case hiçbir şey yakalamazken) tetiklenebileceği
+   senaryo yalnızca negatif/gevşetilmiş bir tolerans payı verildiğinde ortaya
+   çıkar. Pratikte aggregate branch per-case'in üstüne **ek sinyal** eklemez;
+   ikincil/raporlama rolünde kalır, kendi başına bağımsız bir regresyon
+   kaynağı değildir. Gerçek çözüm (ör. per-case + aggregate'i farklı case
+   alt-kümelerinde bağımsızlaştırmak) kapsam dışı bırakıldı.
+   *İlgili Dosya:* `evals/regression_gate.py` (`compare_regression`)
+2. **Gerçek accuracy değil.** Gate, deterministik sahte (fake) LLM pipeline'ı
+   üzerinde çalışan golden eval raporunu tüketir — gerçek model çağrısı yok.
+   Dolayısıyla yakaladığı şey **kod-kaynaklı regresyon**dur (bir refactor/PR
+   golden case'leri kırdı mı?), **gerçek LLM/model doğruluğu** değil. Gerçek-LLM
+   accuracy ölçümü ayrı bir eksen (subsystem C — execution harness, Sprint
+   24/29.7 ailesi) ve bu sprintin kapsamı dışında.
+   *İlgili Dosya:* `evals/regression_gate_cli.py`, `backend/app/eval/run_eval` (golden profil)
+3. **Sürüm etiketi elle verilir.** Baseline history kaydı bir `version` etiketi
+   taşır ama bu etiket git-tag'den runtime'da **okunmaz** — `--version` CLI
+   bayrağıyla operatör tarafından elle sağlanır. Yanlış/eksik `--version`
+   sessizce yanlış bir sürüm altında baseline kaydeder; doğrulama yok.
+   *İlgili Dosya:* `evals/regression_gate_cli.py`
+4. **CI'da baseline güncellemesi manuel.** `--update-baseline` bayrağı
+   `evals/baselines/history.json`'a yeni bir kayıt ekler ama CI pipeline'ı bunu
+   **otomatik** çağırmaz — release sırasında operatörün elle koşturması
+   gerekir. Unutulursa baseline eskir ve gate giderek daha eski bir sürüme
+   karşı karşılaştırma yapar (yanlış-negatif değil ama giderek anlamsızlaşan
+   bir referans noktası).
+   *İlgili Dosya:* `evals/regression_gate_cli.py`, `.github/workflows/backend-ci.yml`
+5. **Case-düzeyi granülarite yok.** Karşılaştırma yalnızca case `id`+`passed`
+   düzeyinde çalışır (`results[].id`+`.passed`); bir case'in *hangi check'i*
+   (kolon/tablo/filtre/join/aggregation) regresyona uğradığı raporlanmaz —
+   yalnızca case bütünüyle geçti/geçmedi bilgisi var. Check-düzeyi karşılaştırma
+   (27.9'un `FeedbackCategory` ekseniyle benzer bir ayrım) kapsam dışı.
+   *İlgili Dosya:* `evals/regression_gate.py` (`compare_regression`)
