@@ -69,3 +69,17 @@ def test_truncation_keeps_most_recent():
 def test_empty_input():
     buckets, truncated = bucket_timeseries([], "day")
     assert buckets == () and truncated is False
+
+
+def test_bucket_timeseries_skips_non_datetime_created_at():
+    # None/string created_at -> _floor_iso'ya gitmeden atlanmali (§8.4b)
+    items = [
+        (None, _p("completed", 1)),
+        ("2026-08-01T00:00:00", _p("completed", 1)),
+        (_dt(2026, 8, 1, 9), _p("completed", 20)),   # gecerli datetime -> bucketlanir
+    ]
+    buckets, truncated = bucket_timeseries(items, "day")
+    assert truncated is False
+    assert len(buckets) == 1
+    assert buckets[0].bucket_start == "2026-08-01T00:00:00+00:00"
+    assert buckets[0].total == 1

@@ -45,12 +45,14 @@ def build_dashboard(*, trace_store,
 
     # feedback DB hatasi da YUTULMAZ.
     feedback_rows = list_feedback(created_after=created_after,
-                                  created_before=created_before, limit=scan_cap)
+                                  created_before=created_before, limit=scan_cap + 1)
+    feedback_truncated = len(feedback_rows) > scan_cap
+    feedback_rows = feedback_rows[:scan_cap]
 
     window_base = DashboardWindow(
         created_after=created_after, created_before=created_before, dialect=dialect,
         trace_count=len(trace_items), truncated=truncated, scan_cap=scan_cap,
-        bucket=bucket, timeseries_truncated=False)
+        bucket=bucket, timeseries_truncated=False, feedback_truncated=feedback_truncated)
 
     return compose_dashboard(
         trace_items=trace_items, feedback_rows=feedback_rows, window_base=window_base,

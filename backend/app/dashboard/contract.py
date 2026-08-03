@@ -25,6 +25,7 @@ class DashboardWindow:
     scan_cap: int
     bucket: str
     timeseries_truncated: bool = False
+    feedback_truncated: bool = False
 
     def to_payload(self) -> dict:
         return {
@@ -36,6 +37,7 @@ class DashboardWindow:
             "scan_cap": self.scan_cap,
             "bucket": self.bucket,
             "timeseries_truncated": self.timeseries_truncated,
+            "feedback_truncated": self.feedback_truncated,
         }
 
 
