@@ -279,7 +279,7 @@ gerçek debug-gated endpoint'leriyle. Durum için `ROADMAP.md`'deki tabloya bak�
   yalnızca **ÖNERİR**: insan `POST /api/rag/index/sql-history` ile ayrıca onaylar/
   indeksler; redaksiyon YOK (amaç ham SQL'i onaya sunmak). Bilinçli kapsam dışı:
   onay/persistence-state (idempotency yok), LLM/semantik genelleme + synonym türetme
-  (yalnız literal eşleşme), `scan_cap` üstü DB-side tam-populasyon, frontend UI. (PR TBD)
+  (yalnız literal eşleşme), `scan_cap` üstü DB-side tam-populasyon, frontend UI. (PR #147)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
