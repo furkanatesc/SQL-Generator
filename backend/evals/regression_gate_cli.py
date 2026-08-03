@@ -38,6 +38,10 @@ def _load_report(path: str) -> dict:
         raise ValueError("Invalid eval report schema")
     if not isinstance(report["results"], list):
         raise ValueError("Invalid eval report schema")
+    # Her results girdisi dict olup 'id' ve 'passed' alanlarina sahip olmali
+    for entry in report["results"]:
+        if not isinstance(entry, dict) or "id" not in entry or "passed" not in entry:
+            raise ValueError("Invalid eval report schema")
     return report
 
 

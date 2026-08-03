@@ -5,7 +5,7 @@ onceki surumun baseline'iyla kiyaslar: common = baseline∩current kesisimi uzer
 per-case (sifir-tolerans birincil) + aggregate (ikincil) regresyon. Drift bilgi
 amaclidir, kapiyi patlatmaz.
 """
-from typing import Any, Optional
+from typing import Optional
 
 DEFAULT_REGRESSION_POLICY = {"max_pass_rate_drop": 0.0}
 
