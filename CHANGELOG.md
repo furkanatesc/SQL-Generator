@@ -361,6 +361,37 @@ taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrat
   business-rule ve SQL-history indeksleme hatalarında gerçek mesaj sessizce
   düşüyor, kullanıcı hep hardcoded fallback görüyordu. Yeni
   `extractApiErrorMessage` helper'ı `{"error":{"message"}}` envelope'unu okuyor.
+- **Tech-Debt Cleanup** (Sprint 27.11 · Phase 8 sonrası bakım, faz ilerletmez):
+  `docs/TECH-DEBT.md`'de biriken 7 kalem çözüldü — davranış korunur, yalnız
+  test-bütünlüğü/invariant/sağlamlık iyileşir (contract snapshot değişmedi).
+  **§5.1** `errors`/`feedback` purity guard'ları (`backend/tests/errors/
+  test_errors_package_purity.py`, `backend/tests/feedback/
+  test_feedback_package_purity.py`) taze-alt-sürece (`subprocess`) taşındı —
+  aynı-süreçte ölçen guard'ların sızıntıyı `sys.modules` cache'i yüzünden
+  maskeleyebildiği 27.4 bulgusuyla aynı kök neden, `rule_suggestions` guard'ıyla
+  aynı desen. **§5.2** `backend/tests/test_api_surface.py`'deki `expected_routes`
+  artık elle bakımı yapılan bir literal değil, OpenAPI snapshot'ından türetiliyor
+  — yeni endpoint eklenince sessiz drift riski kapandı. **§3**
+  `backend/app/trace/end_to_end_trace_builders.py`'deki 5 stage builder'ı
+  (intent/retrieval/prompt/generation/validation) artık SKIPPED dalında da
+  kendilerine verilen ölçülen `duration_ms`'i taşıyor (SECURITY span'inde
+  zaten uygulanan precedent'le tutarlı). **§9.3**
+  `backend/app/llm_usage/compute.py`'de `model_id=None` olan generation artık
+  `models_missing_price`'a `"unknown"` olarak uzlaşıyor —
+  `unpriced_request_count` (request-seviyesi) ile `models_missing_price`
+  (model-seviyesi) arasındaki tutarsızlık kapandı. **§8.2**
+  `feedback_truncated` bayrağı eklendi (`backend/app/dashboard_service.py`,
+  `backend/app/dashboard/contract.py`) — feedback ekseni artık trace/timeseries
+  ile aynı "sessiz kesme yok" invariant'ını taşıyor. **§8.4(b)**
+  `backend/app/dashboard/compose.py::bucket_timeseries` non-datetime
+  `created_at`'i atlıyor (caller guard'ı eklendi). **§1**
+  `backend/app/retrieval/nvidia_embedding_provider.py`'deki `dimension`
+  parametresinin varsayılanı 1024→2048 olarak `rag_manager.py`'deki gerçek
+  vektör boyutuyla hizalandı; ayrıca stale `FEATURE.md`/RAG doküman notu
+  düzeltildi (bu dokümanlar zaten yok, `README` zaten koddaki değerlerle
+  uyumlu). Full suite 2410 passed/9 skipped. Diğer TECH-DEBT kalemleri (§2,
+  §4.3–4.9, §5.3/5.4, §6, §7, §8.1/8.3, §9.1/9.2, §10, §11) bilinçli olarak
+  AÇIK bırakıldı (sessiz düşürme yok). (PR TBD)
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
