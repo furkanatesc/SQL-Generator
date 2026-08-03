@@ -35,9 +35,11 @@ fingerprint'e dahil edildi.
 - Model: `nvidia/llama-nemotron-embed-1b-v2` — `backend/app/rag_manager.py:16`
 - Vektör boyutu: `2048` — `backend/app/rag_manager.py:123`
 
-> ⚠️ Not: `FEATURE.md` ve RAG dokümanlarında geçen `llama-3.2-nv-embedqa-1b-v2`
-> ve `nvidia/embeddings-nv-embed-qa-4 (1024)` referansları **eskidir**; koddaki
-> değer yukarıdaki gibidir. Bu dokümanlar güncellenmelidir.
+> ✅ Not (27.11): `FEATURE.md` ve özel bir RAG dokümanı **YOK** — güncellenmesi
+> gereken stale bir doküman bulunmuyor; `README` zaten koddaki değerlerle
+> uyumlu. `backend/app/retrieval/nvidia_embedding_provider.py`'deki `dimension`
+> parametresinin varsayılanı **1024 → 2048** olarak `rag_manager.py`'deki
+> gerçek vektör boyutuyla hizalandı. Bu kalem tamamen kapandı.
 
 **Gelecekte Yapılabilecek Geliştirmeler (Opsiyonel):**
 - Tablolar indekslenirken bütün kolonların tek satıra sıkıştırılması yerine
@@ -79,7 +81,13 @@ tek dosyalık script'tir (vitest kurulumu ayrı bir kalem).
 
 ---
 
-## 3. SKIPPED span'lerde `duration_ms` düşürülüyor (Sprint 27.1w) — AÇIK
+## 3. SKIPPED span'lerde `duration_ms` düşürülüyor (Sprint 27.1w) — ÇÖZÜLDÜ (27.11)
+
+> ✅ Çözüm (27.11): 5 builder'ın tamamı (intent/retrieval/prompt/generation/
+> validation) artık SKIPPED dalında da kendilerine verilen ölçülen
+> `duration_ms`'i taşıyor; aşağıdaki "Karar gerektiren nokta" seçenek (a)
+> yönünde çözüldü (SECURITY span'inde zaten uygulanan precedent'le tutarlı).
+> Testler: `backend/tests/trace/test_end_to_end_trace_builders.py`.
 
 **Sorun:**
 `build_intent_span` ve `build_retrieval_span`, `result is None` erken-dönüş
@@ -166,20 +174,22 @@ katmanında durdu. Kalanlar:
 
 ## §5. Sprint 27.4 (Query Replay System) devirleri — AÇIK
 
-1. **Purity guard'ları aynı süreçte ölçüyor (kardeş paketler).** 27.4'te
-   `app/replay/` guard'ı taze bir alt sürece (`subprocess`) taşındı, çünkü aynı
-   süreçte `sys.modules` cache'i sızıntıyı maskeliyordu: whole-branch review
-   `baseline_extraction.py`'ye kasten `app.trace` importu enjekte etti ve guard
-   **tam suite'te tamamen yeşil kaldı** (yalnız izole koşuda fail etti). Aynı
-   yapısal kusur `backend/tests/errors/test_errors_package_purity.py` ve
-   `backend/tests/feedback/test_feedback_package_purity.py` içinde **hâlâ var** —
-   o iki yaprak paketin saflığı bugün ölçülmüyor sayılır. Aynı subprocess desenine
-   taşınmaları gerekiyor.
-2. **`test_api_surface.py`'deki `expected_routes` seti OpenAPI snapshot'ından
-   türemiyor.** `backend/scripts/generate_contract_snapshots.py` onu senkron
-   tutmuyor; her yeni endpoint'te elle 1 satır ekleniyor (27.3 ve 27.4'te iki kez
-   yapıldı). Sessiz drift riski: set güncellenmezse yeni bir endpoint yüzey
-   testinden kaçar. Çözüm: seti snapshot'tan türet ya da regen script'e ekle.
+1. ~~**Purity guard'ları aynı süreçte ölçüyor (kardeş paketler).**~~ —
+   **ÇÖZÜLDÜ (27.11).** 27.4'te `app/replay/` guard'ı taze bir alt sürece
+   (`subprocess`) taşındı, çünkü aynı süreçte `sys.modules` cache'i sızıntıyı
+   maskeliyordu: whole-branch review `baseline_extraction.py`'ye kasten
+   `app.trace` importu enjekte etti ve guard **tam suite'te tamamen yeşil
+   kaldı** (yalnız izole koşuda fail etti). Aynı yapısal kusur
+   `backend/tests/errors/test_errors_package_purity.py` ve
+   `backend/tests/feedback/test_feedback_package_purity.py` içinde de vardı;
+   errors+feedback purity guard'ları taze-alt-sürece taşındı (27.11) — ikisi de
+   artık `subprocess` ile taze bir Python sürecinde koşuyor, `rule_suggestions`
+   guard'ıyla aynı desen.
+2. ~~**`test_api_surface.py`'deki `expected_routes` seti OpenAPI snapshot'ından
+   türemiyor.**~~ — **ÇÖZÜLDÜ (27.11).** `backend/scripts/generate_contract_snapshots.py`
+   onu senkron tutmuyordu; her yeni endpoint'te elle 1 satır ekleniyordu (27.3 ve
+   27.4'te iki kez yapıldı). `expected_routes` artık OpenAPI snapshot'ından
+   türetilir (27.11); tek kaynak snapshot — sessiz drift riski kapandı.
 3. **`live_trace_assembly` güvenlik span'ini STAGE adına göre kuruyor.** 27.4'te
    replay tarafı 27.2 registry kategorisine geçirildi (`ErrorCategory.SECURITY`), ama
    *emit* tarafı hâlâ stage-tabanlı: `sql_parse_error` (kategorisi `validation`,
@@ -256,13 +266,13 @@ bilinçli olarak ertelendi (sessiz düşürme yok).
    timestamp uyumlaştırması). Yaklaşık bir debug/gözlemlenebilirlik aracı için bloke değil.
    *İlgili Dosya:* `backend/app/dashboard_service.py:29-30,49-51`, `backend/app/database.py` (`list_feedback`)
 
-2. **`feedback` `scan_cap`'te (10000) sessizce kesilir; `feedback_truncated` bayrağı
-   YOK.** *(Review bulgusu #2 — Minor.)* Trace (`truncated`) ve timeseries
-   (`timeseries_truncated`) eksenlerinin aksine feedback için kesme sinyali yok; bir
-   pencere >10k feedback satırı içerirse `feedback.total` sessizce kapaklanır — "sessiz
-   kesme yok" invariant'ının feedback ekseni için yumuşak ihlali. Düşük olasılık; bayrak
-   ya da dokümante not gerekir.
-   *İlgili Dosya:* `backend/app/dashboard_service.py:49-51`
+2. ~~**`feedback` `scan_cap`'te (10000) sessizce kesilir; `feedback_truncated` bayrağı
+   YOK.**~~ — **ÇÖZÜLDÜ (27.11).** *(Review bulgusu #2 — Minor.)* Trace (`truncated`)
+   ve timeseries (`timeseries_truncated`) eksenlerinin aksine feedback için kesme
+   sinyali yoktu; bir pencere >10k feedback satırı içerirse `feedback.total` sessizce
+   kapaklanıyordu. `feedback_truncated` bayrağı eklendi (27.11) — "sessiz kesme yok"
+   invariant'ı artık feedback ekseninde de tutuluyor.
+   *İlgili Dosya:* `backend/app/dashboard_service.py`, `backend/app/dashboard/contract.py`
 
 3. **`scan_cap` üstü pencerelerde timeseries/metrics/top_errors tam popülasyon yerine
    çekilen alt küme üzerinden hesaplanır** (§7 ile aynı kök; dashboard 27.6'yı reuse
@@ -274,12 +284,14 @@ bilinçli olarak ertelendi (sessiz düşürme yok).
 4. **Küçük sağlamlık/semantik notları (Review #3–#5, hepsi Minor):** (a) debug kapalıyken
    geçersiz `bucket` 404 yerine 422 döner (param validation gate'ten önce çalışır →
    endpoint varlığını sızdırır; sibling `metrics_api` aynı in-handler desenini paylaşır
-   ama kısıtlı param'ı yok). (b) `_floor_iso` `created_at`'in datetime olduğunu varsayar
-   (`shape_recent`'teki `hasattr(...,"isoformat")` guard'ı yok) — string `created_at`
-   yalnız defensive dict-record dalından gelirse `AttributeError`; gerçek üretici string
-   döndürmez, tutarsızlık kozmetik. (c) bucket `error_count` (terminal-status bazlı) ≠
-   `metrics.errors` (span-kod bazlı) — ikisi de doğru ama toplamları farklı; sözleşme
-   dokümanına bir cümle notu değer.
+   ama kısıtlı param'ı yok) — AÇIK. (b) ~~`_floor_iso` `created_at`'in datetime olduğunu
+   varsayar (`shape_recent`'teki `hasattr(...,"isoformat")` guard'ı yok) — string
+   `created_at` yalnız defensive dict-record dalından gelirse `AttributeError`.~~ —
+   **ÇÖZÜLDÜ (27.11).** `bucket_timeseries` artık non-datetime `created_at`'i atlıyor
+   (caller guard'ı eklendi, `backend/app/llm_usage/compute.py::bucket_usage_timeseries`
+   ile aynı desen); tutarsızlık kozmetikti ama guard artık kod tarafında da açık. (c)
+   bucket `error_count` (terminal-status bazlı) ≠ `metrics.errors` (span-kod bazlı) —
+   ikisi de doğru ama toplamları farklı; sözleşme dokümanına bir cümle notu değer — AÇIK.
    *İlgili Dosya:* `backend/app/api/dashboard_api.py`, `backend/app/dashboard/compose.py`
 
 ---
@@ -304,16 +316,14 @@ düşürme yok).
    atlar (zero-fill yok); tüketici seyrek bucket'ları kendi doldurur. Bilinçli kapsam dışı.
    *İlgili Dosya:* `backend/app/llm_usage_service.py`, `backend/app/llm_usage/compute.py`
 
-3. **`model_id=None` olan generation üç yüzeyde tutarsız işlenir (Minor — review bulgusu).**
-   Bir GENERATION span `model_id=None` taşırsa (provider model adını vermezse): (a)
-   `totals.unpriced_request_count` onu sayar; (b) `pricing.models_missing_price` onu
-   **listelemez** (`seen_models` falsy `None`'ı düşürür — model-seviyesi, yalnız adlı);
-   (c) `by_model`'da `"unknown"` satırı olarak `estimated_cost=None` ile görünür. Yanlış
-   değil (fiyatlanacak model adı yok) ama `unpriced_request_count` (request-seviyesi) ile
-   `models_missing_price` (model-seviyesi) arasında uzlaşmayan küçük bir boşluk var. Düşük
-   olasılık (model-siz generation nadir); `by_model` yine ortaya koyar. Çözüm (ops.):
-   None-model olayı varken `models_missing_price`'a `"unknown"` eklemek ya da bu ayrımı
-   dokümante etmek.
+3. ~~**`model_id=None` olan generation üç yüzeyde tutarsız işlenir (Minor — review
+   bulgusu).**~~ — **ÇÖZÜLDÜ (27.11).** Bir GENERATION span `model_id=None` taşırsa
+   (provider model adını vermezse): (a) `totals.unpriced_request_count` onu sayar; (b)
+   eskiden `pricing.models_missing_price` onu **listelemiyordu** (`seen_models` falsy
+   `None`'ı düşürüyordu); (c) `by_model`'da `"unknown"` satırı olarak
+   `estimated_cost=None` ile görünüyor. null-model generation artık `models_missing_price`'a
+   `"unknown"` olarak uzlaşır (27.11) — `unpriced_request_count` (request-seviyesi) ile
+   `models_missing_price` (model-seviyesi) arasındaki boşluk kapandı.
    *İlgili Dosya:* `backend/app/llm_usage/compute.py` (`compute_llm_usage` — `unpriced`/`seen_models`)
 
 ---
