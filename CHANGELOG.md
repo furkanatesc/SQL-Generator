@@ -321,7 +321,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   (`dfs_visits`/`fuzzy_comparisons`), CI perf-gate kablolaması,
   NetworkX/`schema_graph` pruner benchmark'ı, embedding/RAG retrieval
   benchmark'ı (→ 28.8), frontend UI. **Bununla Phase 9 (Large Schema
-  Production Scale) başlar.** (PR #TBD)
+  Production Scale) başlar.** (PR #150)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
