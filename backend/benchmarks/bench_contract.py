@@ -4,7 +4,7 @@ Frozen records with JSON-stable to_dict. No I/O, no clock, no randomness.
 """
 from dataclasses import dataclass
 
-BENCHMARK_SCHEMA_VERSION = "large_schema_benchmark_v1"
+BENCHMARK_SCHEMA_VERSION = "large_schema_benchmark_v2"
 
 
 @dataclass(frozen=True)
