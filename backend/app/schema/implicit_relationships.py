@@ -25,7 +25,7 @@ def get_singular(t_name: str) -> str:
         return t[:-1]
     return t
 
-def detect_implicit_relationships(schema: dict | DatabaseSchema) -> list[RelationshipSchema]:
+def detect_implicit_relationships(schema: dict | DatabaseSchema, *, probe=None) -> list[RelationshipSchema]:
     """
     Detects implicit relationships heuristically while rejecting generic matches.
     """
@@ -72,6 +72,8 @@ def detect_implicit_relationships(schema: dict | DatabaseSchema) -> list[Relatio
         for tgt_table in tables:
             if src_table.name == tgt_table.name:
                 continue
+            if probe is not None:
+                probe.incr("pair_iteration")
 
             for src_col in src_table.columns:
                 src_col_lower = src_col.name.lower()
@@ -108,6 +110,8 @@ def detect_implicit_relationships(schema: dict | DatabaseSchema) -> list[Relatio
                     # Generic prefix check (e.g. if the prefix is 'status', we shouldn't match it fuzzily to 'statuses')
                     # We just use difflib to compare prefix with target singular name
                     tgt_singular = get_singular(tgt_table.name)
+                    if probe is not None:
+                        probe.incr("fuzzy_comparison")
                     ratio = difflib.SequenceMatcher(None, prefix, tgt_singular).ratio()
                     
                     if ratio >= 0.85:
@@ -129,6 +133,8 @@ def detect_implicit_relationships(schema: dict | DatabaseSchema) -> list[Relatio
 
                 # Rule 3: Exact column name match (only if not generic)
                 if not is_generic_column(src_col_lower):
+                    if probe is not None:
+                        probe.incr("rule3_scan")
                     for tgt_col in tgt_table.columns:
                         tgt_col_lower = tgt_col.name.lower()
                         if src_col_lower == tgt_col_lower:
