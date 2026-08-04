@@ -2,7 +2,7 @@
 
 Exit codes (27.10 convention): 0 clean, 1 deterministic-metric mismatch,
 2 bad-input / malformed baseline. --update-baseline appends to history.json.
-There is NO CI gate in 28.0 (deferred to 28.1); this CLI is run manually.
+A CI perf-gate runs `--gate --scales 100,500,1000` (Sprint 28.1); it can also be run manually.
 """
 import argparse
 import json
@@ -32,7 +32,7 @@ def _latest_baseline(history):
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Large Schema Benchmark Suite (Sprint 28.0)")
     parser.add_argument("--scales", type=str, default=None,
-                        help="comma-separated table counts, e.g. 100,500,1000,2000")
+                        help="comma-separated table counts, e.g. 100,500,1000")
     parser.add_argument("--seed", type=int, default=1729)
     parser.add_argument("--gate", action="store_true",
                         help="compare against latest baseline; exit 1 on drift")

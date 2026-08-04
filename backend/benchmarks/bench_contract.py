@@ -9,8 +9,8 @@ BENCHMARK_SCHEMA_VERSION = "large_schema_benchmark_v2"
 
 @dataclass(frozen=True)
 class BenchmarkMetric:
-    target: str          # "schema_validation" | "join_paths" | "implicit_fk" | "context_selection"
-    scale: int           # 100 | 500 | 1000 | 2000
+    target: str          # "schema_validation" | "join_paths" | "implicit_fk" | "context_selection" | "graph_backend"
+    scale: int           # 100 | 500 | 1000
     deterministic: dict  # {metric_name: int} — the ONLY gated data
     wall_ms: float       # informational only, never gated
 
