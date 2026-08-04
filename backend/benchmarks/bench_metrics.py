@@ -50,3 +50,14 @@ def derive_selection_metrics(results) -> dict:
         "join_paths_total": sum(len(s.join_paths) for s in results),
         "fallback_used_count": sum(1 for s in results if s.fallback_used),
     }
+
+
+def derive_graph_backend_metrics(graph_nodes: int, graph_edges: int, sp_results) -> dict:
+    with_path = [p for p in sp_results if p]
+    return {
+        "graph_nodes": graph_nodes,
+        "graph_edges": graph_edges,
+        "sp_pairs_evaluated": len(sp_results),
+        "sp_pairs_with_path": len(with_path),
+        "sp_total_path_len": sum(len(p) for p in with_path),
+    }
