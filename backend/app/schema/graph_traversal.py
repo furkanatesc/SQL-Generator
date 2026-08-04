@@ -49,6 +49,7 @@ def find_join_paths(
     max_depth: int = 3,
     max_paths: int = 5,
     allow_fuzzy: bool = False,
+    probe=None,
 ) -> list[JoinPathCandidate]:
     """
     Finds valid join paths between source_table and target_table using cycle-safe DFS.
@@ -70,6 +71,8 @@ def find_join_paths(
     all_paths = []
 
     def dfs(current_table: str, path_tables: list[str], path_edges: list[JoinPathEdge]):
+        if probe is not None:
+            probe.incr("dfs_visit")
         if current_table == target_table:
             # Calculate weakest-link scores
             min_priority = 1000
@@ -84,6 +87,8 @@ def find_join_paths(
                 if conf < min_conf:
                     min_conf = conf
 
+            if probe is not None:
+                probe.incr("path_recorded")
             all_paths.append(JoinPathCandidate(
                 tables=list(path_tables),
                 edges=list(path_edges),
@@ -97,6 +102,8 @@ def find_join_paths(
             return
             
         for rel in adjacency.get(current_table, []):
+            if probe is not None:
+                probe.incr("adjacency_edge")
             next_table = rel.target_table if rel.source_table == current_table else rel.source_table
             
             if next_table in path_tables:
