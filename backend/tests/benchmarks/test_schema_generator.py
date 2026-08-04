@@ -1,4 +1,8 @@
-from benchmarks.schema_generator import generate_schema
+from benchmarks.schema_generator import (
+    generate_schema,
+    generate_join_path_pairs,
+    generate_selection_questions,
+)
 from app.schema.schema_adapter import from_legacy_schema
 from app.schema.implicit_relationships import detect_implicit_relationships
 from app.schema.schema_contract import RelationshipType
@@ -35,3 +39,22 @@ def test_table_names_unique_at_scale():
     legacy = generate_schema(table_count=200, seed=3)
     names = list(legacy["tables"].keys())
     assert len(names) == len(set(names)) == 200
+
+
+def test_join_path_pairs_deterministic_and_distinct():
+    names = [f"t{i}s" for i in range(50)]
+    a = generate_join_path_pairs(names, seed=7, count=20)
+    b = generate_join_path_pairs(names, seed=7, count=20)
+    assert a == b
+    assert all(src != tgt for src, tgt in a)
+    assert all(src in names and tgt in names for src, tgt in a)
+
+
+def test_selection_questions_deterministic_and_reference_tables():
+    names = ["customers", "orders", "products"]
+    a = generate_selection_questions(names, seed=7, count=10)
+    b = generate_selection_questions(names, seed=7, count=10)
+    assert a == b
+    assert len(a) == 10
+    # every question mentions at least one real table name
+    assert all(any(n in q for n in names) for q in a)
