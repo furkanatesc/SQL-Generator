@@ -1,0 +1,205 @@
+[
+  {
+    "schema_version": "large_schema_benchmark_v1",
+    "generator_params": {
+      "dialect": "postgres",
+      "scales": [
+        100,
+        500,
+        1000,
+        2000
+      ],
+      "seed": 1729
+    },
+    "metrics": [
+      {
+        "target": "schema_validation",
+        "scale": 100,
+        "deterministic": {
+          "columns_total": 493,
+          "relationships_validated": 51,
+          "tables": 100,
+          "valid": 1
+        },
+        "wall_ms": 2.306999871507287
+      },
+      {
+        "target": "join_paths",
+        "scale": 100,
+        "deterministic": {
+          "adjacency_edges": 51,
+          "pairs_evaluated": 20,
+          "pairs_with_path": 2,
+          "path_edges_total": 3,
+          "paths_found_total": 2
+        },
+        "wall_ms": 0.7792001124471426
+      },
+      {
+        "target": "implicit_fk",
+        "scale": 100,
+        "deterministic": {
+          "implicit_rels_found": 477,
+          "other": 0,
+          "rule1_singular_id": 42,
+          "rule2_fuzzy": 0,
+          "rule3_exact": 435
+        },
+        "wall_ms": 18.17309996113181
+      },
+      {
+        "target": "context_selection",
+        "scale": 100,
+        "deterministic": {
+          "fallback_used_count": 0,
+          "focus_tables_total": 67,
+          "join_paths_total": 29,
+          "questions_evaluated": 20,
+          "selected_tables_total": 67
+        },
+        "wall_ms": 13.88720003888011
+      },
+      {
+        "target": "schema_validation",
+        "scale": 500,
+        "deterministic": {
+          "columns_total": 2508,
+          "relationships_validated": 271,
+          "tables": 500,
+          "valid": 1
+        },
+        "wall_ms": 9.59889986552298
+      },
+      {
+        "target": "join_paths",
+        "scale": 500,
+        "deterministic": {
+          "adjacency_edges": 271,
+          "pairs_evaluated": 20,
+          "pairs_with_path": 2,
+          "path_edges_total": 4,
+          "paths_found_total": 2
+        },
+        "wall_ms": 3.4899001475423574
+      },
+      {
+        "target": "implicit_fk",
+        "scale": 500,
+        "deterministic": {
+          "implicit_rels_found": 12456,
+          "other": 0,
+          "rule1_singular_id": 237,
+          "rule2_fuzzy": 0,
+          "rule3_exact": 12219
+        },
+        "wall_ms": 531.2594999559224
+      },
+      {
+        "target": "context_selection",
+        "scale": 500,
+        "deterministic": {
+          "fallback_used_count": 0,
+          "focus_tables_total": 59,
+          "join_paths_total": 25,
+          "questions_evaluated": 20,
+          "selected_tables_total": 59
+        },
+        "wall_ms": 72.03630008734763
+      },
+      {
+        "target": "schema_validation",
+        "scale": 1000,
+        "deterministic": {
+          "columns_total": 5050,
+          "relationships_validated": 565,
+          "tables": 1000,
+          "valid": 1
+        },
+        "wall_ms": 21.48739993572235
+      },
+      {
+        "target": "join_paths",
+        "scale": 1000,
+        "deterministic": {
+          "adjacency_edges": 565,
+          "pairs_evaluated": 20,
+          "pairs_with_path": 2,
+          "path_edges_total": 4,
+          "paths_found_total": 2
+        },
+        "wall_ms": 11.459700064733624
+      },
+      {
+        "target": "implicit_fk",
+        "scale": 1000,
+        "deterministic": {
+          "implicit_rels_found": 53644,
+          "other": 0,
+          "rule1_singular_id": 485,
+          "rule2_fuzzy": 0,
+          "rule3_exact": 53159
+        },
+        "wall_ms": 2217.845099978149
+      },
+      {
+        "target": "context_selection",
+        "scale": 1000,
+        "deterministic": {
+          "fallback_used_count": 0,
+          "focus_tables_total": 63,
+          "join_paths_total": 27,
+          "questions_evaluated": 20,
+          "selected_tables_total": 63
+        },
+        "wall_ms": 145.2222999650985
+      },
+      {
+        "target": "schema_validation",
+        "scale": 2000,
+        "deterministic": {
+          "columns_total": 10171,
+          "relationships_validated": 1175,
+          "tables": 2000,
+          "valid": 1
+        },
+        "wall_ms": 76.9336000084877
+      },
+      {
+        "target": "join_paths",
+        "scale": 2000,
+        "deterministic": {
+          "adjacency_edges": 1175,
+          "pairs_evaluated": 20,
+          "pairs_with_path": 0,
+          "path_edges_total": 0,
+          "paths_found_total": 0
+        },
+        "wall_ms": 21.904499968513846
+      },
+      {
+        "target": "implicit_fk",
+        "scale": 2000,
+        "deterministic": {
+          "implicit_rels_found": 231019,
+          "other": 0,
+          "rule1_singular_id": 996,
+          "rule2_fuzzy": 0,
+          "rule3_exact": 230023
+        },
+        "wall_ms": 9727.216199971735
+      },
+      {
+        "target": "context_selection",
+        "scale": 2000,
+        "deterministic": {
+          "fallback_used_count": 0,
+          "focus_tables_total": 61,
+          "join_paths_total": 31,
+          "questions_evaluated": 20,
+          "selected_tables_total": 61
+        },
+        "wall_ms": 272.0987000502646
+      }
+    ]
+  }
+]
