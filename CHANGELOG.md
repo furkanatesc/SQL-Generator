@@ -322,6 +322,29 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   NetworkX/`schema_graph` pruner benchmark'ı, embedding/RAG retrieval
   benchmark'ı (→ 28.8), frontend UI. **Bununla Phase 9 (Large Schema
   Production Scale) başlar.** (PR #150)
+- **Schema Graph Performance Profiling** (Sprint 28.1): opsiyonel sıfır-ek-yük
+  `ProfileProbe` (`backend/app/schema/profiling.py`) üç prodüksiyon seam'ine
+  (`find_join_paths`, `detect_implicit_relationships`, `select_schema_context`)
+  iplendi — davranış korunur, `probe=None` byte-for-byte aynı çıktı üretir,
+  mevcut `tests/schema` yeşil kalır (`+N/-0`). Benchmark v2: determinist iç
+  patlama sayaçları (`dfs_visit`, `adjacency_edge`, `path_recorded`,
+  `pair_iteration`, `fuzzy_comparison`, `rule3_scan`, `table_scan`,
+  `column_scan`, `related_expansion`) her hedefin determinist metriklerine
+  birleşir. Şema üreteci near-miss kolonlar kazandı (Rule-2 fuzzy artık
+  egzersiz ediliyor). Yeni **5. hedef** `graph_backend`:
+  `NetworkXGraphBackend`'i (build + pagerank + shortest_path)
+  `to_legacy_dict` reuse'iyle egzersiz eder — çıktı-türevli tam-sayı
+  metrikler (`graph_nodes`/`graph_edges`/`sp_*`) + `wall_ms`; pagerank float
+  **ASLA gate'lenmez**. Baseline `large_schema_benchmark_v2`'ye yükseldi
+  (gate'lenen ölçekler 100/500/1000; 2000 manuel referans). Yeni CI
+  perf-gate adımı (`backend-ci.yml`: `bench_cli --gate --scales
+  100,500,1000`). **Prodüksiyon davranış değişikliği YOK** (probe
+  opsiyonel/guard'lı). **TECH-DEBT §12 ÇÖZÜLDÜ:** iç patlama sayaçları, CI
+  perf-gate kablolaması, NetworkX/graph-backend benchmark'ı. **Açık
+  kalanlar:** embedding/RAG retrieval benchmark'ı (→ 28.8), `GraphPruner`
+  candidate/policy derin entegrasyonu + pruner iç probe'u, `scipy`
+  eksikliği (pagerank `{}`'e düşer, gate etkilenmez), `bench_contract.py`/
+  `bench_cli.py` docstring/help kozmetik doc-sync borcu. (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
