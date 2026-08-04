@@ -69,3 +69,15 @@ def test_selection_metrics():
     d = m.derive_selection_metrics(results)
     assert d == {"questions_evaluated": 2, "focus_tables_total": 1,
                  "selected_tables_total": 3, "join_paths_total": 1, "fallback_used_count": 1}
+
+
+def test_graph_backend_metrics():
+    sp_results = [["a", "b", "c"], [], ["a", "b"]]
+    d = m.derive_graph_backend_metrics(graph_nodes=10, graph_edges=12, sp_results=sp_results)
+    assert d == {"graph_nodes": 10, "graph_edges": 12, "sp_pairs_evaluated": 3,
+                 "sp_pairs_with_path": 2, "sp_total_path_len": 5}
+
+
+def test_schema_version_is_v2():
+    from benchmarks.bench_contract import BENCHMARK_SCHEMA_VERSION
+    assert BENCHMARK_SCHEMA_VERSION == "large_schema_benchmark_v2"
