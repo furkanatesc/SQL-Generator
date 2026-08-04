@@ -84,6 +84,10 @@ jobs:
         run: |
           python -m evals.regression_gate_cli /tmp/golden_eval_report.json
 
+      - name: Schema benchmark perf gate (deterministic counters)
+        run: |
+          python -m benchmarks.bench_cli --gate --scales 100,500,1000
+
       - name: Build backend Docker image
         run: |
           docker build -t sqlgen-backend:test .
