@@ -301,6 +301,27 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   otomatik güncellenmesi (`--update-baseline` release'te elle çağrılmalı),
   frontend UI. **Bununla Phase 8 (Observability & Debuggability) kapanır.**
   (PR #148)
+- **Large Schema Benchmark Suite** (Sprint 28.0 · Phase 9 başlangıcı): yeni
+  `backend/benchmarks/` paketi (dev/CI aracı, `evals/`'in kardeşi) — hiçbir
+  `app/` dosyası değişmedi, davranış korunur. Saf çekirdek: seeded sentetik
+  şema üreteci (`schema_generator.py`, `random.Random(seed)` ile
+  100/500/1000/2000 tablo ölçekleri), frozen metrik sözleşmesi
+  (`bench_contract.py`), 4 REUSED prodüksiyon hedefi için girdi/çıktı-türevli
+  determinist metrik çıkarıcılar (`bench_metrics.py`: `from_legacy_schema`
+  validator, `find_join_paths`, `detect_implicit_relationships`,
+  `select_schema_context`) ve 27.10 desenini izleyen `compare_benchmark`
+  (`bench_compare.py`). Kirli kenar: `bench_runner.py` (enjekte edilen clock
+  ile ölçer; `wall_ms` yalnızca **bilgi amaçlı**, asla gate'lenmez) +
+  `bench_cli.py` (`--gate`/`--update-baseline`, exit `0`/`1`/`2`). Seeded
+  committed baseline `baselines/history.json` (1 kayıt, 4 hedef × 4 ölçek = 16
+  metrik). Yeni source-scan purity guard testi
+  (`backend/tests/benchmarks/test_benchmarks_purity.py`) dört saf modülün
+  clock/datetime/unseeded-random içermediğini kilitler. **Bilinçli kapsam
+  dışı (→ 28.1+, `docs/TECH-DEBT.md` §12):** iç patlama sayaçları
+  (`dfs_visits`/`fuzzy_comparisons`), CI perf-gate kablolaması,
+  NetworkX/`schema_graph` pruner benchmark'ı, embedding/RAG retrieval
+  benchmark'ı (→ 28.8), frontend UI. **Bununla Phase 9 (Large Schema
+  Production Scale) başlar.** (PR #150)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
