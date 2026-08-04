@@ -58,3 +58,11 @@ def test_selection_questions_deterministic_and_reference_tables():
     assert len(a) == 10
     # every question mentions at least one real table name
     assert all(any(n in q for n in names) for q in a)
+
+
+def test_generator_yields_rule2_fuzzy_matches():
+    legacy = generate_schema(table_count=60, seed=7)
+    schema = from_legacy_schema(legacy, "postgres")
+    rels = detect_implicit_relationships(schema)
+    fuzzy = [r for r in rels if r.raw.get("rule") == "fuzzy_prefix_match"]
+    assert len(fuzzy) > 0

@@ -61,6 +61,14 @@ def generate_schema(
                 col_name = f"{stems[parent_idx]}_id"
                 if all(c["name"] != col_name for c in cols):
                     cols.append({"name": col_name, "type": "integer"})
+            # (c) near-miss column: prefix is NOT a real table singular but fuzzy-matches
+            # a hub's singular (ratio >= 0.85) -> triggers production Rule-2 fuzzy detection.
+            if i >= hub_count and i % 7 == 0:
+                base = stems[i % hub_count]
+                near = base[0] + base            # doubled first char, e.g. customer -> ccustomer
+                col_name = f"{near}_id"
+                if all(c["name"] != col_name for c in cols):
+                    cols.append({"name": col_name, "type": "integer"})
         tables[name] = {"columns": cols, "foreign_keys": fks}
 
     return {"tables": tables}
