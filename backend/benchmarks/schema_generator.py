@@ -64,3 +64,35 @@ def generate_schema(
         tables[name] = {"columns": cols, "foreign_keys": fks}
 
     return {"tables": tables}
+
+
+_QUESTION_TEMPLATES = [
+    "show all {a} with their {b}",
+    "list {a} grouped by {b}",
+    "count {a} for each {b}",
+    "find {a} related to {b}",
+]
+
+
+def generate_join_path_pairs(table_names, *, seed, count=20):
+    rng = random.Random(seed + 1)
+    n = len(table_names)
+    pairs = []
+    while len(pairs) < count and n > 1:
+        s = table_names[rng.randrange(n)]
+        t = table_names[rng.randrange(n)]
+        if s != t:
+            pairs.append((s, t))
+    return pairs
+
+
+def generate_selection_questions(table_names, *, seed, count=20):
+    rng = random.Random(seed + 2)
+    n = len(table_names)
+    questions = []
+    for _ in range(count):
+        a = table_names[rng.randrange(n)]
+        b = table_names[rng.randrange(n)]
+        tmpl = _QUESTION_TEMPLATES[rng.randrange(len(_QUESTION_TEMPLATES))]
+        questions.append(tmpl.format(a=a, b=b))
+    return questions
