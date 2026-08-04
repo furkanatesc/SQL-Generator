@@ -405,3 +405,41 @@ bilinçli ertelendi (sessiz düşürme yok).
    yalnızca case bütünüyle geçti/geçmedi bilgisi var. Check-düzeyi karşılaştırma
    (27.9'un `FeedbackCategory` ekseniyle benzer bir ayrım) kapsam dışı.
    *İlgili Dosya:* `evals/regression_gate.py` (`compare_regression`)
+
+## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — AÇIK
+
+`backend/benchmarks/` yeni bir dev/CI aracıdır (`evals/`'in kardeşi); hiçbir
+`app/` dosyası değişmedi, davranış korunur. Aşağıdakiler **bilinçli olarak**
+28.1+'a ertelendi (sessiz düşürme yok).
+
+1. **İç patlama sayaçları yok.** Ölçülen 4 REUSED hedef (`from_legacy_schema`,
+   `find_join_paths`, `detect_implicit_relationships`,
+   `select_schema_context`) yalnızca **girdi/çıktı-türevli** determinist
+   metrikler üretir (`paths_found_total`, `implicit_rels_found`,
+   `selected_tables_total`, `tables`). Algoritmanın *iç* patlama davranışını
+   gösteren sayaçlar — `find_join_paths`'in DFS ziyaret sayısı
+   (`dfs_visits`), `detect_implicit_relationships`'in fuzzy-match karşılaştırma
+   sayısı (`fuzzy_comparisons`) — **ölçülmüyor**, çünkü bunlar production hot
+   path'lerine (`app/schema_graph/`, `app/schema/implicit_relationships.py`)
+   enstrümantasyon eklemeyi gerektirir ve bu sprintin "hiçbir `app/` dosyası
+   değişmedi" invariant'ını ihlal ederdi. 2000-tablo ölçeğinde join-path/fuzzy-
+   match patlamasının *neden* olduğu (yalnız *ne kadar* çıktı ürettiği değil)
+   28.1/28.2'nin (Schema Graph Performance Profiling / Join Path Explosion
+   Control) kapsamı.
+   *İlgili Dosya:* `backend/benchmarks/bench_metrics.py`
+2. **CI perf-gate kablolaması yok.** `bench_cli.py --gate` yerel/manuel
+   çalışır ve exit `0`/`1`/`2` döner ama `.github/workflows/backend-ci.yml`'e
+   henüz bağlanmadı — 27.10'un regresyon-gate'i CI'da otomatik çalışırken,
+   28.0'ın benchmark gate'i şimdilik yalnızca elle/lokal bir araç.
+   *İlgili Dosya:* `backend/benchmarks/bench_cli.py`, `.github/workflows/backend-ci.yml`
+3. **NetworkX/`schema_graph` pruner benchmark'ı yok.** Ölçülen 4 hedef
+   `find_join_paths`/`detect_implicit_relationships`/`select_schema_context`/
+   `from_legacy_schema`'dır; `app/schema_graph/`'daki graph pruning/hub
+   detection katmanı (27.1 öncesi #134 fix'inin kökeni) ayrı bir benchmark
+   hedefi olarak henüz kapsanmıyor.
+   *İlgili Dosya:* `backend/benchmarks/bench_metrics.py`, `backend/app/schema_graph/`
+4. **Embedding/RAG retrieval benchmark'ı yok.** Büyük şemalarda embedding
+   pipeline'ının (top-k retrieval, context ranking) ölçeklenebilirliği bu
+   sprintin kapsamı dışında — Sprint 28.8 (Embedding / RAG Re-Index Pipeline)
+   için ayrılmış.
+   *İlgili Dosya:* `backend/app/retrieval/`
