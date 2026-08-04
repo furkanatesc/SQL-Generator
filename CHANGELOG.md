@@ -344,7 +344,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   kalanlar:** embedding/RAG retrieval benchmark'ı (→ 28.8), `GraphPruner`
   candidate/policy derin entegrasyonu + pruner iç probe'u, `scipy`
   eksikliği (pagerank `{}`'e düşer, gate etkilenmez), `bench_contract.py`/
-  `bench_cli.py` docstring/help kozmetik doc-sync borcu. (PR #TBD)
+  `bench_cli.py` docstring/help kozmetik doc-sync borcu. (PR #151)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
