@@ -47,6 +47,17 @@ def test_implicit_fk_metrics_buckets_by_rule():
                  "rule2_fuzzy": 1, "rule3_exact": 1, "other": 0}
 
 
+def test_implicit_fk_metrics_other_bucket_and_missing_raw():
+    def _rel_with_raw(raw):
+        return RelationshipSchema(source_table="a", source_column="x", target_table="b",
+                                  target_column="id", relationship_type=RelationshipType.IMPLICIT,
+                                  raw=raw)
+    rels = [_rel_with_raw({"rule": "some_unknown_rule"}), _rel_with_raw({})]
+    d = m.derive_implicit_fk_metrics(rels)
+    assert d == {"implicit_rels_found": 2, "rule1_singular_id": 0,
+                 "rule2_fuzzy": 0, "rule3_exact": 0, "other": 2}
+
+
 def test_selection_metrics():
     class _Sel:
         def __init__(self, focus, sel, jp, fb):
