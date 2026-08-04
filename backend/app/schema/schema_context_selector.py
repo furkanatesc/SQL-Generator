@@ -38,6 +38,7 @@ def select_schema_context(
     max_tables: int = 8,
     max_join_paths: int = 5,
     include_related_tables: bool = True,
+    probe=None,
 ) -> SchemaContextSelection:
     """
     Deterministically selects and scores relevant tables from the database schema based on the question.
@@ -56,6 +57,8 @@ def select_schema_context(
         table_reasons[table_name].append(reason)
         
     for table in schema.tables:
+        if probe is not None:
+            probe.incr("table_scan")
         table_tokens = _tokenize(table.name)
         table_singular_tokens = {_singularize(t) for t in table_tokens}
         
@@ -75,6 +78,8 @@ def select_schema_context(
         has_exact_col = False
         has_overlap_col = False
         for col in table.columns:
+            if probe is not None:
+                probe.incr("column_scan")
             if col.name.lower() in question.lower():
                 has_exact_col = True
             else:
@@ -92,6 +97,8 @@ def select_schema_context(
         base_selected = [t for t in table_scores.keys() if table_scores[t] > 0]
         for t_name in base_selected:
             for rel in schema.relationships:
+                if probe is not None:
+                    probe.incr("related_expansion")
                 if rel.source_table == t_name or rel.target_table == t_name:
                     neighbor = rel.target_table if rel.source_table == t_name else rel.source_table
                     
