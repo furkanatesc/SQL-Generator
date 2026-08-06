@@ -2,6 +2,7 @@ import json
 import os
 from app.schema.schema_adapter import from_legacy_schema
 from app.schema.schema_context_selector import select_schema_context
+from app.schema.table_selection_cost import TableSelectionCostModel, DEFAULT_COST_MODEL
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures", "schema")
 
@@ -104,3 +105,77 @@ def test_selection_not_truncated_by_default():
                                      "referenced_column": "id", "type": "explicit"}]}}}, "postgres")
     sel = select_schema_context(schema, "orders users")
     assert sel.join_search_truncated is False
+
+
+# --- Sprint 28.3: benefit-density budget selection ---
+
+def _two_table_schema():
+    legacy = {"tables": {
+        "orders": {"columns": [{"name": "id", "primary_key": True}, {"name": "customer_id"}],
+                   "foreign_keys": [{"column": "customer_id", "referenced_table": "customers",
+                                     "referenced_column": "id", "type": "explicit"}]},
+        "customers": {"columns": [{"name": "id", "primary_key": True}, {"name": "name"}],
+                      "foreign_keys": []},
+    }}
+    return from_legacy_schema(legacy, "postgres")
+
+def test_selected_tables_carry_cost_and_selection_reports_total():
+    schema = _two_table_schema()
+    sel = select_schema_context(schema, "orders customers")
+    assert all(st.cost > 0 for st in sel.selected_tables)
+    assert sel.total_cost == sum(st.cost for st in sel.selected_tables)
+    assert sel.cost_budget == DEFAULT_COST_MODEL.cost_budget
+    assert sel.budget_exhausted is False  # tiny schema fits the default budget
+
+def _tight_budget_schema():
+    # NOTE: the brief's original scenario used "orders customers" against a
+    # two-table schema where BOTH tables are exact-table-matches, so both get
+    # force-included regardless of budget (budget_exhausted would stay False
+    # incorrectly). To genuinely exercise budget binding we need two
+    # NON-exact-match (here: singular/plural token) candidates with DIFFERENT
+    # costs, so the tight budget can afford the cheaper/denser one but not
+    # both.
+    #
+    # "order_items" tokenizes to {"order", "items"} -> singularized
+    # {"order", "item"}; "invoice_items" tokenizes to {"invoice", "items"} ->
+    # singularized {"invoice", "item"}. Question "items" singularizes to
+    # {"item"}, which intersects both tables' singular token sets, so BOTH
+    # score via singular_plural_table_match (60.0 each) -- NEITHER is an
+    # exact_table_match (the literal string "order_items"/"invoice_items"
+    # is not a substring of "items"), so neither is force-included.
+    #
+    # Costs (w_base=1.0, w_col=1.0, w_fk=0.0 in DEFAULT_COST_MODEL):
+    #   order_items:   1 + 3 columns (id, order_id, qty) = 4.0
+    #   invoice_items: 1 + 2 columns (id, invoice_id)     = 3.0
+    # Benefit is tied (60.0 each), so density favors invoice_items
+    # (60/3=20.0) over order_items (60/4=15.0).
+    legacy = {"tables": {
+        "order_items": {"columns": [{"name": "id", "primary_key": True},
+                                     {"name": "order_id"}, {"name": "qty"}],
+                         "foreign_keys": []},
+        "invoice_items": {"columns": [{"name": "id", "primary_key": True},
+                                       {"name": "invoice_id"}],
+                           "foreign_keys": []},
+    }}
+    return from_legacy_schema(legacy, "postgres")
+
+def test_tight_budget_prefers_small_relevant_table_and_flags_exhaustion():
+    # invoice_items (cost 3.0, density 20.0) and order_items (cost 4.0,
+    # density 15.0) tie on benefit (60.0, singular/plural match on "items")
+    # but neither is an exact match, so neither is force-included. A budget
+    # of 3.5 can afford only the denser/cheaper invoice_items.
+    schema = _tight_budget_schema()
+    model = TableSelectionCostModel(cost_budget=3.5)
+    sel = select_schema_context(schema, "items", cost_model=model)
+    assert [st.table_name for st in sel.selected_tables] == ["invoice_items"]
+    assert sel.total_cost == 3.0
+    assert sel.total_cost <= 3.5
+    assert sel.budget_exhausted is True
+
+def test_exact_match_focus_always_included_even_if_expensive():
+    schema = _two_table_schema()
+    # budget below any single table cost; exact-match focus must still appear
+    model = TableSelectionCostModel(cost_budget=0.0)
+    sel = select_schema_context(schema, "orders")  # 'orders' is an exact table match
+    # 'orders' forced in despite zero budget
+    assert "orders" in [st.table_name for st in sel.selected_tables]
