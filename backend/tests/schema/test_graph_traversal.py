@@ -82,3 +82,10 @@ def test_join_path_respects_max_depth():
     assert [p.tables for p in paths_deep] == [
         ["a", "b", "c", "d", "e"]
     ]
+
+def test_unreachable_target_returns_empty_without_visits():
+    schema = load_fixture("graph_traversal_fuzzy_schema.json")
+    # employees -> departments has only a fuzzy edge, excluded by default -> unreachable
+    result = find_join_paths(schema, "employees", "departments")
+    assert result.paths == []
+    assert result.node_visits == 0  # BFS early-exit, no DFS performed
