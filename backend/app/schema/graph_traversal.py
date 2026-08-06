@@ -88,6 +88,8 @@ def find_join_paths(
     Prioritizes explicit paths over implicit using a weakest-link scoring logic.
     """
 
+    # Non-positive max_paths yields no paths (also guards kept[-1] below). Intentionally
+    # returns [] for negative values rather than the old all_paths[:max_paths] slice.
     if max_paths <= 0:
         return JoinPathSearchResult(
             paths=[], budget_truncated=False, node_visits=0,
