@@ -3,6 +3,9 @@
 Exit codes (27.10 convention): 0 clean, 1 deterministic-metric mismatch,
 2 bad-input / malformed baseline. --update-baseline appends to history.json.
 A CI perf-gate runs `--gate --scales 100,500,1000` (Sprint 28.1); it can also be run manually.
+Sprint 28.2 regenerated the committed baseline as a single large_schema_benchmark_v3
+entry (join-path branch-and-bound pruning lowers dfs_visit/adjacency_edge and adds
+branches_pruned).
 """
 import argparse
 import json
