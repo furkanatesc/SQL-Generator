@@ -1,7 +1,7 @@
 import re
 from pydantic import BaseModel
 from app.schema.schema_contract import DatabaseSchema, RelationshipType, TableSchema
-from app.schema.graph_traversal import JoinPathCandidate, find_join_paths
+from app.schema.graph_traversal import JoinPathCandidate, find_join_paths, DEFAULT_JOIN_PATH_NODE_BUDGET
 
 class SelectedTable(BaseModel):
     table_name: str
@@ -16,6 +16,7 @@ class SchemaContextSelection(BaseModel):
     fallback_strategy: str | None = None
     fallback_limit: int | None = None
     max_fallback_tables: int | None = None
+    join_search_truncated: bool = False
 
 def _tokenize(text: str) -> set[str]:
     """Simple tokenizer that splits by non-alphanumeric characters and lowercases."""
@@ -38,6 +39,7 @@ def select_schema_context(
     max_tables: int = 8,
     max_join_paths: int = 5,
     include_related_tables: bool = True,
+    node_budget: int = DEFAULT_JOIN_PATH_NODE_BUDGET,
     probe=None,
 ) -> SchemaContextSelection:
     """
@@ -136,20 +138,23 @@ def select_schema_context(
     
     # Discover Join Paths among top tables
     join_paths = []
+    join_search_truncated = False
     top_tables = focus_tables[:5] # Limit combinations to top 5
     for i in range(len(top_tables)):
         for j in range(i + 1, len(top_tables)):
             source = top_tables[i]
             target = top_tables[j]
-            paths = find_join_paths(
+            search = find_join_paths(
                 schema,
                 source,
                 target,
                 max_depth=3,
                 max_paths=1,
                 allow_fuzzy=False,
-            ).paths
-            join_paths.extend(paths)
+                node_budget=node_budget,
+            )
+            join_paths.extend(search.paths)
+            join_search_truncated = join_search_truncated or search.budget_truncated
             
     # Remove duplicates and limit
     unique_paths = []
@@ -169,5 +174,6 @@ def select_schema_context(
         fallback_used=fallback_used,
         fallback_strategy=fallback_strategy,
         fallback_limit=fallback_limit,
-        max_fallback_tables=max_fallback_tables
+        max_fallback_tables=max_fallback_tables,
+        join_search_truncated=join_search_truncated,
     )

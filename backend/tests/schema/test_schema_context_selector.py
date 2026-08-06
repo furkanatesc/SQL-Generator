@@ -64,7 +64,43 @@ def test_schema_context_respects_max_tables():
 
 def test_schema_context_returns_join_paths_for_selected_tables():
     schema = load_fixture("context_selection_relationship_schema.json")
-    
+
     selection = select_schema_context(schema, "show orders by user")
-    
+
     assert any(set(path.tables) == {"orders", "users"} for path in selection.join_paths)
+
+def test_selection_propagates_budget_truncation():
+    # A single-hub star schema does NOT force truncation here: the selector's
+    # find_join_paths call uses a fixed max_depth=3, and BFS hop-distance pruning
+    # cuts off all non-productive star branches before they are ever visited
+    # (verified empirically), so no amount of hub fan-out trips the budget.
+    # A many-to-many junction/bipartite pattern (two anchor tables joined
+    # through many link tables, each equally a shortest path) defeats that
+    # pruning because every link table sits on a genuine shortest path and
+    # must be visited, which is exactly the "join path explosion" this
+    # sprint targets.
+    tables = {
+        "left": {"columns": [{"name": "id", "primary_key": True}], "foreign_keys": []},
+        "right": {"columns": [{"name": "id", "primary_key": True}], "foreign_keys": []},
+    }
+    for i in range(20):
+        tables[f"link{i}"] = {
+            "columns": [{"name": "id", "primary_key": True}, {"name": "left_id"}, {"name": "right_id"}],
+            "foreign_keys": [
+                {"column": "left_id", "referenced_table": "left",
+                 "referenced_column": "id", "type": "explicit"},
+                {"column": "right_id", "referenced_table": "right",
+                 "referenced_column": "id", "type": "explicit"},
+            ]}
+    schema = from_legacy_schema({"tables": tables}, "postgres")
+    sel = select_schema_context(schema, "left right", node_budget=15)
+    assert sel.join_search_truncated is True
+
+def test_selection_not_truncated_by_default():
+    schema = from_legacy_schema({"tables": {
+        "users": {"columns": [{"name": "id", "primary_key": True}], "foreign_keys": []},
+        "orders": {"columns": [{"name": "id", "primary_key": True}, {"name": "user_id"}],
+                   "foreign_keys": [{"column": "user_id", "referenced_table": "users",
+                                     "referenced_column": "id", "type": "explicit"}]}}}, "postgres")
+    sel = select_schema_context(schema, "orders users")
+    assert sel.join_search_truncated is False
