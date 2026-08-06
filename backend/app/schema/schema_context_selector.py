@@ -147,8 +147,8 @@ def select_schema_context(
                 target,
                 max_depth=3,
                 max_paths=1,
-                allow_fuzzy=False
-            )
+                allow_fuzzy=False,
+            ).paths
             join_paths.extend(paths)
             
     # Remove duplicates and limit

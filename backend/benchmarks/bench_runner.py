@@ -50,7 +50,7 @@ def run_benchmark(*, scales=DEFAULT_SCALES, seed=1729, dialect="postgres",
         pairs = gen.generate_join_path_pairs(table_names, seed=seed)
         probe = ProfileProbe()
         t0 = clock()
-        jp_results = [(s, t, find_join_paths(schema, s, t, probe=probe)) for s, t in pairs]
+        jp_results = [(s, t, find_join_paths(schema, s, t, probe=probe).paths) for s, t in pairs]
         wall = (clock() - t0) * 1000.0
         det = metrics.derive_join_path_metrics(jp_results, len(schema.relationships))
         det.update(probe.counts)
