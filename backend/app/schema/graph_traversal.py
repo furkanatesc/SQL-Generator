@@ -67,6 +67,11 @@ def _edge_sort_key(edge: JoinPathEdge) -> str:
         f"->{edge.to_table}.{edge.to_column}"
     )
 
+def _sort_paths(paths):
+    paths.sort(key=lambda path: (
+        -path.min_relationship_priority, -path.min_confidence,
+        path.path_length, "|".join(_edge_sort_key(e) for e in path.edges)))
+
 def find_join_paths(
     schema: DatabaseSchema,
     source_table: str,
@@ -102,102 +107,80 @@ def find_join_paths(
             paths=[], budget_truncated=False, node_visits=0,
             node_budget=node_budget, branches_pruned=0)
 
-    all_paths = []
     stats = {"visits": 0, "pruned": 0}
 
-    def dfs(current_table: str, path_tables: list[str], path_edges: list[JoinPathEdge]):
+    kept = []
+    worst_prefix = None  # (-min_pri, -min_conf, path_length) of worst kept when full
+
+    def _record(cand):
+        nonlocal worst_prefix
+        kept.append(cand)
+        if len(kept) > max_paths:
+            _sort_paths(kept); kept.pop()
+        if len(kept) == max_paths:
+            _sort_paths(kept)
+            w = kept[-1]
+            worst_prefix = (-w.min_relationship_priority, -w.min_confidence, w.path_length)
+
+    def dfs(current_table, path_tables, path_edges, pri_so_far, conf_so_far):
         stats["visits"] += 1
         if probe is not None:
             probe.incr("dfs_visit")
         if current_table == target_table:
-            # Calculate weakest-link scores
-            min_priority = 1000
-            min_conf = 1.0
-            
+            # completion uses path_edges (identical to pre-28.2)
+            min_priority = 1000; min_conf = 1.0
             for e in path_edges:
-                priority = RELATIONSHIP_TYPE_PRIORITY.get(e.relationship_type, 0)
-                if priority < min_priority:
-                    min_priority = priority
-                    
-                conf = e.confidence if e.confidence is not None else 1.0
-                if conf < min_conf:
-                    min_conf = conf
-
+                p = RELATIONSHIP_TYPE_PRIORITY.get(e.relationship_type, 0)
+                if p < min_priority: min_priority = p
+                c = e.confidence if e.confidence is not None else 1.0
+                if c < min_conf: min_conf = c
             if probe is not None:
                 probe.incr("path_recorded")
-            all_paths.append(JoinPathCandidate(
-                tables=list(path_tables),
-                edges=list(path_edges),
-                min_relationship_priority=min_priority,
-                min_confidence=min_conf,
-                path_length=len(path_edges)
-            ))
+            _record(JoinPathCandidate(tables=list(path_tables), edges=list(path_edges),
+                    min_relationship_priority=min_priority, min_confidence=min_conf,
+                    path_length=len(path_edges)))
             return
-            
         if len(path_edges) >= max_depth:
             return
-            
         for rel in adjacency.get(current_table, []):
             if probe is not None:
                 probe.incr("adjacency_edge")
             next_table = rel.target_table if rel.source_table == current_table else rel.source_table
-            
             if next_table in path_tables:
-                # Cycle detected
                 continue
-
             nb_hop = hop.get(next_table)
             if nb_hop is None or (len(path_edges) + 1) + nb_hop > max_depth:
                 stats["pruned"] += 1
-                if probe is not None:
-                    probe.incr("branches_pruned")
+                if probe is not None: probe.incr("branches_pruned")
                 continue
-
+            edge_priority = RELATIONSHIP_TYPE_PRIORITY.get(rel.relationship_type, 0)
+            edge_conf = rel.confidence if rel.confidence is not None else 1.0
+            new_pri = edge_priority if edge_priority < pri_so_far else pri_so_far
+            new_conf = edge_conf if edge_conf < conf_so_far else conf_so_far
+            if worst_prefix is not None:
+                opt_prefix = (-new_pri, -new_conf, (len(path_edges) + 1) + nb_hop)
+                if opt_prefix > worst_prefix:  # strictly worse -> cannot enter top-k
+                    stats["pruned"] += 1
+                    if probe is not None: probe.incr("branches_pruned")
+                    continue
+            # build edge (unchanged), recurse with running mins
             if rel.source_table == current_table:
                 from_tbl, from_col = rel.source_table, rel.source_column
                 to_tbl, to_col = rel.target_table, rel.target_column
             else:
                 from_tbl, from_col = rel.target_table, rel.target_column
                 to_tbl, to_col = rel.source_table, rel.source_column
-                
             jp_edge = JoinPathEdge(
-                from_table=from_tbl,
-                from_column=from_col,
-                to_table=to_tbl,
-                to_column=to_col,
-                relationship_source_table=rel.source_table,
-                relationship_source_column=rel.source_column,
-                relationship_target_table=rel.target_table,
-                relationship_target_column=rel.target_column,
-                relationship_type=rel.relationship_type,
-                confidence=rel.confidence,
-                reason=rel.reason
-            )
-            
-            path_tables.append(next_table)
-            path_edges.append(jp_edge)
-            
-            dfs(next_table, path_tables, path_edges)
-            
-            path_tables.pop()
-            path_edges.pop()
+                from_table=from_tbl, from_column=from_col, to_table=to_tbl, to_column=to_col,
+                relationship_source_table=rel.source_table, relationship_source_column=rel.source_column,
+                relationship_target_table=rel.target_table, relationship_target_column=rel.target_column,
+                relationship_type=rel.relationship_type, confidence=rel.confidence, reason=rel.reason)
+            path_tables.append(next_table); path_edges.append(jp_edge)
+            dfs(next_table, path_tables, path_edges, new_pri, new_conf)
+            path_tables.pop(); path_edges.pop()
 
-    dfs(source_table, [source_table], [])
-    
-    # Sort the paths: (-min_priority, -min_conf, length, lexical_key)
-    all_paths.sort(
-        key=lambda path: (
-            -path.min_relationship_priority,
-            -path.min_confidence,
-            path.path_length,
-            "|".join(_edge_sort_key(edge) for edge in path.edges)
-        )
-    )
-
+    dfs(source_table, [source_table], [], 1000, 1.0)
+    _sort_paths(kept)
     return JoinPathSearchResult(
-        paths=all_paths[:max_paths],
-        budget_truncated=False,
-        node_visits=stats["visits"],
-        node_budget=node_budget,
-        branches_pruned=stats["pruned"],
-    )
+        paths=kept[:max_paths], budget_truncated=False, node_visits=stats["visits"],
+        node_budget=node_budget, branches_pruned=stats["pruned"])
