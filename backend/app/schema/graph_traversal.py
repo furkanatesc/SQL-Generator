@@ -113,6 +113,7 @@ def find_join_paths(
             node_budget=node_budget, branches_pruned=0)
 
     stats = {"visits": 0, "pruned": 0}
+    truncated = {"flag": False}
 
     kept = []
     worst_prefix = None  # (-min_pri, -min_conf, path_length) of worst kept when full
@@ -128,9 +129,16 @@ def find_join_paths(
             worst_prefix = (-w.min_relationship_priority, -w.min_confidence, w.path_length)
 
     def dfs(current_table, path_tables, path_edges, pri_so_far, conf_so_far):
+        if truncated["flag"]:
+            return
         stats["visits"] += 1
         if probe is not None:
             probe.incr("dfs_visit")
+        if stats["visits"] > node_budget:
+            truncated["flag"] = True
+            if probe is not None:
+                probe.incr("join_budget_truncated")
+            return
         if current_table == target_table:
             # completion uses path_edges (identical to pre-28.2)
             min_priority = 1000; min_conf = 1.0
@@ -148,6 +156,8 @@ def find_join_paths(
         if len(path_edges) >= max_depth:
             return
         for rel in adjacency.get(current_table, []):
+            if truncated["flag"]:
+                return
             if probe is not None:
                 probe.incr("adjacency_edge")
             next_table = rel.target_table if rel.source_table == current_table else rel.source_table
@@ -187,5 +197,5 @@ def find_join_paths(
     dfs(source_table, [source_table], [], 1000, 1.0)
     _sort_paths(kept)
     return JoinPathSearchResult(
-        paths=kept[:max_paths], budget_truncated=False, node_visits=stats["visits"],
+        paths=kept[:max_paths], budget_truncated=truncated["flag"], node_visits=stats["visits"],
         node_budget=node_budget, branches_pruned=stats["pruned"])
