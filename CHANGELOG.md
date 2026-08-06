@@ -371,6 +371,36 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   candidate/policy derin entegrasyonu (§12.5 hâlâ AÇIK), empirik/adaptif
   budget tuning (sabit 200_000 kullanılır), frontend `maxNodesLimit`
   kalıcı çözümü (§2, Phase 12). (PR #152)
+- **Table Selection Cost Model** (Sprint 28.3): `select_schema_context`'in
+  hardcoded additive relevance skoru + düz top-K'sini **config-driven
+  benefit-vs-cost budget modeliyle** değiştirdi. Yeni saf
+  `app/schema/table_selection_cost.py`: frozen `TableSelectionCostModel`
+  (named relevance ağırlıkları = eski magic number'lar + cost ağırlıkları
+  `w_base`/`w_col`/`w_fk` + `cost_budget`), `table_cost() = w_base +
+  w_col*columns + w_fk*fks`, `fk_counts()` (source-side), toleranslı
+  `from_config()` (27.8 `llm_pricing` deseni). `select_schema_context`
+  enjekte edilen `cost_model=DEFAULT_COST_MODEL` parametresi kazandı
+  (saf yaprak korunur; `probe`/`node_budget` değişmedi). Benefit artık
+  model ağırlıklarıyla skorlanır — kalan magic number yok. **Seçim:**
+  exact-match focus tabloları önce garanti edilir, kalanlar `cost_budget`
+  altında benefit-density (`benefit/cost`) **greedy** ile eklenir
+  (skip-and-continue), `max_tables` ikincil sert tavan. **Şeffaflık:**
+  `SelectedTable.cost`, `SchemaContextSelection.total_cost`/
+  `cost_budget`/`budget_exhausted`. Kirli config yükü `sql_pipeline.py`'de:
+  config anahtarı `table_selection_cost_model` → `from_config` → enjekte;
+  yoksa `DEFAULT_COST_MODEL`. Muhafazakâr varsayılan `cost_budget=30.0`
+  golden şema üzerinde kalibre edildi (ölçülen max `total_cost`=25.0);
+  golden eval yeşil, fixture kürasyonu **gerekmedi**. Benchmark v4
+  (`large_schema_benchmark_v4`): `context_selection` cost modelini yansıtır
+  (scale 100 `selected_tables_total` 67→61); **`join_paths` metrikleri
+  v3'e göre değişmedi** (`dfs_visit` 5/6/6, `branches_pruned`
+  15/180/369) — cost modelinin join-path katmanını etkilemediğinin kanıtı.
+  Gate yeşil. **Bilinçli kapsam dışı:** ilişki-güven-ağırlıklı komşu
+  benefit'i (→ 28.4; 28.3 düz `explicit_neighbor`/`implicit_neighbor`
+  20/10 ağırlıklarını yalnızca cost modeline taşıdı), token-tabanlı
+  gerçek maliyet (serialize footprint) — kolon-sayısı proxy'si kullanılır,
+  gerçek 0/1-knapsack optimalliği (deterministik greedy kullanılır),
+  frontend `maxNodesLimit` kalıcı çözümü (§2, Phase 12). (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
