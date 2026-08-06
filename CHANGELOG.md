@@ -345,6 +345,32 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   candidate/policy derin entegrasyonu + pruner iç probe'u, `scipy`
   eksikliği (pagerank `{}`'e düşer, gate etkilenmez), `bench_contract.py`/
   `bench_cli.py` docstring/help kozmetik doc-sync borcu. (PR #151)
+- **Join Path Explosion Control** (Sprint 28.2): `find_join_paths`'in
+  kombinatoryal DFS patlamasını iki katmanla sınırlayan ve yeni
+  `JoinPathSearchResult` sözleşmesini döndüren **tek-API kırılımı** (13
+  çağrı noktası `.paths`'e taşındı). **Katman 1 — çıktı-koruyan
+  branch-and-bound:** ters-BFS `hop` mesafelerinden admissible bir derinlik
+  sınırı (`_hop_distances`) + kept-set dominance pruning (optimistic
+  tamamlama prefiksinde kesin `>`); **çıktı byte-for-byte korunur** —
+  pruning yalnızca ziyareti keser, brute-force denklik testiyle guard'lı.
+  **Katman 2 — determinist güvenlik kemeri:** `node_budget` (keyword-only,
+  `DEFAULT_JOIN_PATH_NODE_BUDGET = 200_000`); taşmada DFS determinist
+  durur ve `budget_truncated=True` işaretler. `select_schema_context` yeni
+  `join_search_truncated: bool = False` alanı kazandı (çift üzerinde
+  OR'lanır) + opsiyonel `node_budget` passthrough — non-breaking. Benchmark
+  v3 (`large_schema_benchmark_v3`, gate'lenen ölçekler 100/500/1000)
+  join_paths hedefinde ölçülen düşüş: `dfs_visit` 205→5 / 747→6 / 2653→6;
+  `adjacency_edge` (probe) 368→19 / 1452→186 / 5264→375; yeni
+  `branches_pruned` 15/180/369. Çıktı-türevli metrikler **değişmedi**
+  (`paths_found_total`=2, `path_recorded`=2, `pairs_with_path`=2 tüm
+  ölçeklerde) — çıktı korumasının kanıtı. Gate'lenen ölçeklerde
+  `join_budget_truncated` yok; CI perf-gate yeşil. **Bilinçli kapsam dışı
+  (TECH-DEBT §12):** ağırlıklı/maliyet-tabanlı path scoring + hub-penalty
+  (`graph_traversal.py`'deki "future work" yorumu AÇIK kalır — 28.2
+  yalnızca enumerasyonu sınırlar, scoring'i değil), `GraphPruner`
+  candidate/policy derin entegrasyonu (§12.5 hâlâ AÇIK), empirik/adaptif
+  budget tuning (sabit 200_000 kullanılır), frontend `maxNodesLimit`
+  kalıcı çözümü (§2, Phase 12). (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
