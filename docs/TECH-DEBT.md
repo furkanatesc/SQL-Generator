@@ -406,7 +406,7 @@ bilinçli ertelendi (sessiz düşürme yok).
    (27.9'un `FeedbackCategory` ekseniyle benzer bir ayrım) kapsam dışı.
    *İlgili Dosya:* `evals/regression_gate.py` (`compare_regression`)
 
-## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1, 28.2)
+## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1, 28.2, 28.3)
 
 `backend/benchmarks/` yeni bir dev/CI aracıdır (`evals/`'in kardeşi); hiçbir
 `app/` dosyası değişmedi, davranış korunur.
@@ -504,5 +504,54 @@ bilinçli ertelendi (sessiz düşürme yok).
     (D3 Graph UI Performans Limiti) — ara fix uygulandı ama kalıcı çözüm
     (progressive/virtualized rendering, WebGL) hâlâ Phase 12 (31.x UI/UX
     Production Layer)'e ertelenmiş durumda; 28.2 backend-only bir sprint
-    olduğu için bu kalemi kapsamadı.
+    olduğu için bu kalemi kapsamadı. **28.3 de kapsamadı** (bkz. madde 16) —
+    kalem hâlâ Phase 12'ye ait.
     *İlgili Dosya:* `frontend/src/components/SchemaManager.vue`, `frontend/src/utils/graphSelection.ts`
+13. **AÇIK (28.3 bilinçli kapsam dışı) — ilişki-güven-ağırlıklı komşu
+    benefit'i yok.** `select_schema_context`'in `explicit_neighbor`/
+    `implicit_neighbor` benefit ağırlıkları (28.3'te `TableSelectionCostModel`e
+    taşınan eski 20.0/10.0 magic number'ları) hâlâ **düz** (flat) — bir
+    komşunun ilişki güveninin (confidence) ne kadar yüksek olduğuna göre
+    ölçeklenmiyor. 28.3 yalnızca bu sabit ağırlıkları config-driven bir
+    modele taşıdı, güven-ağırlıklandırmayı eklemedi; bu Sprint 28.4
+    (Relationship Confidence Scoring)'e bırakıldı.
+    *İlgili Dosya:* `backend/app/schema/table_selection_cost.py`, `backend/app/schema/schema_context_selector.py`
+14. **AÇIK (28.3 bilinçli kapsam dışı) — token-tabanlı gerçek maliyet yok.**
+    `table_cost() = w_base + w_col*n_columns + w_fk*n_fks` kolon/FK
+    **sayısını** bir proxy olarak kullanır; tablonun prompt'a serialize
+    edildiğinde gerçekte kaç token tuttuğunu (kolon adı uzunluğu, tip
+    bilgisi, açıklama metni vb.) ölçmez. Token-tabanlı gerçek maliyet
+    fonksiyonu kapsam dışı bırakıldı.
+    *İlgili Dosya:* `backend/app/schema/table_selection_cost.py` (`table_cost`)
+15. **AÇIK (28.3 bilinçli kapsam dışı) — gerçek 0/1-knapsack optimalliği
+    yok.** Seçim algoritması benefit-density (`benefit/cost`) sıralı
+    **deterministik greedy**'dir (skip-and-continue); bu, klasik 0/1-knapsack
+    probleminin optimal çözümünü GARANTİ ETMEZ (greedy yaklaşım bazı
+    girdilerde optimalden sapabilir). Gerçek knapsack optimalliği (ör.
+    dynamic programming) kapsam dışı bırakıldı — determinizm ve performans
+    tercih edildi.
+    *İlgili Dosya:* `backend/app/schema/schema_context_selector.py`
+16. **AÇIK (devam, 28.3'ten) — frontend `maxNodesLimit` kalıcı çözümü.**
+    Madde 12 ile aynı kalem; 28.3 backend-only bir sprint olduğu için
+    (config-driven cost model + benefit-density seçim) bu kalemi kapsamadı.
+    Hâlâ Phase 12 (31.x UI/UX Production Layer)'e ait.
+    *İlgili Dosya:* `frontend/src/components/SchemaManager.vue`, `frontend/src/utils/graphSelection.ts`
+17. **AÇIK (yeni, 28.3, minor) — fallback yolu `cost_budget`'a gate
+    edilmiyor.** `select_schema_context`'teki deterministik bounded fallback
+    dalı (`fallback_used=True`, en fazla `max_fallback_tables=5` tablo)
+    `cost_budget` kontrolü YAPMADAN doğrudan `selected_tables`'a ekler
+    (`schema_context_selector.py`, `add`/`fallback_limit` döngüsü). Varsayılan
+    `cost_budget=30.0` altında bu dal pratikte hiç ERİŞİLEMEZ (5 tablo ×
+    tipik `table_cost` bu bütçeyi aşmaz) ve şu an test EDİLMİYOR; ancak çok
+    düşük bir `cost_budget` override'ı ile teorik olarak bütçeyi aşan bir
+    fallback seçimi üretebilir. Küçük, gözlemlenmiş ama düzeltilmemiş bir
+    tutarsızlık.
+    *İlgili Dosya:* `backend/app/schema/schema_context_selector.py`
+18. **AÇIK (yeni, 28.3, minor) — pipeline wiring testi yalnızca parse
+    sözleşmesini kilitliyor, uçtan-uca enjeksiyonu değil.** `sql_pipeline.py`
+    `table_selection_cost_model` config anahtarını `from_config`'e geçirip
+    `select_schema_context`'e enjekte eder; mevcut test bu kablolamanın
+    **parse/from_config çağrısını** doğrular ama gerçek bir pipeline
+    çalıştırmasının, config'te override edilmiş bir `cost_budget`/ağırlık
+    değerini seçim sonucuna **fiilen yansıttığını** uçtan uca doğrulamaz.
+    *İlgili Dosya:* `backend/app/sql_pipeline.py`, `backend/tests/schema/test_cost_model_pipeline_wiring.py`
