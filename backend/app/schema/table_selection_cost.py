@@ -27,7 +27,13 @@ class TableSelectionCostModel(BaseModel):
     w_base: float = 1.0
     w_col: float = 1.0
     w_fk: float = 0.0
-    cost_budget: float = 100.0  # PROVISIONAL — calibrated on the golden schema in Task 4
+    # Calibrated on the golden schema (Sprint 28.3 Task 4): measured max total_cost
+    # across all golden cases = 25.0 (unknown_question_uses_bounded_fallback, the
+    # widest case). 30.0 = ~1.2x that max, rounded to a clean number — comfortably
+    # above so the budget never binds on golden (all cases: budget_exhausted=False).
+    # max_tables remains the effective cap for selection size; this budget is a
+    # conservative backstop, not the primary limiter.
+    cost_budget: float = 30.0
 
 
 DEFAULT_COST_MODEL = TableSelectionCostModel()
