@@ -406,7 +406,7 @@ bilinçli ertelendi (sessiz düşürme yok).
    (27.9'un `FeedbackCategory` ekseniyle benzer bir ayrım) kapsam dışı.
    *İlgili Dosya:* `evals/regression_gate.py` (`compare_regression`)
 
-## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1, 28.2, 28.3)
+## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1, 28.2); 28.3 genişletti (yeni madde 13-17)
 
 `backend/benchmarks/` yeni bir dev/CI aracıdır (`evals/`'in kardeşi); hiçbir
 `app/` dosyası değişmedi, davranış korunur.
@@ -504,8 +504,9 @@ bilinçli ertelendi (sessiz düşürme yok).
     (D3 Graph UI Performans Limiti) — ara fix uygulandı ama kalıcı çözüm
     (progressive/virtualized rendering, WebGL) hâlâ Phase 12 (31.x UI/UX
     Production Layer)'e ertelenmiş durumda; 28.2 backend-only bir sprint
-    olduğu için bu kalemi kapsamadı. **28.3 de kapsamadı** (bkz. madde 16) —
-    kalem hâlâ Phase 12'ye ait.
+    olduğu için bu kalemi kapsamadı. **28.3 de kapsamadı** (config-driven
+    cost model + benefit-density seçim backend-only kaldı) — kalem hâlâ
+    Phase 12'ye ait.
     *İlgili Dosya:* `frontend/src/components/SchemaManager.vue`, `frontend/src/utils/graphSelection.ts`
 13. **AÇIK (28.3 bilinçli kapsam dışı) — ilişki-güven-ağırlıklı komşu
     benefit'i yok.** `select_schema_context`'in `explicit_neighbor`/
@@ -531,12 +532,7 @@ bilinçli ertelendi (sessiz düşürme yok).
     dynamic programming) kapsam dışı bırakıldı — determinizm ve performans
     tercih edildi.
     *İlgili Dosya:* `backend/app/schema/schema_context_selector.py`
-16. **AÇIK (devam, 28.3'ten) — frontend `maxNodesLimit` kalıcı çözümü.**
-    Madde 12 ile aynı kalem; 28.3 backend-only bir sprint olduğu için
-    (config-driven cost model + benefit-density seçim) bu kalemi kapsamadı.
-    Hâlâ Phase 12 (31.x UI/UX Production Layer)'e ait.
-    *İlgili Dosya:* `frontend/src/components/SchemaManager.vue`, `frontend/src/utils/graphSelection.ts`
-17. **AÇIK (yeni, 28.3, minor) — fallback yolu `cost_budget`'a gate
+16. **AÇIK (yeni, 28.3, minor) — fallback yolu `cost_budget`'a gate
     edilmiyor.** `select_schema_context`'teki deterministik bounded fallback
     dalı (`fallback_used=True`, en fazla `max_fallback_tables=5` tablo)
     `cost_budget` kontrolü YAPMADAN doğrudan `selected_tables`'a ekler
@@ -547,7 +543,7 @@ bilinçli ertelendi (sessiz düşürme yok).
     fallback seçimi üretebilir. Küçük, gözlemlenmiş ama düzeltilmemiş bir
     tutarsızlık.
     *İlgili Dosya:* `backend/app/schema/schema_context_selector.py`
-18. **AÇIK (yeni, 28.3, minor) — pipeline wiring testi yalnızca parse
+17. **AÇIK (yeni, 28.3, minor) — pipeline wiring testi yalnızca parse
     sözleşmesini kilitliyor, uçtan-uca enjeksiyonu değil.** `sql_pipeline.py`
     `table_selection_cost_model` config anahtarını `from_config`'e geçirip
     `select_schema_context`'e enjekte eder; mevcut test bu kablolamanın
