@@ -406,7 +406,7 @@ bilinçli ertelendi (sessiz düşürme yok).
    (27.9'un `FeedbackCategory` ekseniyle benzer bir ayrım) kapsam dışı.
    *İlgili Dosya:* `evals/regression_gate.py` (`compare_regression`)
 
-## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1)
+## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1, 28.2)
 
 `backend/benchmarks/` yeni bir dev/CI aracıdır (`evals/`'in kardeşi); hiçbir
 `app/` dosyası değişmedi, davranış korunur.
@@ -421,6 +421,11 @@ bilinçli ertelendi (sessiz düşürme yok).
    `fuzzy_comparison`, `rule3_scan`, `table_scan`, `column_scan`,
    `related_expansion`) her hedefin metriklerine birleştiriyor — 2000-tablo
    ölçeğinde join-path/fuzzy-match patlamasının *neden* olduğu artık ölçülür.
+   **Güncelleme (28.2):** bu sayaçlar artık yalnızca gözlem değil — 28.2
+   `dfs_visit`/`adjacency_edge` sayaçlarını gerçek bir optimizasyonun
+   (branch-and-bound + node-budget, bkz. madde 8) *önce/sonra* kanıtı olarak
+   kullandı; profiling ile başlayan zincir gerçek bir performans iyileştirmesine
+   ulaştı.
    *İlgili Dosya:* `backend/app/schema/profiling.py`, `backend/benchmarks/bench_metrics.py`, `backend/benchmarks/bench_runner.py`
 2. **✅ ÇÖZÜLDÜ (28.1) — CI perf-gate kablolandı.** `.github/workflows/backend-ci.yml`'e
    yeni adım eklendi: `python -m benchmarks.bench_cli --gate --scales
@@ -463,3 +468,41 @@ bilinçli ertelendi (sessiz düşürme yok).
    5. hedefi (`graph_backend`) ve gate'lenen 3-ölçek (100/500/1000) ile
    senkron değil. Davranışı etkilemiyor, doc-sync borcu.
    *İlgili Dosya:* `backend/benchmarks/bench_contract.py`, `backend/benchmarks/bench_cli.py`
+8. **✅ ÇÖZÜLDÜ (28.2) — `find_join_paths` kombinatoryal DFS patlaması iki
+   katmanla sınırlandı.** Ters-BFS `hop` mesafelerinden admissible bir derinlik
+   sınırı (`_hop_distances`) + kept-set dominance pruning (çıktı-koruyan
+   branch-and-bound, brute-force denklik testiyle guard'lı) artı determinist
+   `node_budget` güvenlik kemeri (`DEFAULT_JOIN_PATH_NODE_BUDGET = 200_000`,
+   taşmada `budget_truncated=True`). Yeni `JoinPathSearchResult` sözleşmesi
+   (13 çağrı noktası `.paths`'e taşındı); `select_schema_context` yeni
+   `join_search_truncated` alanı kazandı (non-breaking, defaultlu). Benchmark
+   v3 join_paths hedefinde `dfs_visit`/`adjacency_edge`'de büyük düşüş
+   ölçtü, çıktı-türevli metrikler değişmedi (çıktı korumasının kanıtı).
+   *İlgili Dosya:* `backend/app/schema/graph_traversal.py`, `backend/app/schema/schema_context_selector.py`
+9. **AÇIK (28.2 bilinçli kapsam dışı) — ağırlıklı/maliyet-tabanlı path
+   scoring + hub-penalty yok.** 28.2 yalnızca DFS *enumerasyonunu* sınırladı
+   (hangi path'ler ziyaret edilir), path'lerin nasıl *skorlandığını/sıralandığını*
+   değiştirmedi. `graph_traversal.py`'nin başındaki "Hub-table penalty is
+   intentionally out of scope... Future work: penalize high-degree tables
+   during path scoring" yorumu hâlâ AÇIK.
+   *İlgili Dosya:* `backend/app/schema/graph_traversal.py:7-8`
+10. **AÇIK (devam, 28.1'den) — `GraphPruner` candidate/policy derin
+    entegrasyonu hâlâ yok.** Madde 5 ile aynı kalem; 28.2 yalnızca
+    `find_join_paths`'i kapsadı, `app/schema_graph/`'daki pruning
+    candidate seçimi ve policy katmanı (hub detection, candidate scoring)
+    ayrı bir benchmark hedefi veya `ProfileProbe` entegrasyonu olarak henüz
+    kapsanmıyor.
+    *İlgili Dosya:* `backend/app/schema_graph/`
+11. **AÇIK (28.2 bilinçli kapsam dışı) — empirik/adaptif budget tuning
+    yok.** `DEFAULT_JOIN_PATH_NODE_BUDGET = 200_000` sabit, elle seçilmiş bir
+    değer (scale-1000 ölçümünde gözlenen 2653 ziyaretin çok üzerinde,
+    gated ölçeklerde asla tetiklenmeyecek kadar cömert); şema büyüklüğüne
+    göre empirik/adaptif bir budget hesaplaması (ör. tablo sayısına göre
+    ölçeklenen bir formül) kapsam dışı bırakıldı.
+    *İlgili Dosya:* `backend/app/schema/graph_traversal.py`
+12. **AÇIK (devam) — frontend `maxNodesLimit` kalıcı çözümü yok.** Bkz. §2
+    (D3 Graph UI Performans Limiti) — ara fix uygulandı ama kalıcı çözüm
+    (progressive/virtualized rendering, WebGL) hâlâ Phase 12 (31.x UI/UX
+    Production Layer)'e ertelenmiş durumda; 28.2 backend-only bir sprint
+    olduğu için bu kalemi kapsamadı.
+    *İlgili Dosya:* `frontend/src/components/SchemaManager.vue`, `frontend/src/utils/graphSelection.ts`
