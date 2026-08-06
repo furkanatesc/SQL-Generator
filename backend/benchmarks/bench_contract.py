@@ -1,17 +1,19 @@
-"""Sprint 28.0 — Large Schema Benchmark Suite: pure metric/report contract.
+"""Sprint 28.2 — Large Schema Benchmark Suite: pure metric/report contract.
 
 Frozen records with JSON-stable to_dict. No I/O, no clock, no randomness.
 """
 from dataclasses import dataclass
 
-BENCHMARK_SCHEMA_VERSION = "large_schema_benchmark_v2"
+BENCHMARK_SCHEMA_VERSION = "large_schema_benchmark_v3"
 
 
 @dataclass(frozen=True)
 class BenchmarkMetric:
     target: str          # "schema_validation" | "join_paths" | "implicit_fk" | "context_selection" | "graph_backend"
     scale: int           # 100 | 500 | 1000
-    deterministic: dict  # {metric_name: int} — the ONLY gated data
+    deterministic: dict  # {metric_name: int} — the ONLY gated data; join_paths now
+                          # includes branches_pruned (Sprint 28.2 branch-and-bound)
+                          # and join_budget_truncated when the budget belt fires
     wall_ms: float       # informational only, never gated
 
     def to_dict(self) -> dict:
