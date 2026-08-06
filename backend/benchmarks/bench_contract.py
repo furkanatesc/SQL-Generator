@@ -1,10 +1,13 @@
-"""Sprint 28.2 — Large Schema Benchmark Suite: pure metric/report contract.
+"""Sprint 28.3 — Large Schema Benchmark Suite: pure metric/report contract.
 
 Frozen records with JSON-stable to_dict. No I/O, no clock, no randomness.
+Sprint 28.3 (table selection cost model) changed how select_schema_context
+picks tables — context_selection now reflects DEFAULT_COST_MODEL's
+density-budget selection; join_paths is unaffected.
 """
 from dataclasses import dataclass
 
-BENCHMARK_SCHEMA_VERSION = "large_schema_benchmark_v3"
+BENCHMARK_SCHEMA_VERSION = "large_schema_benchmark_v4"
 
 
 @dataclass(frozen=True)
