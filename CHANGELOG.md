@@ -370,7 +370,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   yalnızca enumerasyonu sınırlar, scoring'i değil), `GraphPruner`
   candidate/policy derin entegrasyonu (§12.5 hâlâ AÇIK), empirik/adaptif
   budget tuning (sabit 200_000 kullanılır), frontend `maxNodesLimit`
-  kalıcı çözümü (§2, Phase 12). (PR #TBD)
+  kalıcı çözümü (§2, Phase 12). (PR #152)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
