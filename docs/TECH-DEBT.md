@@ -537,11 +537,10 @@ bilinçli ertelendi (sessiz düşürme yok).
     dalı (`fallback_used=True`, en fazla `max_fallback_tables=5` tablo)
     `cost_budget` kontrolü YAPMADAN doğrudan `selected_tables`'a ekler
     (`schema_context_selector.py`, `add`/`fallback_limit` döngüsü). Varsayılan
-    `cost_budget=30.0` altında bu dal pratikte hiç ERİŞİLEMEZ (5 tablo ×
-    tipik `table_cost` bu bütçeyi aşmaz) ve şu an test EDİLMİYOR; ancak çok
-    düşük bir `cost_budget` override'ı ile teorik olarak bütçeyi aşan bir
-    fallback seçimi üretebilir. Küçük, gözlemlenmiş ama düzeltilmemiş bir
-    tutarsızlık.
+    `cost_budget=30.0` altında bu dal yalnızca patolojik-geniş (30+ kolon) tek
+    aday tabloyla erişilebilir; golden şemada ve benchmark'ta gözlemlenmiş değil.
+    Etki düşük: tablo yine de output setine eklenir, yalnızca debug metadata'sı
+    (reason/score) bozulur, iki bayrak çelişkili görünür.
     *İlgili Dosya:* `backend/app/schema/schema_context_selector.py`
 17. **AÇIK (yeni, 28.3, minor) — pipeline wiring testi yalnızca parse
     sözleşmesini kilitliyor, uçtan-uca enjeksiyonu değil.** `sql_pipeline.py`
