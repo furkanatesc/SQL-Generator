@@ -400,7 +400,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   20/10 ağırlıklarını yalnızca cost modeline taşıdı), token-tabanlı
   gerçek maliyet (serialize footprint) — kolon-sayısı proxy'si kullanılır,
   gerçek 0/1-knapsack optimalliği (deterministik greedy kullanılır),
-  frontend `maxNodesLimit` kalıcı çözümü (§2, Phase 12). (PR #TBD)
+  frontend `maxNodesLimit` kalıcı çözümü (§2, Phase 12). (PR #153)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
