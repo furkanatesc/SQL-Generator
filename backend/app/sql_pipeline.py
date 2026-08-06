@@ -16,8 +16,12 @@ from app.llm.provider import LLMProvider, SQLGenerationRequest
 from app.schema.schema_adapter import from_legacy_schema
 from app.schema.schema_context_selector import select_schema_context
 from app.schema.schema_prompt_serializer import serialize_selection_for_prompt
+from app.schema.table_selection_cost import from_config as _cost_model_from_config
+from app.database import get_config
 
 logger = logging.getLogger("sql_pipeline")
+
+TABLE_SELECTION_COST_MODEL_KEY = "table_selection_cost_model"
 
 from app.sql_validator import SQLValidator
 from app.sql_guardrail import SQLGuardrailValidator
@@ -262,9 +266,11 @@ class SQLGenerationPipeline:
 
             try:
                 database_schema = from_legacy_schema(pruned_schema, dialect=dialect)
+                cost_model = _cost_model_from_config(get_config(TABLE_SELECTION_COST_MODEL_KEY))
                 schema_context_selection = select_schema_context(
                     schema=database_schema,
-                    question=natural_query or aqr.get("natural_query", "")
+                    question=natural_query or aqr.get("natural_query", ""),
+                    cost_model=cost_model,
                 )
 
                 prompt_schema_context = serialize_selection_for_prompt(
