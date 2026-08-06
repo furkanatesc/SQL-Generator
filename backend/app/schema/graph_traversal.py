@@ -1,3 +1,5 @@
+from collections import deque
+
 from pydantic import BaseModel
 from .schema_contract import DatabaseSchema, RelationshipType
 from .relationship_priority import RELATIONSHIP_TYPE_PRIORITY
@@ -46,6 +48,19 @@ class JoinPathSearchResult(BaseModel):
     branches_pruned: int = 0
 
 
+def _hop_distances(adjacency, target):
+    """Unweighted min-hop distance from every node to target over the (undirected) adjacency."""
+    dist = {target: 0}
+    q = deque([target])
+    while q:
+        node = q.popleft()
+        for rel in adjacency.get(node, []):
+            nbr = rel.target_table if rel.source_table == node else rel.source_table
+            if nbr not in dist:
+                dist[nbr] = dist[node] + 1
+                q.append(nbr)
+    return dist
+
 def _edge_sort_key(edge: JoinPathEdge) -> str:
     return (
         f"{edge.from_table}.{edge.from_column}"
@@ -80,6 +95,13 @@ def find_join_paths(
         if rel.target_table in adjacency:
             adjacency[rel.target_table].append(rel)
             
+    hop = _hop_distances(adjacency, target_table)
+    src_hop = hop.get(source_table)
+    if src_hop is None or src_hop > max_depth:
+        return JoinPathSearchResult(
+            paths=[], budget_truncated=False, node_visits=0,
+            node_budget=node_budget, branches_pruned=0)
+
     all_paths = []
     stats = {"visits": 0, "pruned": 0}
 
@@ -123,7 +145,14 @@ def find_join_paths(
             if next_table in path_tables:
                 # Cycle detected
                 continue
-                
+
+            nb_hop = hop.get(next_table)
+            if nb_hop is None or (len(path_edges) + 1) + nb_hop > max_depth:
+                stats["pruned"] += 1
+                if probe is not None:
+                    probe.incr("branches_pruned")
+                continue
+
             if rel.source_table == current_table:
                 from_tbl, from_col = rel.source_table, rel.source_column
                 to_tbl, to_col = rel.target_table, rel.target_column
