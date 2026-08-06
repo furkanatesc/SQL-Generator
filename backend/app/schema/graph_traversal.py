@@ -35,6 +35,17 @@ class JoinPathCandidate(BaseModel):
     path_length: int
 
 
+DEFAULT_JOIN_PATH_NODE_BUDGET = 200_000
+
+
+class JoinPathSearchResult(BaseModel):
+    paths: list[JoinPathCandidate]
+    budget_truncated: bool = False
+    node_visits: int = 0
+    node_budget: int
+    branches_pruned: int = 0
+
+
 def _edge_sort_key(edge: JoinPathEdge) -> str:
     return (
         f"{edge.from_table}.{edge.from_column}"
@@ -50,7 +61,8 @@ def find_join_paths(
     max_paths: int = 5,
     allow_fuzzy: bool = False,
     probe=None,
-) -> list[JoinPathCandidate]:
+    node_budget: int = DEFAULT_JOIN_PATH_NODE_BUDGET,
+) -> JoinPathSearchResult:
     """
     Finds valid join paths between source_table and target_table using cycle-safe DFS.
     Prioritizes explicit paths over implicit using a weakest-link scoring logic.
@@ -69,8 +81,10 @@ def find_join_paths(
             adjacency[rel.target_table].append(rel)
             
     all_paths = []
+    stats = {"visits": 0, "pruned": 0}
 
     def dfs(current_table: str, path_tables: list[str], path_edges: list[JoinPathEdge]):
+        stats["visits"] += 1
         if probe is not None:
             probe.incr("dfs_visit")
         if current_table == target_table:
@@ -151,4 +165,10 @@ def find_join_paths(
         )
     )
 
-    return all_paths[:max_paths]
+    return JoinPathSearchResult(
+        paths=all_paths[:max_paths],
+        budget_truncated=False,
+        node_visits=stats["visits"],
+        node_budget=node_budget,
+        branches_pruned=stats["pruned"],
+    )
