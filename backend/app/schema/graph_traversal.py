@@ -87,7 +87,12 @@ def find_join_paths(
     Finds valid join paths between source_table and target_table using cycle-safe DFS.
     Prioritizes explicit paths over implicit using a weakest-link scoring logic.
     """
-    
+
+    if max_paths <= 0:
+        return JoinPathSearchResult(
+            paths=[], budget_truncated=False, node_visits=0,
+            node_budget=node_budget, branches_pruned=0)
+
     adjacency: dict[str, list] = {t.name: [] for t in schema.tables}
     for rel in schema.relationships:
         if rel.relationship_type == RelationshipType.DISABLED:
