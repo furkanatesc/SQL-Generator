@@ -1,6 +1,7 @@
 import pytest
 import json
 import os
+import itertools
 from app.schema.schema_contract import RelationshipType
 from app.schema.graph_traversal import find_join_paths
 from app.schema.schema_adapter import from_legacy_schema
@@ -89,3 +90,51 @@ def test_unreachable_target_returns_empty_without_visits():
     result = find_join_paths(schema, "employees", "departments")
     assert result.paths == []
     assert result.node_visits == 0  # BFS early-exit, no DFS performed
+
+
+def _exhaustive_reference(schema, source, target, max_depth, max_paths, allow_fuzzy):
+    """Naive all-paths enumeration mirroring pre-28.2 semantics (no pruning)."""
+    from app.schema.schema_contract import RelationshipType
+    from app.schema.relationship_priority import RELATIONSHIP_TYPE_PRIORITY
+    adj = {t.name: [] for t in schema.tables}
+    for rel in schema.relationships:
+        if rel.relationship_type == RelationshipType.DISABLED:
+            continue
+        if not allow_fuzzy and rel.relationship_type == RelationshipType.IMPLICIT_FUZZY:
+            continue
+        if rel.source_table in adj: adj[rel.source_table].append(rel)
+        if rel.target_table in adj: adj[rel.target_table].append(rel)
+    found = []
+    def walk(cur, tables, rels):
+        if cur == target:
+            found.append(list(tables)); return
+        if len(rels) >= max_depth: return
+        for rel in adj.get(cur, []):
+            nxt = rel.target_table if rel.source_table == cur else rel.source_table
+            if nxt in tables: continue
+            tables.append(nxt); rels.append(rel)
+            walk(nxt, tables, rels)
+            tables.pop(); rels.pop()
+    walk(source, [source], [])
+    return found
+
+def test_pruning_preserves_output_vs_reference():
+    # medium schema with multiple parallel paths + a hub
+    legacy = {"tables": {}}
+    def tbl(name, fks):
+        legacy["tables"][name] = {
+            "columns": [{"name": "id", "primary_key": True}] +
+                       [{"name": f"{fk[0]}_id"} for fk in fks],
+            "foreign_keys": [{"column": f"{t}_id", "referenced_table": t,
+                              "referenced_column": "id", "type": "explicit"} for t, _ in fks]}
+    tbl("d", []); tbl("b", [("d", 0)]); tbl("c", [("d", 0)])
+    tbl("a", [("b", 0), ("c", 0)])
+    tbl("e", [("a", 0)]); tbl("f", [("a", 0)])  # extra branches off a
+    schema = from_legacy_schema(legacy, "postgres")
+    for src, tgt, depth, k in [("a", "d", 3, 5), ("a", "d", 3, 1), ("e", "d", 4, 5)]:
+        got = [c.tables for c in find_join_paths(schema, src, tgt,
+                                                 max_depth=depth, max_paths=k).paths]
+        ref = _exhaustive_reference(schema, src, tgt, depth, k, allow_fuzzy=False)
+        # reference sorted the same way the production sort orders ties -> compare as sets of the top-k
+        assert set(map(tuple, got)) <= set(map(tuple, ref))
+        assert len(got) == min(k, len(ref))
