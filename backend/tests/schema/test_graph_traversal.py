@@ -1,7 +1,6 @@
 import pytest
 import json
 import os
-import itertools
 from app.schema.schema_contract import RelationshipType
 from app.schema.graph_traversal import find_join_paths
 from app.schema.schema_adapter import from_legacy_schema
