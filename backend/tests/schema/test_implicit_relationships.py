@@ -123,8 +123,10 @@ def test_rule3_requires_target_key_drops_spurious_match():
     assert semantic_edges(rels) == set()
 
 
-def test_rule3_matches_when_target_column_is_the_key():
-    # orders.customer_id references customers whose PK IS 'customer_id' (natural key)
+def test_rule1_wins_when_id_suffixed_column_also_equals_target_key():
+    # orders.customer_id references customers whose PK IS 'customer_id'.
+    # 'customer_id' has _id suffix -> Rule 1 (singular_table_id_pattern, 0.90) fires and wins.
+    # (The column happens to also match the target key, but Rule 1 serves it, not Rule 3.)
     schema = {"tables": {
         "customers": {"columns": [{"name": "customer_id", "primary_key": True},
                                   {"name": "name"}]},
@@ -132,9 +134,12 @@ def test_rule3_matches_when_target_column_is_the_key():
                                {"name": "customer_id"}]},
     }}
     rels = detect_implicit_relationships(schema)
-    # 'customer_id' matches customers' PK 'customer_id' -> Rule 3 edge (0.60)
     edges = semantic_edges(rels)
     assert ("orders", "customer_id", "customers", "customer_id", RelationshipType.IMPLICIT) in edges
+    # Verify Rule 1 is the actual reason (not Rule 3)
+    rel = next(r for r in rels if r.source_table == "orders" and r.source_column == "customer_id")
+    assert rel.reason == "singular_table_id_pattern"
+    assert rel.confidence == 0.9
 
 
 def test_rule3_positive_path_natural_key():
