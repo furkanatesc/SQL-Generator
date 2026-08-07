@@ -80,6 +80,10 @@ def test_explicit_fk_relationships_are_not_modified_by_implicit_detection():
     assert semantic_edges(implicit) == set()
 
 def test_exact_non_generic_column_match_is_unidirectional():
+    # v2: Rule 3 now requires the target column to BE the target table's resolved key.
+    # Neither 'shipping' nor 'orders' declares a primary key and neither has an 'id'
+    # column or a '<table>_id' convention column, so tracking_number is not a key in
+    # either table -> the exact match is no longer treated as a spurious FK.
     schema = {
         "tables": {
             "shipping": {
@@ -91,17 +95,58 @@ def test_exact_non_generic_column_match_is_unidirectional():
         }
     }
     relationships = detect_implicit_relationships(schema)
-    
-    # It should generate EXACTLY ONE edge, not two. Order doesn't matter, just length 1.
-    assert len(relationships) == 1
-    rel = relationships[0]
-    assert rel.relationship_type == RelationshipType.IMPLICIT
-    assert rel.confidence == 0.60
-    assert rel.reason == "exact_non_generic_column_match"
 
-    assert semantic_edges(relationships) == {
-        (rel.source_table, "tracking_number", rel.target_table, "tracking_number", RelationshipType.IMPLICIT)
-    }
+    assert semantic_edges(relationships) == set()
+
+
+def test_rule1_targets_non_id_primary_key_recall():
+    # users' PK is 'user_id' (not 'id'); orders.user_id must link to users.user_id
+    schema = {"tables": {
+        "users": {"columns": [{"name": "user_id", "primary_key": True}, {"name": "name"}]},
+        "orders": {"columns": [{"name": "id", "primary_key": True}, {"name": "user_id"}]},
+    }}
+    rels = detect_implicit_relationships(schema)
+    assert semantic_edges(rels) == {
+        ("orders", "user_id", "users", "user_id", RelationshipType.IMPLICIT)}
+    assert rels[0].reason == "singular_table_id_pattern"
+
+
+def test_rule3_requires_target_key_drops_spurious_match():
+    # both tables have 'tracking_number' but it is NOT a key in either -> no edge (precision)
+    schema = {"tables": {
+        "shipping": {"columns": [{"name": "id", "primary_key": True},
+                                 {"name": "tracking_number"}]},
+        "orders": {"columns": [{"name": "id", "primary_key": True},
+                               {"name": "tracking_number"}]},
+    }}
+    rels = detect_implicit_relationships(schema)
+    assert semantic_edges(rels) == set()
+
+
+def test_rule3_matches_when_target_column_is_the_key():
+    # orders.customer_id references customers whose PK IS 'customer_id' (natural key)
+    schema = {"tables": {
+        "customers": {"columns": [{"name": "customer_id", "primary_key": True},
+                                  {"name": "name"}]},
+        "orders": {"columns": [{"name": "id", "primary_key": True},
+                               {"name": "customer_id"}]},
+    }}
+    rels = detect_implicit_relationships(schema)
+    # 'customer_id' matches customers' PK 'customer_id' -> Rule 3 edge (0.60)
+    edges = semantic_edges(rels)
+    assert ("orders", "customer_id", "customers", "customer_id", RelationshipType.IMPLICIT) in edges
+
+
+def test_composite_pk_target_is_skipped():
+    schema = {"tables": {
+        "membership": {"columns": [{"name": "user_id", "primary_key": True},
+                                   {"name": "group_id", "primary_key": True}]},
+        "events": {"columns": [{"name": "id", "primary_key": True},
+                               {"name": "membership_id"}]},
+    }}
+    rels = detect_implicit_relationships(schema)
+    # membership has a composite PK -> resolve_target_key None -> no edge into membership
+    assert all(r.target_table != "membership" for r in rels)
 
 def test_get_singular_logic_with_complex_plural_endings():
     schema = {

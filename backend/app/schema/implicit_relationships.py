@@ -111,22 +111,17 @@ def detect_implicit_relationships(schema: dict | DatabaseSchema, *, probe=None) 
                 if prefix and prefix in singular_to_table:
                     expected_tgt_table = singular_to_table[prefix]
                     if expected_tgt_table == tgt_table.name:
-                        # Find an ID column in target table
-                        for tgt_col in tgt_table.columns:
-                            if tgt_col.name.lower() == "id":
-                                if not is_seen_or_explicit(src_table.name, src_col.name, tgt_table.name, tgt_col.name):
-                                    relationships.append(RelationshipSchema(
-                                        source_table=src_table.name,
-                                        source_column=src_col.name,
-                                        target_table=tgt_table.name,
-                                        target_column=tgt_col.name,
-                                        relationship_type=RelationshipType.IMPLICIT,
-                                        confidence=0.90,
-                                        reason="singular_table_id_pattern",
-                                        raw={"rule": "singular_table_id_pattern", "matched_prefix": prefix}
-                                    ))
-                                break # Move to next source column
-                
+                        key = resolve_target_key(tgt_table)
+                        if key is not None and not is_seen_or_explicit(
+                                src_table.name, src_col.name, tgt_table.name, key):
+                            relationships.append(RelationshipSchema(
+                                source_table=src_table.name, source_column=src_col.name,
+                                target_table=tgt_table.name, target_column=key,
+                                relationship_type=RelationshipType.IMPLICIT,
+                                confidence=0.90, reason="singular_table_id_pattern",
+                                raw={"rule": "singular_table_id_pattern",
+                                     "matched_prefix": prefix, "target_key": key}))
+
                 # Rule 2: Prefix-to-Table_Name Fuzzy Match
                 elif prefix:
                     # Generic prefix check (e.g. if the prefix is 'status', we shouldn't match it fuzzily to 'statuses')
@@ -135,43 +130,34 @@ def detect_implicit_relationships(schema: dict | DatabaseSchema, *, probe=None) 
                     if probe is not None:
                         probe.incr("fuzzy_comparison")
                     ratio = difflib.SequenceMatcher(None, prefix, tgt_singular).ratio()
-                    
+
                     if ratio >= 0.85:
                         confidence = 0.75 if ratio >= 0.90 else 0.65
-                        for tgt_col in tgt_table.columns:
-                            if tgt_col.name.lower() == "id":
-                                if not is_seen_or_explicit(src_table.name, src_col.name, tgt_table.name, tgt_col.name):
-                                    relationships.append(RelationshipSchema(
-                                        source_table=src_table.name,
-                                        source_column=src_col.name,
-                                        target_table=tgt_table.name,
-                                        target_column=tgt_col.name,
-                                        relationship_type=RelationshipType.IMPLICIT_FUZZY,
-                                        confidence=confidence,
-                                        reason="fuzzy_prefix_to_table_match",
-                                        raw={"rule": "fuzzy_prefix_match", "ratio": ratio, "prefix": prefix}
-                                    ))
-                                break
+                        key = resolve_target_key(tgt_table)
+                        if key is not None and not is_seen_or_explicit(
+                                src_table.name, src_col.name, tgt_table.name, key):
+                            relationships.append(RelationshipSchema(
+                                source_table=src_table.name, source_column=src_col.name,
+                                target_table=tgt_table.name, target_column=key,
+                                relationship_type=RelationshipType.IMPLICIT_FUZZY,
+                                confidence=confidence, reason="fuzzy_prefix_to_table_match",
+                                raw={"rule": "fuzzy_prefix_match", "ratio": ratio,
+                                     "prefix": prefix, "target_key": key}))
 
-                # Rule 3: Exact column name match (only if not generic)
+                # Rule 3: Exact column name match (only if not generic, and target is the resolved key)
                 if not is_generic_column(src_col_lower):
                     if probe is not None:
                         probe.incr("rule3_scan")
-                    for tgt_col in tgt_table.columns:
-                        tgt_col_lower = tgt_col.name.lower()
-                        if src_col_lower == tgt_col_lower:
-                            # Exact match on a non-generic column
-                            if not is_seen_or_explicit(src_table.name, src_col.name, tgt_table.name, tgt_col.name):
-                                relationships.append(RelationshipSchema(
-                                    source_table=src_table.name,
-                                    source_column=src_col.name,
-                                    target_table=tgt_table.name,
-                                    target_column=tgt_col.name,
-                                    relationship_type=RelationshipType.IMPLICIT,
-                                    confidence=0.60,
-                                    reason="exact_non_generic_column_match",
-                                    raw={"rule": "exact_column_match", "column": src_col_lower}
-                                ))
-                            break
+                    key = resolve_target_key(tgt_table)
+                    if key is not None and src_col_lower == key.lower():
+                        if not is_seen_or_explicit(
+                                src_table.name, src_col.name, tgt_table.name, key):
+                            relationships.append(RelationshipSchema(
+                                source_table=src_table.name, source_column=src_col.name,
+                                target_table=tgt_table.name, target_column=key,
+                                relationship_type=RelationshipType.IMPLICIT,
+                                confidence=0.60, reason="exact_non_generic_column_match",
+                                raw={"rule": "exact_column_match", "column": src_col_lower,
+                                     "target_key": key}))
 
     return relationships
