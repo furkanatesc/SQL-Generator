@@ -167,6 +167,11 @@ def select_schema_context(
 
     if not selected_tables:
         fallback_used = True
+        # Fallback is a bounded (<=5-table) deterministic safety net, not the
+        # budget-gated regime; budget_exhausted describes the benefit-density
+        # `rest` path above and must not co-report with fallback_used=True
+        # (Sprint 28.3.1 Task 5, TECH-DEBT §12.16).
+        budget_exhausted = False
         fallback_strategy = "deterministic_bounded_fallback"
         sorted_all_tables = sorted([t.name for t in schema.tables])
         max_fallback_tables = 5
