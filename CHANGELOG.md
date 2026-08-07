@@ -423,7 +423,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   (sentetik şema yalnız explicit-FK içeriyor → komşu benefit'i
   etkilenmedi); gate yeşil (exit 0), `join_paths`/`implicit_fk` metrikleri
   dokunulmadı. **TECH-DEBT §12.13 ÇÖZÜLDÜ.** Full suite 2490 passed/9
-  skipped. (PR #TBD)
+  skipped. (PR #155)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
