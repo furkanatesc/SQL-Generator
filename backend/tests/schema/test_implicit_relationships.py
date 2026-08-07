@@ -1,7 +1,8 @@
 import pytest
 import json
 import os
-from app.schema.implicit_relationships import detect_implicit_relationships
+from app.schema.implicit_relationships import detect_implicit_relationships, resolve_target_key
+from app.schema.schema_adapter import from_legacy_schema
 from app.schema.schema_contract import RelationshipType
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures", "schema")
@@ -125,3 +126,35 @@ def test_get_singular_logic_with_complex_plural_endings():
         ("products", "category_id", "categories", "id", RelationshipType.IMPLICIT),
         ("users", "company_id", "companies", "id", RelationshipType.IMPLICIT)
     }
+
+def _table(legacy_one):
+    schema = from_legacy_schema({"tables": legacy_one}, "unknown")
+    return schema.tables[0]
+
+def test_resolve_target_key_declared_single_pk():
+    t = _table({"users": {"columns": [
+        {"name": "user_id", "primary_key": True}, {"name": "name"}]}})
+    assert resolve_target_key(t) == "user_id"
+
+def test_resolve_target_key_composite_pk_returns_none():
+    t = _table({"membership": {"columns": [
+        {"name": "user_id", "primary_key": True},
+        {"name": "group_id", "primary_key": True}]}})
+    assert resolve_target_key(t) is None
+
+def test_resolve_target_key_convention_id_when_no_declared_pk():
+    t = _table({"orders": {"columns": [{"name": "id"}, {"name": "total"}]}})
+    assert resolve_target_key(t) == "id"
+
+def test_resolve_target_key_convention_table_id_fallback():
+    t = _table({"users": {"columns": [{"name": "user_id"}, {"name": "name"}]}})
+    assert resolve_target_key(t) == "user_id"  # singular('users')+'_id'
+
+def test_resolve_target_key_none_when_unresolvable():
+    t = _table({"log": {"columns": [{"name": "message"}, {"name": "ts"}]}})
+    assert resolve_target_key(t) is None
+
+def test_resolve_target_key_declared_pk_wins_over_id_column():
+    t = _table({"acct": {"columns": [
+        {"name": "code", "primary_key": True}, {"name": "id"}]}})
+    assert resolve_target_key(t) == "code"
