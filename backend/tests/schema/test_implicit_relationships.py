@@ -137,6 +137,21 @@ def test_rule3_matches_when_target_column_is_the_key():
     assert ("orders", "customer_id", "customers", "customer_id", RelationshipType.IMPLICIT) in edges
 
 
+def test_rule3_positive_path_natural_key():
+    # 'sku' is products' PK (natural key). inventory.sku matches it -> Rule 3 (NOT Rule 1,
+    # since 'sku' has no _id suffix so Rule 1/2 never fire). Genuinely pins Rule 3's positive path.
+    schema = {"tables": {
+        "products": {"columns": [{"name": "sku", "primary_key": True}, {"name": "name"}]},
+        "inventory": {"columns": [{"name": "id", "primary_key": True}, {"name": "sku"}]},
+    }}
+    rels = detect_implicit_relationships(schema)
+    assert ("inventory", "sku", "products", "sku", RelationshipType.IMPLICIT) in semantic_edges(rels)
+    r = next(x for x in rels if x.source_table == "inventory" and x.source_column == "sku")
+    assert r.reason == "exact_non_generic_column_match"
+    assert r.confidence == 0.60
+    assert r.raw["rule"] == "exact_column_match"
+
+
 def test_composite_pk_target_is_skipped():
     schema = {"tables": {
         "membership": {"columns": [{"name": "user_id", "primary_key": True},
