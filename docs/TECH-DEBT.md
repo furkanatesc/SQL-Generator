@@ -281,18 +281,26 @@ bilinçli olarak ertelendi (sessiz düşürme yok).
    tüketici seyrek buckets'ı kendi doldurmalı. Bilinçli kapsam dışı (27.7 spec).
    *İlgili Dosya:* `backend/app/dashboard_service.py`, `backend/app/dashboard/compose.py`
 
-4. **Küçük sağlamlık/semantik notları (Review #3–#5, hepsi Minor):** (a) debug kapalıyken
+4. **Küçük sağlamlık/semantik notları (Review #3–#5, hepsi Minor):** (a) ~~debug kapalıyken
    geçersiz `bucket` 404 yerine 422 döner (param validation gate'ten önce çalışır →
    endpoint varlığını sızdırır; sibling `metrics_api` aynı in-handler desenini paylaşır
-   ama kısıtlı param'ı yok) — AÇIK. (b) ~~`_floor_iso` `created_at`'in datetime olduğunu
+   ama kısıtlı param'ı yok)~~ — **ÇÖZÜLDÜ (28.3.1).** Debug gate route-level
+   `Depends(ensure_debug_enabled)` olarak taşındı (in-body çağrı kaldırıldı) →
+   FastAPI dependency'leri param validation'dan önce çözdüğü için debug kapalıyken
+   geçersiz `bucket` artık 404 (endpoint varlığı sızmıyor); debug açıkken 422
+   (validation hâlâ çalışıyor). OpenAPI şeması değişmedi (`bucket` hâlâ
+   `Literal["hour","day"]`). (b) ~~`_floor_iso` `created_at`'in datetime olduğunu
    varsayar (`shape_recent`'teki `hasattr(...,"isoformat")` guard'ı yok) — string
    `created_at` yalnız defensive dict-record dalından gelirse `AttributeError`.~~ —
    **ÇÖZÜLDÜ (27.11).** `bucket_timeseries` artık non-datetime `created_at`'i atlıyor
    (caller guard'ı eklendi, `backend/app/llm_usage/compute.py::bucket_usage_timeseries`
    ile aynı desen); tutarsızlık kozmetikti ama guard artık kod tarafında da açık. (c)
-   bucket `error_count` (terminal-status bazlı) ≠ `metrics.errors` (span-kod bazlı) —
-   ikisi de doğru ama toplamları farklı; sözleşme dokümanına bir cümle notu değer — AÇIK.
-   *İlgili Dosya:* `backend/app/api/dashboard_api.py`, `backend/app/dashboard/compose.py`
+   ~~bucket `error_count` (terminal-status bazlı) ≠ `metrics.errors` (span-kod bazlı) —
+   ikisi de doğru ama toplamları farklı; sözleşme dokümanına bir cümle notu değer.~~ —
+   **ÇÖZÜLDÜ (28.3.1).** `backend/app/dashboard/contract.py::TimeseriesBucket`
+   docstring'ine bir cümle not eklendi.
+   *İlgili Dosya:* `backend/app/api/dashboard_api.py`, `backend/app/dashboard/compose.py`,
+   `backend/app/dashboard/contract.py`
 
 ---
 
