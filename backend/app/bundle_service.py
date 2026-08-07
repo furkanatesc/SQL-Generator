@@ -18,6 +18,7 @@ from app.trace.query import TraceQuery
 from app.trace.redaction import redact_sensitive, redact_sensitive_dict
 
 END_TO_END_TRACE_TYPE = "end_to_end"
+DEBUG_TRACE_TYPE = "nl2sql"
 
 
 class BundleJobNotFound(Exception):
@@ -36,13 +37,11 @@ def _latest_end_to_end_payload(trace_store, job_id: str) -> Optional[Mapping[str
 
 
 def _latest_debug_trace(trace_store, job_id: str) -> Optional[Mapping[str, Any]]:
-    """SQL tasiyan debug trace (end_to_end OLMAYAN), serialize_trace_for_debug ile
+    """SQL tasiyan debug trace (trace_type=nl2sql), serialize_trace_for_debug ile
     REDAKTE gelir. Yoksa None."""
     adapter = DebugTraceAdapter(trace_store)
-    rows = adapter.list_traces(TraceQuery(limit=5, job_id=job_id))
+    rows = adapter.list_traces(TraceQuery(trace_type=DEBUG_TRACE_TYPE, job_id=job_id, limit=1))
     for row in rows or ():
-        if row.get("trace_type") == END_TO_END_TRACE_TYPE:
-            continue
         return row
     return None
 
