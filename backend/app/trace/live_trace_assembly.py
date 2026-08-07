@@ -56,6 +56,7 @@ from app.errors import ErrorCategory, codes_for_category
 # reason_code'lu ERROR span üretmiyordu.
 _INPUT_ERROR_TYPES = codes_for_category(ErrorCategory.INPUT)
 _RETRIEVAL_ERROR_TYPES = codes_for_category(ErrorCategory.RETRIEVAL)
+_SECURITY_ERROR_TYPES = codes_for_category(ErrorCategory.SECURITY)
 
 # _SECURITY_STAGES bir STAGE setidir (kod değil) ve registry'ye girmez —
 # kategori kodun sabit özelliği, stage çalışma zamanı verisidir.
@@ -73,6 +74,15 @@ def _attempt_issues(attempts: Sequence[Mapping]) -> list:
     for att in attempts or ():
         issues.extend(att.get("validation_errors") or [])
     return issues
+
+
+def _security_outcome(reason_code):
+    """(outcome, severity) for a security-span entry, from the 27.2 registry.
+    A code whose category is SECURITY is a real deny; anything else (e.g. a
+    validation code tagged at a security stage) is a flag, not a denial."""
+    if reason_code in _SECURITY_ERROR_TYPES:
+        return "denied", "error"
+    return "flagged", "warning"
 
 
 def assemble_live_end_to_end_trace(
@@ -163,11 +173,13 @@ def assemble_live_end_to_end_trace(
     if not attempts:
         security_span = build_security_span((), duration_ms=timings.get("security"))
     elif security_issues:
-        security_span = build_security_span([
-            SimpleNamespace(category=e.get("stage"), outcome="denied",
-                            severity="error", reason_code=e.get("type"),
-                            entry_hash=None)
-            for e in security_issues], duration_ms=timings.get("security"))
+        entries = []
+        for e in security_issues:
+            outcome, severity = _security_outcome(e.get("type"))
+            entries.append(SimpleNamespace(
+                category=e.get("stage"), outcome=outcome, severity=severity,
+                reason_code=e.get("type"), entry_hash=None))
+        security_span = build_security_span(entries, duration_ms=timings.get("security"))
     else:
         security_span = build_security_span([
             SimpleNamespace(category="sql_guardrail", outcome="allowed",
