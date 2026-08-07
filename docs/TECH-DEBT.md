@@ -190,13 +190,18 @@ katmanında durdu. Kalanlar:
    onu senkron tutmuyordu; her yeni endpoint'te elle 1 satır ekleniyordu (27.3 ve
    27.4'te iki kez yapıldı). `expected_routes` artık OpenAPI snapshot'ından
    türetilir (27.11); tek kaynak snapshot — sessiz drift riski kapandı.
-3. **`live_trace_assembly` güvenlik span'ini STAGE adına göre kuruyor.** 27.4'te
-   replay tarafı 27.2 registry kategorisine geçirildi (`ErrorCategory.SECURITY`), ama
-   *emit* tarafı hâlâ stage-tabanlı: `sql_parse_error` (kategorisi `validation`,
-   retryable) canlı trace'in SECURITY span'ine `outcome="denied"` olarak yazılmaya
-   devam ediyor. Replay artık bunu süzüyor, fakat trace'in kendisi hâlâ yanıltıcı —
-   `/api/debug/traces` üzerinden bakan bir insan "güvenlik reddi" görür. Emit tarafını
-   da kategoriye taşımak 27.4 kapsamı dışıydı (27.1w yüzeyini değiştirirdi).
+3. ~~**`live_trace_assembly` güvenlik span'ini STAGE adına göre kuruyor.**~~ —
+   **✅ ÇÖZÜLDÜ (28.3.1).** Canlı SECURITY span'inin `outcome`'ı artık 27.2
+   error registry'sinden türetiliyor: yeni `_security_outcome(reason_code)`
+   helper'ı kodun `ErrorCategory.SECURITY` kategorisinde olup olmadığına bakar
+   — kategori SECURITY ise `outcome="denied"`/`severity="error"`, değilse
+   (ör. `sql_parse_error` gibi validation kategorisi bir stage'de yakalanmış
+   kod) `outcome="flagged"`/`severity="warning"`. `_SECURITY_STAGES` seti
+   (hangi stage'lerin security span'e girdiğini belirleyen) DEĞİŞMEDİ —
+   yalnızca outcome artık kategoriye göre kuruluyor; pinning testi yeşil.
+   Ayrıca kayıtlı olmayan sahte bir hata koduna dayanan 2 pre-existing test
+   düzeltildi (registry'de gerçekten var olan kodlarla değiştirildi).
+   *İlgili Dosya:* `backend/app/trace/live_trace_assembly.py` (`_security_outcome`)
 4. **Fail olmuş job'ların üretilen SQL'i saklanmıyor** → replay'in
    `validation_recovery` verdict'i bugünkü veri modelinde **ulaşılamaz**, ve
    `security_regression` yalnız başarılı job'larda ölçülebilir. `jobs.result_sql`
@@ -207,15 +212,13 @@ katmanında durdu. Kalanlar:
 
 ## §6. Sprint 27.5 (Debug Bundle Export) devirleri — AÇIK
 
-1. **`_latest_debug_trace` `trace_type` filtresi olmadan `limit=5` kullanıyor.**
-   `bundle_service.py:38-47` job'ın en yeni 5 trace kaydını çekip aralarında
-   `end_to_end` OLMAYANI arıyor. Bir job'a ait `end_to_end` trace sayısı debug
-   trace'ten önce 5'i geçerse (örn. tekrarlanan replay/export çağrıları veya
-   çok adımlı retry döngüsü ek `end_to_end` kaydı biriktirirse), asıl debug
-   trace pencerenin dışında kalır ve bundle'ın `sql` bölümü `null` döner. Gerçek
-   çözüm: sorguyu debug trace türüne göre filtrelemek (store adaptöründe
-   `trace_type != end_to_end` desteği gerekiyor) ya da limiti büyütmek.
-   *İlgili Dosya:* `backend/app/bundle_service.py:38-47`
+1. ~~**`_latest_debug_trace` `trace_type` filtresi olmadan `limit=5` kullanıyor.**~~ —
+   **✅ ÇÖZÜLDÜ (28.3.1).** `_latest_debug_trace` artık `TraceQuery(trace_type=
+   DEBUG_TRACE_TYPE, job_id=job_id, limit=1)` ile doğrudan debug trace türünü
+   filtreliyor — "en yeni 5 kaydı çekip aralarında ara" penceresi kalktı;
+   `end_to_end` trace sayısı 5'i geçse bile asıl debug trace artık kaçmıyor,
+   bundle'ın `sql` bölümü `null` dönmüyor.
+   *İlgili Dosya:* `backend/app/bundle_service.py` (`_latest_debug_trace`)
 2. **Şema bölümü tam DDL snapshot'ı taşımıyor.** `BundleSchemaInfo`
    (`backend/app/debug_bundle/contract.py:54-61`) yalnız `selected_tables` (isim
    listesi) + `schema_hash` taşır; kolon/tip/FK detayları bundle'a hiç girmez,
@@ -246,8 +249,15 @@ katmanında durdu. Kalanlar:
 Opus whole-branch review verdict'i **SHIP** (0 Critical, 0 bloke); aşağıdakiler
 bilinçli olarak ertelendi (sessiz düşürme yok).
 
-1. **`feedback` bölümü ile trace bölümleri (`metrics`/`timeseries`/`recent`) aynı
-   istekte FARKLI zaman penceresi yansıtabilir (naive-timestamp sınırlarında).**
+1. ~~**`feedback` bölümü ile trace bölümleri (`metrics`/`timeseries`/`recent`) aynı
+   istekte FARKLI zaman penceresi yansıtabilir (naive-timestamp sınırlarında).**~~ —
+   **✅ ÇÖZÜLDÜ (28.3.1).** `database.list_feedback` artık gelen
+   `created_after`/`created_before` sınırını `_normalize_feedback_boundary` ile
+   naive-UTC'ye normalize ediyor (offset-aware bir ISO damgası gelirse
+   `astimezone(utc)` + offset düşürülür) — trace tarafının zaten naive-UTC
+   sakladığı `feedback.created_at` ile artık tutarlı karşılaştırılıyor;
+   offset'li ve naive sınır case'leri ayrı testlerle kilitli, mevcut
+   naive-sınır testleri değişmedi.
    *(Review bulgusu #1 — Important.)* `dashboard_service.build_dashboard` tek bir
    `created_after`/`created_before` sınırını iki tüketiciye fan-out eder ama
    filtreleme yolları farklı: (a) trace tarafı `TraceQuery` → `sqlite_store` sınırı
@@ -397,9 +407,15 @@ bilinçli ertelendi (sessiz düşürme yok).
    *İlgili Dosya:* `evals/regression_gate_cli.py`, `backend/app/eval/run_eval` (golden profil)
 3. **Sürüm etiketi elle verilir.** Baseline history kaydı bir `version` etiketi
    taşır ama bu etiket git-tag'den runtime'da **okunmaz** — `--version` CLI
-   bayrağıyla operatör tarafından elle sağlanır. Yanlış/eksik `--version`
-   sessizce yanlış bir sürüm altında baseline kaydeder; doğrulama yok.
-   *İlgili Dosya:* `evals/regression_gate_cli.py`
+   bayrağıyla operatör tarafından elle sağlanır. ~~Yanlış/eksik `--version`
+   sessizce yanlış bir sürüm altında baseline kaydeder; doğrulama yok.~~ —
+   **✅ ÇÖZÜLDÜ (28.3.1, kısmen)** — doğrulama eksikliği kapandı: `--version`
+   artık `_VERSION_RE = ^v?\d+\.\d+(\.\d+)?$` deseniyle doğrulanıyor; uyumsuz
+   bir değer baseline'a hiç yazılmadan `exit 2` ile reddediliyor. Git-tag'den
+   **otomatik** okuma (elle sağlama zorunluluğunun kendisi) hâlâ AÇIK —
+   operatör hâlâ doğru sürümü elle girmek zorunda, yalnızca *format* hatası
+   artık yakalanıyor.
+   *İlgili Dosya:* `backend/evals/regression_gate_cli.py` (`_VERSION_RE`, `_run_update`)
 4. **CI'da baseline güncellemesi manuel.** `--update-baseline` bayrağı
    `evals/baselines/history.json`'a yeni bir kayıt ekler ama CI pipeline'ı bunu
    **otomatik** çağırmaz — release sırasında operatörün elle koşturması
@@ -414,7 +430,7 @@ bilinçli ertelendi (sessiz düşürme yok).
    (27.9'un `FeedbackCategory` ekseniyle benzer bir ayrım) kapsam dışı.
    *İlgili Dosya:* `evals/regression_gate.py` (`compare_regression`)
 
-## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1, 28.2); 28.3 genişletti (yeni madde 13-17)
+## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1, 28.2, 28.3.1); 28.3 genişletti (yeni madde 13-17)
 
 `backend/benchmarks/` yeni bir dev/CI aracıdır (`evals/`'in kardeşi); hiçbir
 `app/` dosyası değişmedi, davranış korunur.
@@ -460,21 +476,24 @@ bilinçli ertelendi (sessiz düşürme yok).
    (hub detection, candidate scoring) ayrı bir benchmark hedefi veya
    `ProfileProbe` entegrasyonu olarak henüz kapsanmıyor.
    *İlgili Dosya:* `backend/app/schema_graph/`, `backend/benchmarks/bench_metrics.py`
-6. **AÇIK (yeni, 28.1) — `scipy` kurulu değil, `personalized_pagerank`
-   sessizce `{}`'e düşüyor.** `NetworkXGraphBackend.personalized_pagerank`
-   NetworkX'in `pagerank` çağrısı `scipy` gerektirdiğinde `Exception`'ı
-   yakalayıp `{}` döner (`app/schema_graph/networkx_backend.py`); bu yüzden
-   `graph_backend` hedefinin pagerank kısmı gerçek iş yapmadan CI log
-   gürültüsü üretiyor. Gate etkilenmiyor (pagerank float hiçbir zaman
-   gate'lenmez, madde 3), ama gerçek pagerank profillemesi ve log
-   temizliği için `scipy`'nin `requirements.txt`'e eklenmesi düşünülebilir.
-   *İlgili Dosya:* `backend/app/schema_graph/networkx_backend.py`, `backend/requirements.txt`
-7. **AÇIK (kozmetik, yeni, 28.1) — stale docstring/help metinleri.**
-   `backend/benchmarks/bench_contract.py` docstring/yorumları hâlâ "4-way
-   hedef" diyor ve `scale: 2000`'i bahsediyor; `backend/benchmarks/bench_cli.py`
-   `--scales` yardım metni örneği hâlâ `100,500,1000,2000` gösteriyor — v2'nin
-   5. hedefi (`graph_backend`) ve gate'lenen 3-ölçek (100/500/1000) ile
-   senkron değil. Davranışı etkilemiyor, doc-sync borcu.
+6. ~~**AÇIK (yeni, 28.1) — `scipy` kurulu değil, `personalized_pagerank`
+   sessizce `{}`'e düşüyor.**~~ — **✅ ÇÖZÜLDÜ (28.3.1, kısmen).**
+   `personalized_pagerank` artık `scipy` eksikliğini `(ImportError,
+   ModuleNotFoundError)` olarak ayrı yakalayıp DEBUG seviyesinde logluyor
+   ("PPR skipped (optional scipy backend unavailable)") — beklenmeyen diğer
+   hatalar hâlâ `logger.error` ile ayrı ele alınıyor; CI log gürültüsü kapandı.
+   `scipy` bağımlılığı **eklenmedi** (bilinçli) — gerçek pagerank profillemesi
+   hâlâ AÇIK, yalnızca eksiklik artık sessizce/gürültüyle değil temiz şekilde
+   ele alınıyor.
+   *İlgili Dosya:* `backend/app/schema_graph/networkx_backend.py` (`personalized_pagerank`)
+7. ~~**AÇIK (kozmetik, yeni, 28.1) — stale docstring/help metinleri.**~~ —
+   **✅ ÇÖZÜLDÜ (28.3.1) — VERIFY-CLOSE, kod değişikliği yok.** Bu kalem kod
+   olarak zaten 28.1/28.2/28.3 düzeltme dalgalarında aşamalı olarak
+   çözülmüştü: `bench_contract.py` docstring'i "Sprint 28.3" diyor ve 5
+   hedefin tamamını (`graph_backend` dahil) listeliyor, "4-way"/`scale: 2000`
+   metni yok; `bench_cli.py`'nin `--scales` yardım metni `100,500,1000`
+   gösteriyor. Bu madde yalnızca doğrulayıp RESOLVED olarak işaretlemek için
+   açık bırakılmıştı (28.3.1 Task 7 verify-close).
    *İlgili Dosya:* `backend/benchmarks/bench_contract.py`, `backend/benchmarks/bench_cli.py`
 8. **✅ ÇÖZÜLDÜ (28.2) — `find_join_paths` kombinatoryal DFS patlaması iki
    katmanla sınırlandı.** Ters-BFS `hop` mesafelerinden admissible bir derinlik
@@ -540,21 +559,22 @@ bilinçli ertelendi (sessiz düşürme yok).
     dynamic programming) kapsam dışı bırakıldı — determinizm ve performans
     tercih edildi.
     *İlgili Dosya:* `backend/app/schema/schema_context_selector.py`
-16. **AÇIK (yeni, 28.3, minor) — fallback yolu `cost_budget`'a gate
-    edilmiyor.** `select_schema_context`'teki deterministik bounded fallback
-    dalı (`fallback_used=True`, en fazla `max_fallback_tables=5` tablo)
-    `cost_budget` kontrolü YAPMADAN doğrudan `selected_tables`'a ekler
-    (`schema_context_selector.py`, `add`/`fallback_limit` döngüsü). Varsayılan
-    `cost_budget=30.0` altında bu dal yalnızca patolojik-geniş (30+ kolon) tek
-    aday tabloyla erişilebilir; golden şemada ve benchmark'ta gözlemlenmiş değil.
-    Etki düşük: tablo yine de output setine eklenir, yalnızca debug metadata'sı
-    (reason/score) bozulur, iki bayrak çelişkili görünür.
+16. ~~**AÇIK (yeni, 28.3, minor) — fallback yolu `cost_budget`'a gate
+    edilmiyor.**~~ — **✅ ÇÖZÜLDÜ (28.3.1).** Fallback rejimi artık
+    `budget_exhausted=False` set ediyor (fallback bir bütçe-dalı değil,
+    bounded bir güvenlik ağıdır — bkz. `schema_context_selector.py` satır
+    ~171-174 yorumu); önceki çelişkili `budget_exhausted=True` +
+    `fallback_used=True` kombinasyonu artık üretilmiyor. Fallback davranışının
+    kendisi (en fazla `max_fallback_tables=5` tablo, `cost_budget` kontrolü
+    olmadan ekleme) DEĞİŞMEDİ — yalnızca debug metadata'sındaki bayrak
+    çelişkisi kapandı, güvenlik ağı korundu.
     *İlgili Dosya:* `backend/app/schema/schema_context_selector.py`
-17. **AÇIK (yeni, 28.3, minor) — pipeline wiring testi yalnızca parse
-    sözleşmesini kilitliyor, uçtan-uca enjeksiyonu değil.** `sql_pipeline.py`
-    `table_selection_cost_model` config anahtarını `from_config`'e geçirip
-    `select_schema_context`'e enjekte eder; mevcut test bu kablolamanın
-    **parse/from_config çağrısını** doğrular ama gerçek bir pipeline
-    çalıştırmasının, config'te override edilmiş bir `cost_budget`/ağırlık
-    değerini seçim sonucuna **fiilen yansıttığını** uçtan uca doğrulamaz.
+17. ~~**AÇIK (yeni, 28.3, minor) — pipeline wiring testi yalnızca parse
+    sözleşmesini kilitliyor, uçtan-uca enjeksiyonu değil.**~~ —
+    **✅ ÇÖZÜLDÜ (28.3.1).** Yeni bir uçtan-uca test
+    (`test_wiring_end_to_end_config_override_changes_selection`) `configs`
+    üzerinden verilen bir `table_selection_cost_model` override'ının gerçek
+    bir pipeline çalıştırmasında seçim sonucunu **fiilen değiştirdiğini**
+    kanıtlıyor — önceki test yalnızca `from_config`/parse çağrısını
+    doğruluyordu, bu boşluk kapandı.
     *İlgili Dosya:* `backend/app/sql_pipeline.py`, `backend/tests/schema/test_cost_model_pipeline_wiring.py`

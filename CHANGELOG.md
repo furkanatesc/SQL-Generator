@@ -492,6 +492,51 @@ taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrat
   uyumlu). Full suite 2410 passed/9 skipped. Diğer TECH-DEBT kalemleri (§2,
   §4.3–4.9, §5.3/5.4, §6, §7, §8.1/8.3, §9.1/9.2, §10, §11) bilinçli olarak
   AÇIK bırakıldı (sessiz düşürme yok). (PR #149)
+- **Tech-Debt Cleanup** (Sprint 28.3.1 · Phase 9 içi bakım, faz ilerletmez,
+  27.11 desenini izler): `docs/TECH-DEBT.md`'de biriken 10 kalem 4 bundle
+  altında çözüldü — davranış korunur, yalnız test-bütünlüğü/invariant/
+  sağlamlık iyileşir. **Bundle A (§5.3/§8.1/§8.4a/§8.4c):** `live_trace_
+  assembly`'deki canlı SECURITY span outcome'ı artık STAGE adı yerine 27.2
+  error registry'sinden türetiliyor (`_security_outcome`: kodun kategorisi
+  SECURITY ise `denied`/`error`, değilse `flagged`/`warning`; `_SECURITY_
+  STAGES` seçimi ve pinning testi korunur) — ayrıca kayıtlı olmayan sahte bir
+  koda dayanan 2 pre-existing test düzeltildi; `database.list_feedback`
+  pencere sınırları `_normalize_feedback_boundary` ile naive-UTC'ye normalize
+  edildi (dashboard feedback/trace bölümleri artık aynı zaman penceresini
+  yansıtır); dashboard debug gate'i route-level `Depends(ensure_debug_
+  enabled)`'e taşındı (debug kapalıyken geçersiz `bucket` artık 404, endpoint
+  varlığı sızmıyor) + `TimeseriesBucket` docstring'ine `error_count`/
+  `metrics.errors` fark notu eklendi. **Bundle B (§6.1):** `bundle_service.
+  _latest_debug_trace` artık `TraceQuery(trace_type="nl2sql", job_id=…,
+  limit=1)` ile doğrudan sorguluyor — eski `limit=5` penceresinin bir job'a
+  ait `end_to_end` trace sayısı 5'i geçtiğinde asıl debug trace'i kaçırıp
+  bundle'ın `sql` bölümünü `null` döndürme riski kapandı. **Bundle C
+  (§12.16/§12.17):** `select_schema_context`'in bounded fallback rejimi artık
+  `budget_exhausted=False` set ediyor (fallback bir bütçe-dalı değil, bounded
+  bir güvenlik ağıdır) — önceki çelişkili `budget_exhausted=True` +
+  `fallback_used=True` kombinasyonu kalktı, fallback davranışının kendisi
+  değişmedi; yeni bir uçtan-uca test
+  (`test_wiring_end_to_end_config_override_changes_selection`) `configs`
+  üzerinden verilen bir `table_selection_cost_model` override'ının gerçek bir
+  pipeline çalıştırmasında seçim sonucunu fiilen değiştirdiğini kanıtlıyor
+  (önceki test yalnızca parse/`from_config` çağrısını doğruluyordu). **Bundle
+  D (§12.6/§11.3/§12.7):** `NetworkXGraphBackend.personalized_pagerank`
+  `scipy` eksikliğini `(ImportError, ModuleNotFoundError)` olarak ayrı
+  yakalayıp DEBUG seviyesinde logluyor (beklenmeyen diğer hatalar hâlâ
+  `logger.error`; `scipy` bağımlılığı bilinçli olarak eklenmedi); regression-
+  gate CLI'ın `--version` bayrağı artık `^v?\d+\.\d+(\.\d+)?$` deseniyle
+  doğrulanıyor, uyumsuz bir değer baseline'a hiç yazılmadan `exit 2` ile
+  reddediliyor; §12.7 stale docstring/help metni kalemi **verify-close**
+  edildi (kod değişikliği yok — `bench_contract.py`/`bench_cli.py` zaten
+  28.1–28.3 düzeltme dalgalarında senkronlanmıştı: 5 hedefin tamamı listeli,
+  "4-way"/`scale: 2000` metni yok, `--scales` yardımı `100,500,1000`
+  gösteriyor). Full suite 2483 passed/9 skipped; CI perf-gate
+  (`bench_cli --gate --scales 100,500,1000`) exit 0. **Yapısal borçlar
+  bilinçli AÇIK bırakıldı** (sessiz düşürme yok): `scan_cap`→DB-aggregation
+  kökü (§7.1/§8.3/§9.2/§10.3), retry-token eksik-sayımı (§9.1), onay-state
+  persistence (§10.1), semantik dedup (§10.2), gerçek-accuracy/case-
+  granülarite (§11.1/§11.2/§11.4/§11.5), Phase 9/12 kalemleri (§12.4/5/9/10/
+  11/12/13/14/15). (PR #TBD)
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
