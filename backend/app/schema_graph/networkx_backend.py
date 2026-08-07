@@ -61,6 +61,11 @@ class NetworkXGraphBackend(SchemaGraphBackend):
                 
         try:
             return self.nx.pagerank(self.G, alpha=0.85, personalization=personalization, weight='weight')
+        except (ImportError, ModuleNotFoundError) as e:
+            # Optional scipy backend not installed; pagerank is never gated
+            # on this, so keep it quiet instead of raising CI log noise.
+            logger.debug(f"PPR skipped (optional scipy backend unavailable): {e}")
+            return {}
         except Exception as e:
             logger.error(f"PPR calculation failed: {e}")
             return {}

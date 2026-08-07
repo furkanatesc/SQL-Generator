@@ -7,6 +7,7 @@ surum baseline'i append edilir (elle, surum keserken; CI otomatik yazmaz).
 """
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,7 @@ from evals.regression_gate import (
 
 DEFAULT_BASELINE_PATH = "evals/baselines/history.json"
 REQUIRED_REPORT_FIELDS = {"total", "passed", "failed", "pass_rate", "results"}
+_VERSION_RE = re.compile(r"^v?\d+\.\d+(\.\d+)?$")
 
 
 def _load_report(path: str) -> dict:
@@ -78,6 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
 def _run_update(args: Any, report: dict) -> int:
     if not args.version:
         print("--version is required with --update-baseline", file=sys.stderr)
+        return 2
+    if not _VERSION_RE.match(args.version):
+        print(f"invalid --version '{args.version}': expected e.g. v1.2.3", file=sys.stderr)
         return 2
     try:
         history = _load_history(args.baseline)
