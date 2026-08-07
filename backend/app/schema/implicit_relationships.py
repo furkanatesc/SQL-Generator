@@ -25,6 +25,28 @@ def get_singular(t_name: str) -> str:
         return t[:-1]
     return t
 
+def resolve_target_key(table):
+    """Single-column primary key of `table` for FK-target matching. Deterministic,
+    schema-only. Declared single PK -> its name; composite PK -> None; no declared PK
+    -> 'id', then '<singular_table>_id' convention; else None."""
+    pk = []
+    declared_names = {c.lower() for c in getattr(table, "primary_key_columns", [])}
+    for c in table.columns:
+        if c.primary_key or c.name.lower() in declared_names:
+            if c.name.lower() not in {p.lower() for p in pk}:
+                pk.append(c.name)
+    if len(pk) == 1:
+        return pk[0]
+    if len(pk) >= 2:
+        return None  # composite -> single-column FK inference does not apply
+    by_lower = {c.name.lower(): c.name for c in table.columns}
+    if "id" in by_lower:
+        return by_lower["id"]
+    conv = get_singular(table.name) + "_id"
+    if conv in by_lower:
+        return by_lower[conv]
+    return None
+
 def detect_implicit_relationships(schema: dict | DatabaseSchema, *, probe=None) -> list[RelationshipSchema]:
     """
     Detects implicit relationships heuristically while rejecting generic matches.
