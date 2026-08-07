@@ -26,7 +26,8 @@ def ensure_debug_enabled():
         raise HTTPException(status_code=404, detail="Not found")
 
 
-@router.get("", response_model=DashboardEnvelopeResponse)
+@router.get("", response_model=DashboardEnvelopeResponse,
+            dependencies=[Depends(ensure_debug_enabled)])
 def dashboard(
     created_after: Optional[str] = Query(default=None),
     created_before: Optional[str] = Query(default=None),
@@ -36,7 +37,6 @@ def dashboard(
     recent_limit: int = Query(default=20, ge=1, le=100),
     store: TraceStore = Depends(get_trace_store),
 ):
-    ensure_debug_enabled()
     payload = build_dashboard(
         trace_store=store, created_after=created_after, created_before=created_before,
         dialect=dialect, bucket=bucket, top_n=top_n, recent_limit=recent_limit)
