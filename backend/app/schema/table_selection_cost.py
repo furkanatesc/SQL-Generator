@@ -1,4 +1,4 @@
-"""Table selection cost model — PURE (Sprint 28.3).
+"""Table selection cost model — PURE (Sprint 28.3; neighbor confidence weighting Sprint 28.4).
 
 Named relevance weights + a per-table cost function for benefit-vs-cost
 budget selection. Injected into select_schema_context (no I/O here).
@@ -10,9 +10,11 @@ from pydantic import BaseModel, ConfigDict
 
 _KNOWN_FIELDS = {
     "exact_table", "singular_plural_table", "table_token_overlap",
-    "exact_column", "column_token_overlap", "explicit_neighbor", "implicit_neighbor",
+    "exact_column", "column_token_overlap", "neighbor_base",
     "w_base", "w_col", "w_fk", "cost_budget",
 }
+
+_KNOWN_BOOL_FIELDS = {"include_fuzzy_neighbors"}
 
 
 class TableSelectionCostModel(BaseModel):
@@ -22,8 +24,8 @@ class TableSelectionCostModel(BaseModel):
     table_token_overlap: float = 40.0
     exact_column: float = 80.0
     column_token_overlap: float = 30.0
-    explicit_neighbor: float = 20.0
-    implicit_neighbor: float = 10.0
+    neighbor_base: float = 20.0            # multiplied by relationship effective_confidence
+    include_fuzzy_neighbors: bool = False  # opt-in expansion of IMPLICIT_FUZZY neighbors
     w_base: float = 1.0
     w_col: float = 1.0
     w_fk: float = 0.0
@@ -55,6 +57,13 @@ def _is_number(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def neighbor_benefit(rel_confidence, model: TableSelectionCostModel) -> float:
+    """Neighbor relevance benefit = neighbor_base * effective_confidence.
+    A relationship with confidence None (explicit FK / custom) is certain -> 1.0."""
+    conf = rel_confidence if rel_confidence is not None else 1.0
+    return model.neighbor_base * conf
+
+
 def from_config(raw) -> TableSelectionCostModel:
     if not raw:
         return DEFAULT_COST_MODEL
@@ -64,6 +73,10 @@ def from_config(raw) -> TableSelectionCostModel:
         return DEFAULT_COST_MODEL
     if not isinstance(data, dict):
         return DEFAULT_COST_MODEL
-    overrides = {k: float(v) for k, v in data.items()
-                 if k in _KNOWN_FIELDS and _is_number(v)}
+    overrides = {}
+    for k, v in data.items():
+        if k in _KNOWN_FIELDS and _is_number(v):
+            overrides[k] = float(v)
+        elif k in _KNOWN_BOOL_FIELDS and isinstance(v, bool):
+            overrides[k] = v
     return TableSelectionCostModel(**overrides)
