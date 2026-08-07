@@ -536,7 +536,7 @@ taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrat
   kökü (§7.1/§8.3/§9.2/§10.3), retry-token eksik-sayımı (§9.1), onay-state
   persistence (§10.1), semantik dedup (§10.2), gerçek-accuracy/case-
   granülarite (§11.1/§11.2/§11.4/§11.5), Phase 9/12 kalemleri (§12.4/5/9/10/
-  11/12/13/14/15). (PR #TBD)
+  11/12/13/14/15). (PR #154)
 
 ### Known limitations
 - **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
