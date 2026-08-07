@@ -424,6 +424,34 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   etkilenmedi); gate yeşil (exit 0), `join_paths`/`implicit_fk` metrikleri
   dokunulmadı. **TECH-DEBT §12.13 ÇÖZÜLDÜ.** Full suite 2490 passed/9
   skipped. (PR #155)
+- **Missing Foreign Key Inference v2** (Sprint 28.5): `detect_implicit_relationships`'i
+  (`app/schema/implicit_relationships.py`) **PK-aware** hale getirdi. Yeni saf
+  `resolve_target_key(table) -> str | None`: tek-kolonlu deklare PK
+  (`ColumnSchema.primary_key`/`TableSchema.primary_key_columns`) → o kolon;
+  composite PK (2+ deklare kolon) → `None`; deklare PK yoksa `"id"` sonra
+  `"<singular_table>_id"` konvansiyon fallback'i; hiçbiri yoksa `None`. Rule 1
+  (`singular_table_id_pattern`, conf 0.90) ve Rule 2 (`fuzzy_prefix_to_table_match`,
+  IMPLICIT_FUZZY conf 0.75/0.65) artık hardcoded `"id"` yerine
+  `resolve_target_key(tgt)`'i hedefliyor — **recall**: `id` olmayan PK'li
+  tablolarda ilişki artık yakalanıyor. Rule 3 (`exact_non_generic_column_match`,
+  conf 0.60) artık YALNIZ kaynak kolon adı hedefin çözülmüş anahtarına eşitse
+  tetikleniyor — **precision**: PK olmayan bir kolona rastgele isim-eşleşmesiyle
+  kurulan spurious FK kenarları düştü. Confidence değerleri ve `reason`
+  string'leri **korundu** (benchmark `derive_implicit_fk_metrics` bucketing
+  etkilenmedi); `raw["target_key"]` yeni alan eklendi. Production
+  (`schema_manager.py`) çıkarımı iyileşir; schema-only ve deterministik kalır.
+  **Benchmark v5** (`large_schema_benchmark_v5`): `implicit_fk` hedefinde
+  `rule3_exact` 461/13024/56449 → **0** (scale 100/500/1000) — v1 on binlerce
+  spurious non-key kenar çıkarıyordu; `implicit_rels_found` artık yalnız
+  rule1+rule2 (92/730/1472). **`join_paths`/`context_selection`/`graph_backend`
+  v4'e göre BYTE-IDENTICAL** (`select_schema_context`/`find_join_paths` explicit
+  FK üzerinde çalışır, implicit-detection çıktısını tüketmez — coupling yok).
+  Gate yeşil (exit 0). **Bilinçli kapsam dışı** (TECH-DEBT §13):
+  type-uyumluluk sinyali/gate, config-driven eşikler (confidence/fuzzy-ratio/
+  generic-liste hardcoded kalır), unique-ama-PK-olmayan hedefler (PK-only
+  tasarım), composite-PK FK çıkarımı (tek-kolon PK'ye odaklanılır), veri
+  örneklemesi/value-overlap/cardinality (schema-only kalır). Full suite 2500
+  passed/9 skipped. (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
