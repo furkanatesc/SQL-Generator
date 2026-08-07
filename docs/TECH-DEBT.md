@@ -430,7 +430,7 @@ bilinçli ertelendi (sessiz düşürme yok).
    (27.9'un `FeedbackCategory` ekseniyle benzer bir ayrım) kapsam dışı.
    *İlgili Dosya:* `evals/regression_gate.py` (`compare_regression`)
 
-## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1, 28.2, 28.3.1); 28.3 genişletti (yeni madde 13-17)
+## §12. Sprint 28.0 (Large Schema Benchmark Suite) devirleri — KISMEN ÇÖZÜLDÜ (28.1, 28.2, 28.3.1, 28.4); 28.3 genişletti (yeni madde 13-17)
 
 `backend/benchmarks/` yeni bir dev/CI aracıdır (`evals/`'in kardeşi); hiçbir
 `app/` dosyası değişmedi, davranış korunur.
@@ -535,14 +535,19 @@ bilinçli ertelendi (sessiz düşürme yok).
     cost model + benefit-density seçim backend-only kaldı) — kalem hâlâ
     Phase 12'ye ait.
     *İlgili Dosya:* `frontend/src/components/SchemaManager.vue`, `frontend/src/utils/graphSelection.ts`
-13. **AÇIK (28.3 bilinçli kapsam dışı) — ilişki-güven-ağırlıklı komşu
-    benefit'i yok.** `select_schema_context`'in `explicit_neighbor`/
-    `implicit_neighbor` benefit ağırlıkları (28.3'te `TableSelectionCostModel`e
-    taşınan eski 20.0/10.0 magic number'ları) hâlâ **düz** (flat) — bir
-    komşunun ilişki güveninin (confidence) ne kadar yüksek olduğuna göre
-    ölçeklenmiyor. 28.3 yalnızca bu sabit ağırlıkları config-driven bir
-    modele taşıdı, güven-ağırlıklandırmayı eklemedi; bu Sprint 28.4
-    (Relationship Confidence Scoring)'e bırakıldı.
+13. ~~**AÇIK (28.3 bilinçli kapsam dışı) — ilişki-güven-ağırlıklı komşu
+    benefit'i yok.**~~ — **✅ ÇÖZÜLDÜ (28.4).** `TableSelectionCostModel`'deki
+    düz `explicit_neighbor`/`implicit_neighbor` (20.0/10.0) ağırlıkları tek bir
+    `neighbor_base: float = 20.0` ile birleştirildi; komşu benefit'i artık
+    `neighbor_base × effective_confidence`'tir (explicit/custom ilişki
+    `confidence=None` → 1.0, implicit ilişki 0.60–0.90 aralığında ölçülü
+    güven). `IMPLICIT_FUZZY` komşular yeni `include_fuzzy_neighbors: bool =
+    False` ile opt-in (varsayılan kapalı). Muhafazakâr `neighbor_base=20.0`
+    seçimi mevcut fixture'larda davranışı korudu (golden şemanın 6 kenarı
+    hepsi explicit conf=None → `20×1.0=20` = eski `explicit_neighbor`);
+    golden eval yeşil, fixture kürasyonu gerekmedi; benchmark v4 baseline'ı
+    byte-identical kaldı (versiyon bump gerekmedi — sentetik şema yalnız
+    explicit FK içeriyor).
     *İlgili Dosya:* `backend/app/schema/table_selection_cost.py`, `backend/app/schema/schema_context_selector.py`
 14. **AÇIK (28.3 bilinçli kapsam dışı) — token-tabanlı gerçek maliyet yok.**
     `table_cost() = w_base + w_col*n_columns + w_fk*n_fks` kolon/FK

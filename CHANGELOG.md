@@ -401,6 +401,29 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   gerçek maliyet (serialize footprint) — kolon-sayısı proxy'si kullanılır,
   gerçek 0/1-knapsack optimalliği (deterministik greedy kullanılır),
   frontend `maxNodesLimit` kalıcı çözümü (§2, Phase 12). (PR #153)
+- **Relationship Confidence Scoring** (Sprint 28.4): `TableSelectionCostModel`'in
+  28.3'te taşıdığı **düz** `explicit_neighbor`/`implicit_neighbor` (20.0/10.0)
+  ağırlıklarını tek bir `neighbor_base: float = 20.0` ile birleştirdi; komşu
+  benefit'i artık **çarpımsal**: yeni saf `neighbor_benefit(rel_confidence,
+  model) = neighbor_base × (conf if conf is not None else 1.0)`.
+  `select_schema_context`'teki EXPLICIT/CUSTOM/IMPLICIT komşu genişletmesi
+  artık `neighbor_base × effective_confidence` ile skorlanıyor (explicit/
+  custom ilişki `confidence=None` → 1.0, implicit ilişki 0.60–0.90
+  aralığında ölçülü güven); `IMPLICIT_FUZZY` komşular yeni
+  `include_fuzzy_neighbors: bool = False` ile **opt-in** genişliyor
+  (varsayılan kapalı). Güven artık tek trust sinyali — reason etiketleri
+  tip-tabanlı kalıyor (stabil prefix), tip-ağırlık çifte-sayımı yok.
+  `probe`/`node_budget`/`cost_budget`/seçim/join-path/fallback davranışı
+  **DEĞİŞMEDİ** — güven yalnızca komşu benefit'ini etkiliyor. Muhafazakâr
+  `neighbor_base=20.0` seçimi mevcut fixture'larda **davranış-koruyucu**
+  (golden şemanın 6 kenarı hepsi explicit conf=None → `20×1.0=20` = eski
+  `explicit_neighbor`); golden eval yeşil, fixture kürasyonu **gerekmedi**.
+  **Benchmark: versiyon bump gerekmedi** — `context_selection` metrikleri
+  committed `large_schema_benchmark_v4` baseline'ıyla **byte-identical**
+  (sentetik şema yalnız explicit-FK içeriyor → komşu benefit'i
+  etkilenmedi); gate yeşil (exit 0), `join_paths`/`implicit_fk` metrikleri
+  dokunulmadı. **TECH-DEBT §12.13 ÇÖZÜLDÜ.** Full suite 2490 passed/9
+  skipped. (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
