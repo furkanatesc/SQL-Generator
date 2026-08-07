@@ -450,7 +450,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   type-uyumluluk sinyali/gate, config-driven eşikler (confidence/fuzzy-ratio/
   generic-liste hardcoded kalır), unique-ama-PK-olmayan hedefler (PK-only
   tasarım), composite-PK FK çıkarımı (tek-kolon PK'ye odaklanılır), veri
-  örneklemesi/value-overlap/cardinality (schema-only kalır). Full suite 2500
+  örneklemesi/value-overlap/cardinality (schema-only kalır). Full suite 2501
   passed/9 skipped. (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
