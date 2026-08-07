@@ -452,6 +452,32 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   tasarım), composite-PK FK çıkarımı (tek-kolon PK'ye odaklanılır), veri
   örneklemesi/value-overlap/cardinality (schema-only kalır). Full suite 2501
   passed/9 skipped. (PR #156)
+- **Schema Cache Invalidation** (Sprint 28.6): `SchemaManager.load_schema`'nın
+  eski `db_type`-only okuma predikatını içeriğe duyarlı bir fingerprint'le
+  değiştirdi. Yeni saf `app/schema_cache_fingerprint.py`:
+  `SCHEMA_CACHE_VERSION = "v1"` + `compute_cache_fingerprint(*, db_type,
+  hidden_tables_raw, hidden_columns_raw, embedding_model,
+  cache_version=SCHEMA_CACHE_VERSION) -> str` — girdileri `\x1f` ayracıyla
+  birleştirip (None → `""`) sha256 alır; stdlib-only, deterministik.
+  `load_schema` artık lock içinde en başta güncel fingerprint'i hesaplıyor
+  (embedding model ucuz okunuyor, build tetiklenmiyor), cache'teki
+  `cache_fingerprint`'le karşılaştırıyor; uyuşmazlık/eksiklikte yeniden
+  çıkarım yapılıyor. Eski `db_type`-only kontrol yeni fingerprint'e dahil
+  (subsumed). Yazma payload'ı yeni `cache_fingerprint` alanını kazandı.
+  Lock/cache-stampede/deepcopy/RAG-indexleme/ilişki-dressing **DEĞİŞMEDİ**.
+  **Etki:** `hidden_tables`/`hidden_columns` config drift'i ve
+  embedding-model değişikliği artık cache'i otomatik invalidate ediyor;
+  fingerprint'siz eski bir cache bir kez yeniden çıkarılıp fingerprint'li
+  olarak yeniden yazılıyor; `SCHEMA_CACHE_VERSION` bump'ı tüm cache'leri
+  invalidate ediyor. Self-contained — yeni bir DB sorgusu YOK. **Bilinçli
+  kapsam dışı** (TECH-DEBT §14): ham DB şema drift'i (tablo/kolon
+  değişikliği — self-contained fingerprint bunu yakalamaz; 28.7 Incremental
+  Schema Sync ile örtüşebilir), TTL/zaman-tabanlı invalidation, explicit
+  invalidation endpoint/event, granüler embedding-only invalidation.
+  **Benchmark etkilenmedi** (`from_legacy_schema` sentetik şemalar
+  üzerinde çalışır, `SchemaManager.load_schema`'yı egzersiz etmez) — gate
+  yeşil, versiyon bump gerekmedi. Full suite 2509 passed/9 skipped.
+  (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
