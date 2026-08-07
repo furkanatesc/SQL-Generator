@@ -583,3 +583,37 @@ bilinçli ertelendi (sessiz düşürme yok).
     kanıtlıyor — önceki test yalnızca `from_config`/parse çağrısını
     doğruluyordu, bu boşluk kapandı.
     *İlgili Dosya:* `backend/app/sql_pipeline.py`, `backend/tests/schema/test_cost_model_pipeline_wiring.py`
+
+## §13. Sprint 28.5 (Missing Foreign Key Inference v2) devirleri — AÇIK
+
+`detect_implicit_relationships` artık PK-aware (yeni saf `resolve_target_key(table)`
+yardımcısı); aşağıdakiler tasarım spec'inde (§7) bilinçli olarak kapsam dışı
+bırakıldı (sessiz düşürme yok).
+
+1. **Type-uyumluluk sinyali/gate yok.** Kaynak kolonun veri tipi hedef PK'nin
+   tipiyle karşılaştırılmıyor — bir `customer_id INTEGER` kaynak kolonu,
+   hedefteki PK `TEXT` olsa bile salt isim/PK-anahtar eşleşmesiyle FK adayı
+   sayılabilir. Tip-uyumluluk kontrolü ayrı bir precision katmanı olarak
+   kapsam dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/schema/implicit_relationships.py` (`resolve_target_key`, Rule 1-3)
+2. **Config-driven eşikler yok.** Confidence değerleri (0.90/0.75/0.65/0.60),
+   fuzzy-ratio eşiği (`0.85`/`0.90`) ve generic-kolon listesi hâlâ kod içinde
+   hardcoded — 27.8/28.3 `from_config()` desenindeki gibi bir config yüzeyi
+   yok.
+   *İlgili Dosya:* `backend/app/schema/implicit_relationships.py`
+3. **Unique-ama-PK-olmayan hedefler tanınmıyor.** `resolve_target_key` yalnız
+   deklare edilmiş PK'yi (veya PK yoksa `id`/`<singular>_id` konvansiyonunu)
+   hedef anahtar sayar; `UNIQUE` kısıtlı ama PK olmayan bir kolona işaret eden
+   gerçek bir FK ilişkisi hâlâ yakalanmaz (PK-only tasarım kararı, Q2).
+   *İlgili Dosya:* `backend/app/schema/implicit_relationships.py` (`resolve_target_key`)
+4. **Composite-PK hedefli FK çıkarımı yok.** `resolve_target_key` composite PK
+   (2+ deklare edilmiş PK kolonu) taşıyan bir tabloda `None` döner —
+   yalnız tek-kolonlu PK'lere odaklanılır; çok-kolonlu FK çıkarımı kapsam
+   dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/schema/implicit_relationships.py` (`resolve_target_key`)
+5. **Veri örneklemesi / value-overlap / cardinality yok.** Çıkarım tamamen
+   schema-only kalır (kolon adı + deklare edilmiş PK metadata'sı); gerçek
+   satır verisi üzerinde value-overlap veya cardinality analizi (ör. kaynak
+   kolon değerlerinin hedef PK değer kümesine ne oranda düştüğü) bilinçli
+   olarak kapsam dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/schema/implicit_relationships.py`
