@@ -9,7 +9,7 @@ def test_default_weights_match_legacy_magic_numbers():
     m = DEFAULT_COST_MODEL
     assert (m.exact_table, m.singular_plural_table, m.table_token_overlap) == (100.0, 60.0, 40.0)
     assert (m.exact_column, m.column_token_overlap) == (80.0, 30.0)
-    assert (m.explicit_neighbor, m.implicit_neighbor) == (20.0, 10.0)
+    assert m.neighbor_base == 20.0
 
 
 def test_table_cost_is_base_plus_columns_plus_fks():
@@ -43,3 +43,36 @@ def test_from_config_overrides_known_fields_only():
     m = from_config(raw)
     assert m.exact_table == 200.0 and m.w_col == 2.0 and m.cost_budget == 50.0
     assert m.singular_plural_table == DEFAULT_COST_MODEL.singular_plural_table  # untouched
+
+
+def test_neighbor_base_default_and_fuzzy_flag_default():
+    m = DEFAULT_COST_MODEL
+    assert m.neighbor_base == 20.0
+    assert m.include_fuzzy_neighbors is False
+    # old flat neighbor fields are gone
+    assert not hasattr(m, "explicit_neighbor")
+    assert not hasattr(m, "implicit_neighbor")
+
+
+def test_neighbor_benefit_multiplies_base_by_confidence():
+    from app.schema.table_selection_cost import neighbor_benefit
+    m = TableSelectionCostModel(neighbor_base=20.0)
+    assert neighbor_benefit(None, m) == 20.0     # explicit/custom -> 1.0
+    assert neighbor_benefit(1.0, m) == 20.0
+    assert neighbor_benefit(0.9, m) == 18.0
+    assert neighbor_benefit(0.6, m) == 12.0
+
+
+def test_from_config_accepts_neighbor_base_and_fuzzy_bool_and_drops_old_keys():
+    raw = json.dumps({"neighbor_base": 30.0, "include_fuzzy_neighbors": True,
+                      "explicit_neighbor": 999, "implicit_neighbor": 999})
+    m = from_config(raw)
+    assert m.neighbor_base == 30.0
+    assert m.include_fuzzy_neighbors is True
+    # old keys silently ignored (not accepted, no crash)
+    assert not hasattr(m, "explicit_neighbor")
+
+
+def test_from_config_ignores_non_bool_fuzzy_flag():
+    m = from_config(json.dumps({"include_fuzzy_neighbors": "yes"}))
+    assert m.include_fuzzy_neighbors is False  # non-bool ignored -> default
