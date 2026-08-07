@@ -216,3 +216,55 @@ def test_fallback_regime_does_not_report_budget_exhausted():
     assert sel.budget_exhausted is False
     assert [st.table_name for st in sel.selected_tables] == ["order_items"]
     assert sel.selected_tables[0].reasons == ["fallback"]
+
+
+# --- Sprint 28.4: confidence-weighted neighbor expansion + fuzzy opt-in ---
+
+def _schema_with_implicit_neighbor():
+    # 'orders' token-matches the question; 'customers' is an IMPLICIT neighbor (conf 0.6).
+    legacy = {"tables": {
+        "orders": {"columns": [{"name": "id", "primary_key": True}, {"name": "customer_id"}],
+                   "foreign_keys": []},
+        "customers": {"columns": [{"name": "id", "primary_key": True}], "foreign_keys": []},
+    }, "graph": {"nodes": ["orders", "customers"], "edges": [
+        {"source": "orders", "source_col": "customer_id", "target": "customers",
+         "target_col": "id", "type": "implicit", "confidence": 0.6}]}}
+    return from_legacy_schema(legacy, "postgres")
+
+def test_implicit_neighbor_benefit_scaled_by_confidence():
+    schema = _schema_with_implicit_neighbor()
+    sel = select_schema_context(schema, "orders")  # 'orders' exact-matches
+    by_name = {st.table_name: st for st in sel.selected_tables}
+    assert "customers" in by_name
+    # implicit neighbor benefit = neighbor_base(20) * confidence(0.6) = 12.0
+    assert by_name["customers"].score == 12.0
+
+def test_explicit_neighbor_benefit_is_full_base():
+    legacy = {"tables": {
+        "orders": {"columns": [{"name": "id", "primary_key": True}, {"name": "customer_id"}],
+                   "foreign_keys": [{"column": "customer_id", "referenced_table": "customers",
+                                     "referenced_column": "id", "type": "explicit"}]},
+        "customers": {"columns": [{"name": "id", "primary_key": True}], "foreign_keys": []},
+    }}
+    schema = from_legacy_schema(legacy, "postgres")
+    sel = select_schema_context(schema, "orders")
+    by_name = {st.table_name: st for st in sel.selected_tables}
+    # explicit neighbor conf None -> 1.0 -> 20.0 (unchanged from old explicit_neighbor)
+    assert by_name["customers"].score == 20.0
+
+def test_fuzzy_neighbor_excluded_by_default_included_when_enabled():
+    legacy = {"tables": {
+        "orders": {"columns": [{"name": "id", "primary_key": True}, {"name": "cust"}],
+                   "foreign_keys": []},
+        "customers": {"columns": [{"name": "id", "primary_key": True}], "foreign_keys": []},
+    }, "graph": {"nodes": ["orders", "customers"], "edges": [
+        {"source": "orders", "source_col": "cust", "target": "customers",
+         "target_col": "id", "type": "implicit_fuzzy", "confidence": 0.7}]}}
+    schema = from_legacy_schema(legacy, "postgres")
+    default_sel = select_schema_context(schema, "orders")
+    assert "customers" not in [st.table_name for st in default_sel.selected_tables]
+    enabled = TableSelectionCostModel(include_fuzzy_neighbors=True)
+    on_sel = select_schema_context(schema, "orders", cost_model=enabled)
+    by_name = {st.table_name: st for st in on_sel.selected_tables}
+    assert "customers" in by_name
+    assert by_name["customers"].score == 20.0 * 0.7  # 14.0
