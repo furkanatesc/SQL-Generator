@@ -1,6 +1,6 @@
 [
   {
-    "schema_version": "large_schema_benchmark_v4",
+    "schema_version": "large_schema_benchmark_v5",
     "generator_params": {
       "dialect": "postgres",
       "fk_density": 0.6,
@@ -22,7 +22,7 @@
           "tables": 100,
           "valid": 1
         },
-        "wall_ms": 2.31559993699193
+        "wall_ms": 2.3927001748234034
       },
       {
         "target": "join_paths",
@@ -38,22 +38,22 @@
           "path_recorded": 2,
           "paths_found_total": 2
         },
-        "wall_ms": 0.4093002062290907
+        "wall_ms": 0.4032999277114868
       },
       {
         "target": "implicit_fk",
         "scale": 100,
         "deterministic": {
           "fuzzy_comparison": 1386,
-          "implicit_rels_found": 553,
+          "implicit_rels_found": 92,
           "other": 0,
           "pair_iteration": 9900,
           "rule1_singular_id": 42,
           "rule2_fuzzy": 50,
-          "rule3_exact": 461,
+          "rule3_exact": 0,
           "rule3_scan": 20493
         },
-        "wall_ms": 35.436099860817194
+        "wall_ms": 42.00250003486872
       },
       {
         "target": "context_selection",
@@ -68,7 +68,7 @@
           "selected_tables_total": 61,
           "table_scan": 2000
         },
-        "wall_ms": 14.786200132220984
+        "wall_ms": 15.124700032174587
       },
       {
         "target": "graph_backend",
@@ -80,7 +80,7 @@
           "sp_pairs_with_path": 2,
           "sp_total_path_len": 5
         },
-        "wall_ms": 80.88189992122352
+        "wall_ms": 85.79130005091429
       },
       {
         "target": "schema_validation",
@@ -91,7 +91,7 @@
           "tables": 500,
           "valid": 1
         },
-        "wall_ms": 9.526199894025922
+        "wall_ms": 9.979800088331103
       },
       {
         "target": "join_paths",
@@ -107,22 +107,22 @@
           "path_recorded": 2,
           "paths_found_total": 2
         },
-        "wall_ms": 1.648399978876114
+        "wall_ms": 1.6485999803990126
       },
       {
         "target": "implicit_fk",
         "scale": 500,
         "deterministic": {
           "fuzzy_comparison": 35429,
-          "implicit_rels_found": 13754,
+          "implicit_rels_found": 730,
           "other": 0,
           "pair_iteration": 249500,
           "rule1_singular_id": 237,
           "rule2_fuzzy": 493,
-          "rule3_exact": 13024,
+          "rule3_exact": 0,
           "rule3_scan": 538421
         },
-        "wall_ms": 932.6124000363052
+        "wall_ms": 1120.1064998749644
       },
       {
         "target": "context_selection",
@@ -137,7 +137,7 @@
           "selected_tables_total": 59,
           "table_scan": 10000
         },
-        "wall_ms": 69.56290011294186
+        "wall_ms": 71.40569994226098
       },
       {
         "target": "graph_backend",
@@ -149,7 +149,7 @@
           "sp_pairs_with_path": 2,
           "sp_total_path_len": 6
         },
-        "wall_ms": 28.11349998228252
+        "wall_ms": 25.34020016901195
       },
       {
         "target": "schema_validation",
@@ -160,7 +160,7 @@
           "tables": 1000,
           "valid": 1
         },
-        "wall_ms": 42.87869995459914
+        "wall_ms": 34.464700147509575
       },
       {
         "target": "join_paths",
@@ -176,22 +176,22 @@
           "path_recorded": 2,
           "paths_found_total": 2
         },
-        "wall_ms": 4.064999986439943
+        "wall_ms": 4.094399977475405
       },
       {
         "target": "implicit_fk",
         "scale": 1000,
         "deterministic": {
           "fuzzy_comparison": 141858,
-          "implicit_rels_found": 57921,
+          "implicit_rels_found": 1472,
           "other": 0,
           "pair_iteration": 999000,
           "rule1_singular_id": 485,
           "rule2_fuzzy": 987,
-          "rule3_exact": 56449,
+          "rule3_exact": 0,
           "rule3_scan": 2189808
         },
-        "wall_ms": 4021.720499964431
+        "wall_ms": 4737.219700124115
       },
       {
         "target": "context_selection",
@@ -206,7 +206,7 @@
           "selected_tables_total": 63,
           "table_scan": 20000
         },
-        "wall_ms": 151.0524998884648
+        "wall_ms": 171.61570000462234
       },
       {
         "target": "graph_backend",
@@ -218,7 +218,7 @@
           "sp_pairs_with_path": 2,
           "sp_total_path_len": 6
         },
-        "wall_ms": 54.15119999088347
+        "wall_ms": 55.50890020094812
       }
     ]
   }

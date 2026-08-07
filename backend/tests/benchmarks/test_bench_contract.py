@@ -29,6 +29,6 @@ def test_report_to_dict_stable_and_orders_metrics():
         ),
     )
     d = report.to_dict()
-    assert d["schema_version"] == "large_schema_benchmark_v4"
+    assert d["schema_version"] == "large_schema_benchmark_v5"
     assert list(d["generator_params"].keys()) == ["dialect", "seed"]
     assert [m["target"] for m in d["metrics"]] == ["schema_validation", "join_paths"]

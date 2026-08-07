@@ -4,10 +4,16 @@ Frozen records with JSON-stable to_dict. No I/O, no clock, no randomness.
 Sprint 28.3 (table selection cost model) changed how select_schema_context
 picks tables — context_selection now reflects DEFAULT_COST_MODEL's
 density-budget selection; join_paths is unaffected.
+Sprint 28.5 — detect_implicit_relationships became PK-aware (Rule 3 now
+requires the matched column to be a primary key on the referenced side),
+so implicit_fk's deterministic counters (notably rule3_exact) reflect
+PK-aware inference; join_paths/context_selection/graph_backend are
+unaffected (select_schema_context and join-path search use explicit FKs,
+not detect_implicit_relationships' output).
 """
 from dataclasses import dataclass
 
-BENCHMARK_SCHEMA_VERSION = "large_schema_benchmark_v4"
+BENCHMARK_SCHEMA_VERSION = "large_schema_benchmark_v5"
 
 
 @dataclass(frozen=True)
