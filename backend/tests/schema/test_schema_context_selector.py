@@ -179,3 +179,40 @@ def test_exact_match_focus_always_included_even_if_expensive():
     sel = select_schema_context(schema, "orders")  # 'orders' is an exact table match
     # 'orders' forced in despite zero budget
     assert "orders" in [st.table_name for st in sel.selected_tables]
+
+
+# --- Sprint 28.3.1 Task 5 (TECH-DEBT §12.16): fallback regime must not
+# co-report budget_exhausted=True alongside fallback_used=True ---
+
+def test_fallback_regime_does_not_report_budget_exhausted():
+    # Single table "order_items" tokenizes to {"order", "items"} ->
+    # singularized {"order", "item"}. Question "items" singularizes to
+    # {"item"}, which intersects that set, so the table scores via
+    # singular_plural_table_match (NOT exact_table_match: the literal string
+    # "order_items" is not a substring of "items"). Because it is not an
+    # exact match, it is NOT force-included and instead goes through the
+    # budget-gated `rest` path.
+    #
+    # Cost (w_base=1.0, w_col=1.0, w_fk=0.0): 1 + 10 columns = 11.0, which
+    # exceeds the tiny injected cost_budget=5.0. The `rest` loop therefore
+    # skips it and sets budget_exhausted=True internally, leaving
+    # selected_tables empty -> the deterministic bounded fallback fires.
+    #
+    # The fallback is a distinct, bounded (<=5 table) safety net, not the
+    # budget-gated regime, so it must report budget_exhausted=False even
+    # though the (now-irrelevant) budget-gated path was exhausted first.
+    legacy = {"tables": {
+        "order_items": {
+            "columns": [{"name": "id", "primary_key": True}] +
+                       [{"name": f"c{i}"} for i in range(9)],  # 10 cols -> cost 11.0
+            "foreign_keys": []},
+    }}
+    schema = from_legacy_schema(legacy, "postgres")
+    model = TableSelectionCostModel(cost_budget=5.0)
+
+    sel = select_schema_context(schema, "items", cost_model=model)
+
+    assert sel.fallback_used is True
+    assert sel.budget_exhausted is False
+    assert [st.table_name for st in sel.selected_tables] == ["order_items"]
+    assert sel.selected_tables[0].reasons == ["fallback"]
