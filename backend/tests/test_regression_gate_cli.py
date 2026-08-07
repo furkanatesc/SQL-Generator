@@ -111,6 +111,31 @@ def test_update_baseline_duplicate_version_returns_2(tmp_path):
     assert hist.read_text(encoding="utf-8") == before
 
 
+def test_update_baseline_rejects_malformed_version(tmp_path, capsys):
+    report = tmp_path / "r.json"
+    baseline = tmp_path / "h.json"
+    _write_report(report, [("a", True)])
+    rc = main([str(report), "--baseline", str(baseline),
+               "--update-baseline", "--version", "not-a-version"])
+    assert rc == 2
+    assert "version" in capsys.readouterr().err.lower()
+    # Hata sonrasi baseline dosyasi olusturulmamis olmali
+    assert not baseline.exists()
+
+
+def test_update_baseline_accepts_semver(tmp_path, capsys):
+    report = tmp_path / "r.json"
+    hist = tmp_path / "history.json"
+    _write_report(report, [("a", True), ("b", True)])
+    _seed_history(hist, "v1.0.0", ["a", "b"], ["a", "b"])
+    rc = main([str(report), "--baseline", str(hist),
+               "--update-baseline", "--version", "v1.2.3",
+               "--timestamp", "2026-08-03T00:00:00Z"])
+    assert rc == 0
+    data = json.loads(hist.read_text(encoding="utf-8"))
+    assert [e["version"] for e in data] == ["v1.0.0", "v1.2.3"]
+
+
 def test_max_pass_rate_drop_flag_parsed(tmp_path, capsys):
     report = tmp_path / "r.json"
     hist = tmp_path / "history.json"
