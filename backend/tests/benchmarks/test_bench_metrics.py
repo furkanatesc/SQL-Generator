@@ -78,6 +78,6 @@ def test_graph_backend_metrics():
                  "sp_pairs_with_path": 2, "sp_total_path_len": 5}
 
 
-def test_schema_version_is_v4():
+def test_schema_version_is_v5():
     from benchmarks.bench_contract import BENCHMARK_SCHEMA_VERSION
-    assert BENCHMARK_SCHEMA_VERSION == "large_schema_benchmark_v4"
+    assert BENCHMARK_SCHEMA_VERSION == "large_schema_benchmark_v5"
