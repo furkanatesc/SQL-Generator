@@ -475,14 +475,25 @@ class SchemaManager:
         """
         global _schema_lock
         with _schema_lock:
+            from app.database import get_config
+            from app.schema_cache_fingerprint import compute_cache_fingerprint
+            db_type = self.params["type"]
+            current_model = SchemaEmbeddingIndex().embedding_client.model  # cheap, no build
+            current_fp = compute_cache_fingerprint(
+                db_type=db_type,
+                hidden_tables_raw=get_config(f"hidden_tables_{db_type}"),
+                hidden_columns_raw=get_config(f"hidden_columns_{db_type}"),
+                embedding_model=current_model,
+            )
+
             base_schema = None
             embeddings = None
-            
+
             if not force_refresh and os.path.exists(CACHE_PATH):
                 try:
                     with open(CACHE_PATH, "r", encoding="utf-8") as f:
                         cache_data = json.load(f)
-                        if cache_data.get("db_type") == self.params["type"]:
+                        if cache_data.get("cache_fingerprint") == current_fp:
                             base_schema = cache_data["schema"]
                             embeddings = cache_data.get("embeddings")
                 except Exception as e:
@@ -507,6 +518,7 @@ class SchemaManager:
                     
                 try:
                     cache_payload = {
+                        "cache_fingerprint": current_fp,
                         "db_type": self.params["type"],
                         "schema": base_schema,
                         "embeddings": embeddings
