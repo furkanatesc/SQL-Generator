@@ -46,3 +46,31 @@ def test_list_feedback_created_before_filter(isolated_db):
     # gelecekteki bir created_before -> satir gelmeli; gecmisteki -> gelmemeli
     assert len(database.list_feedback(created_before="2099-01-01T00:00:00")) == 1
     assert database.list_feedback(created_before="2000-01-01T00:00:00") == []
+
+
+def test_list_feedback_offset_aware_boundary_matches_naive_utc_rows(isolated_db, monkeypatch):
+    # feedback.created_at is stored naive-UTC (datetime.utcnow().isoformat()). An
+    # offset-aware created_after boundary representing the SAME instant must still
+    # include a row created at/after it. Before the fix, the offset-suffixed string
+    # sorts lexicographically greater than the naive stored value and the row is
+    # wrongly excluded.
+    import datetime as dt_module
+
+    # Same instant as the boundary below, naive-UTC, no microseconds -> isoformat()
+    # produces "2026-08-07T00:00:00", a string-prefix of the offset-aware boundary
+    # "2026-08-07T00:00:00+00:00" and therefore lexicographically LESS than it.
+    fixed_now = dt_module.datetime(2026, 8, 7, 0, 0, 0)
+
+    class _FixedDateTime(dt_module.datetime):
+        @classmethod
+        def utcnow(cls):
+            return fixed_now
+
+    monkeypatch.setattr(dt_module, "datetime", _FixedDateTime)
+
+    database.create_job("j1", natural_query="q")
+    database.create_feedback("f1", "j1", "correct", None, None, None)
+
+    rows = database.list_feedback(created_after="2026-08-07T00:00:00+00:00")
+    assert len(rows) == 1
+    assert rows[0]["id"] == "f1"

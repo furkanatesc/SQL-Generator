@@ -321,6 +321,21 @@ def get_feedback_for_job(job_id: str) -> List[Dict[str, Any]]:
         return [dict(row) for row in rows]
 
 
+def _normalize_feedback_boundary(value: Optional[str]) -> Optional[str]:
+    """Normalize an ISO boundary to naive-UTC to match how feedback.created_at is
+    stored (datetime.utcnow().isoformat()). Unparseable -> returned unchanged."""
+    if value is None:
+        return None
+    import datetime
+    try:
+        dt = datetime.datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return value
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return dt.isoformat()
+
+
 def list_feedback(created_after: Optional[str] = None,
                   created_before: Optional[str] = None,
                   limit: int = 10000) -> List[Dict[str, Any]]:
@@ -329,7 +344,14 @@ def list_feedback(created_after: Optional[str] = None,
     created_at ISO string'leri leksikografik karsilastirilir (ISO-8601 sirali).
     Siralama created_at DESC, rowid DESC — coarse clock esitliginde insertion-order'i
     deterministik kilar. Ince persister; app.feedback taksonomisini import ETMEZ.
+
+    created_after/created_before offset-aware gelebilir (ör. "+00:00"); feedback.created_at
+    naive-UTC saklandigi icin sinirlar karsilastirmadan once naive-UTC'ye normalize edilir
+    (bkz. _normalize_feedback_boundary), aksi halde offset-suffix'li sinir leksikografik
+    olarak naive degerden buyuk gorunur ve satirlar yanlislikla disarida kalir.
     """
+    created_after = _normalize_feedback_boundary(created_after)
+    created_before = _normalize_feedback_boundary(created_before)
     where = []
     params: list = []
     if created_after is not None:
