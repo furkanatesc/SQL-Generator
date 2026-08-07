@@ -43,6 +43,10 @@ class DashboardWindow:
 
 @dataclass(frozen=True)
 class TimeseriesBucket:
+    """Not: `error_count` terminal-status bazli hatalari sayar; ust seviye
+    `metrics.errors` span-kod bazli hatalari sayar. Ikisi de dogrudur ama
+    farkli eksenlerde saydiklari icin toplamlari yapisal olarak farklidir.
+    """
     bucket_start: str
     total: int
     success_rate: Optional[float]

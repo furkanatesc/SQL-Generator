@@ -51,10 +51,20 @@ def test_dashboard_passes_query_params(monkeypatch):
     assert seen == {"bucket": "hour", "top_n": 3, "recent_limit": 5, "dialect": "postgres"}
 
 
-def test_dashboard_invalid_bucket_422(fake_dashboard):
+def test_dashboard_invalid_bucket_422_when_debug_enabled(fake_dashboard):
     fake_dashboard()
     r = client.get("/api/debug/dashboard?bucket=week", headers=HEADERS)
     assert r.status_code == 422
+
+
+def test_dashboard_invalid_bucket_404_when_debug_disabled(fake_dashboard, monkeypatch):
+    fake_dashboard()
+
+    class _Off:
+        debug_endpoints_enabled = False
+    monkeypatch.setattr("app.api.dashboard_api.get_settings", lambda: _Off())
+    r = client.get("/api/debug/dashboard?bucket=week", headers=HEADERS)
+    assert r.status_code == 404
 
 
 def test_dashboard_requires_api_key(fake_dashboard):
