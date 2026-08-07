@@ -52,9 +52,12 @@ def test_retrieval_error_terminal_retrieval():
 
 
 def test_guardrail_block_terminal_security_not_validation():
+    # unsafe_dml_keyword is a real SECURITY-category registry code (Sprint 27.2/28.3.1
+    # §5.3), so this still exercises a genuine security denial, not just a
+    # sql_guardrail-stage tag.
     bad = {"attempt": 1, "action": "generate", "sql": "", "valid": False,
            "error": "guardrail", "validation_errors": [
-               {"type": "forbidden_statement", "stage": "sql_guardrail",
+               {"type": "unsafe_dml_keyword", "stage": "sql_guardrail",
                 "message": "DDL yasak"}]}
     t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "sql_generation_failed",
         "success": False, "prompt_sha256": "p" * 64, "prompt_char_count": 10,
@@ -64,7 +67,8 @@ def test_guardrail_block_terminal_security_not_validation():
     assert t.terminal_status is TraceTerminalStatus.FAILED
     assert t.terminal_stage is TraceStageKind.SECURITY
     sec = _span(t, TraceStageKind.SECURITY)
-    assert sec.detail.checks[0].reason_code == "forbidden_statement"
+    assert sec.detail.checks[0].reason_code == "unsafe_dml_keyword"
+    assert sec.detail.checks[0].outcome == "denied"
 
 
 def test_semantic_failure_terminal_validation():
@@ -134,15 +138,51 @@ def test_security_span_carries_measured_duration_when_ok():
 
 
 def test_security_span_carries_measured_duration_when_denied():
+    # unsafe_dml_keyword is a real SECURITY-category registry code, so this is a
+    # genuine denial (see test_guardrail_block_terminal_security_not_validation).
     bad = {"attempt": 1, "action": "generate", "sql": "", "valid": False,
            "error": "guardrail", "validation_errors": [
-               {"type": "forbidden_statement", "stage": "sql_guardrail",
+               {"type": "unsafe_dml_keyword", "stage": "sql_guardrail",
                 "message": "DDL yasak"}]}
     t = assemble_live_end_to_end_trace(**{**BASE, "error_type": "sql_generation_failed",
         "success": False, "prompt_sha256": "p" * 64, "prompt_char_count": 10,
         "attempts_redacted": [bad], "last_generated_sql_redacted": "DROP TABLE x",
         "stage_timings": {"security": 11}})
     assert _span(t, TraceStageKind.SECURITY).duration_ms == 11
+
+
+def test_security_stage_validation_error_renders_as_warning_not_denied():
+    # A validation-category error (sql_parse_error) tagged at a security stage must
+    # NOT render as a security denial (ERROR); it renders as flagged/WARNING.
+    trace = assemble_live_end_to_end_trace(
+        trace_id="t", request_id="r", job_id="j", dialect="postgres",
+        natural_query_redacted="q", total_duration_ms=1, stage_timings={"security": 2},
+        error_type="sql_parse_error", success=False, schema_selection_trace=None,
+        pruned_tables=[], prompt_sha256=None, prompt_char_count=None,
+        attempts_redacted=[{"validation_errors": [
+            {"stage": "sql_guardrail", "type": "sql_parse_error"}]}],
+        last_generated_sql_redacted=None,
+    )
+    sec = next(s for s in trace.spans if s.stage.name == "SECURITY")
+    assert sec.status.name == "WARNING"          # not ERROR
+    check = sec.detail.checks[0]
+    assert check.outcome == "flagged"            # not "denied"
+    assert check.reason_code == "sql_parse_error"
+
+
+def test_security_stage_real_security_code_still_denied():
+    trace = assemble_live_end_to_end_trace(
+        trace_id="t", request_id="r", job_id="j", dialect="postgres",
+        natural_query_redacted="q", total_duration_ms=1, stage_timings={"security": 2},
+        error_type="unsafe_dml_keyword", success=False, schema_selection_trace=None,
+        pruned_tables=[], prompt_sha256=None, prompt_char_count=None,
+        attempts_redacted=[{"validation_errors": [
+            {"stage": "sql_guardrail", "type": "unsafe_dml_keyword"}]}],
+        last_generated_sql_redacted=None,
+    )
+    sec = next(s for s in trace.spans if s.stage.name == "SECURITY")
+    assert sec.status.name == "ERROR"
+    assert sec.detail.checks[0].outcome == "denied"
 
 
 def test_live_trace_assembly_module_does_not_load_stage_modules_or_drivers():
