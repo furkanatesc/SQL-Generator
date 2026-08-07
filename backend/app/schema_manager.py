@@ -478,7 +478,8 @@ class SchemaManager:
             from app.database import get_config
             from app.schema_cache_fingerprint import compute_cache_fingerprint
             db_type = self.params["type"]
-            current_model = SchemaEmbeddingIndex().embedding_client.model  # cheap, no build
+            # Cheap model read for the fingerprint — SchemaEmbeddingIndex()/NVIDIAEmbeddingClient() __init__ must stay side-effect-free (no I/O) since this runs on every load, including cache hits.
+            current_model = SchemaEmbeddingIndex().embedding_client.model
             current_fp = compute_cache_fingerprint(
                 db_type=db_type,
                 hidden_tables_raw=get_config(f"hidden_tables_{db_type}"),
