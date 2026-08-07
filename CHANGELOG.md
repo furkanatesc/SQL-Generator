@@ -477,7 +477,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   **Benchmark etkilenmedi** (`from_legacy_schema` sentetik şemalar
   üzerinde çalışır, `SchemaManager.load_schema`'yı egzersiz etmez) — gate
   yeşil, versiyon bump gerekmedi. Full suite 2509 passed/9 skipped.
-  (PR #TBD)
+  (PR #157)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
