@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from app.schema.schema_contract import DatabaseSchema, RelationshipType, TableSchema
 from app.schema.graph_traversal import JoinPathCandidate, find_join_paths, DEFAULT_JOIN_PATH_NODE_BUDGET
 from app.schema.table_selection_cost import (
-    TableSelectionCostModel, DEFAULT_COST_MODEL, table_cost, fk_counts,
+    TableSelectionCostModel, DEFAULT_COST_MODEL, table_cost, fk_counts, neighbor_benefit,
 )
 
 class SelectedTable(BaseModel):
@@ -113,10 +113,14 @@ def select_schema_context(
                     neighbor = rel.target_table if rel.source_table == t_name else rel.source_table
                     
                     if rel.relationship_type in (RelationshipType.EXPLICIT, RelationshipType.CUSTOM):
-                        add_score(neighbor, cost_model.explicit_neighbor, f"explicit_neighbor_of_{t_name}")
+                        add_score(neighbor, neighbor_benefit(rel.confidence, cost_model),
+                                  f"explicit_neighbor_of_{t_name}")
                     elif rel.relationship_type == RelationshipType.IMPLICIT:
-                        add_score(neighbor, cost_model.implicit_neighbor, f"implicit_neighbor_of_{t_name}")
-                    # implicit_fuzzy is not trusted to expand by default
+                        add_score(neighbor, neighbor_benefit(rel.confidence, cost_model),
+                                  f"implicit_neighbor_of_{t_name}")
+                    elif rel.relationship_type == RelationshipType.IMPLICIT_FUZZY and cost_model.include_fuzzy_neighbors:
+                        add_score(neighbor, neighbor_benefit(rel.confidence, cost_model),
+                                  f"fuzzy_neighbor_of_{t_name}")
                         
     # Benefit-vs-cost budget selection (Sprint 28.3)
     col_counts = {t.name: len(t.columns) for t in schema.tables}
