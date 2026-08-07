@@ -617,3 +617,38 @@ bırakıldı (sessiz düşürme yok).
    kolon değerlerinin hedef PK değer kümesine ne oranda düştüğü) bilinçli
    olarak kapsam dışı bırakıldı.
    *İlgili Dosya:* `backend/app/schema/implicit_relationships.py`
+
+## §14. Sprint 28.6 (Schema Cache Invalidation) devirleri — AÇIK
+
+`SchemaManager.load_schema` artık içerik-fingerprint'li (yeni saf
+`app/schema_cache_fingerprint.py`: `compute_cache_fingerprint(*, db_type,
+hidden_tables_raw, hidden_columns_raw, embedding_model, cache_version=
+SCHEMA_CACHE_VERSION)` → sha256); aşağıdakiler tasarım spec'inde bilinçli
+olarak kapsam dışı bırakıldı (sessiz düşürme yok).
+
+1. **Ham DB şema drift'i (tablo/kolon değişikliği) yakalanmıyor.**
+   Fingerprint self-contained'dır (yalnız `db_type` + hidden-tables/columns
+   config'i + embedding model'i özetler); veritabanında bir tablo/kolon
+   eklenip/kaldırılırsa/tipi değişirse cache bunu göremez — yeni bir DB
+   sorgusu (ör. hafif per-dialect bir DB fingerprint sorgusu:
+   `information_schema`/`sqlite_master` üzerinde tablo/kolon sayımı veya
+   `updated_at`/DDL-versiyon benzeri bir sinyal) gerekir. 28.7 Incremental
+   Schema Sync ile örtüşebilir — o sprintte ele alınıp alınmayacağı orada
+   netleştirilmeli.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`), `backend/app/schema_cache_fingerprint.py`
+2. **TTL/zaman-tabanlı invalidation yok.** Cache yalnızca fingerprint
+   uyuşmazlığında veya `force_refresh=True` ile yenilenir; belirli bir süre
+   sonra otomatik "bayatla" mekanizması (ör. `cache_ttl_seconds`) kapsam
+   dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`)
+3. **Explicit invalidation endpoint/event yok.** Cache'i manuel/programatik
+   olarak temizleyen bir debug endpoint'i veya olay-tabanlı (ör. admin
+   panelinden "şemayı yenile") tetikleyici eklenmedi; tek yol hâlâ
+   `force_refresh=True` parametresi veya cache dosyasının silinmesi.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`)
+4. **Granüler embedding-only invalidation yok.** Embedding model değişince
+   (veya herhangi bir fingerprint girdisi değişince) tüm cache
+   (`schema` + `embeddings`) yeniden yazılıyor; yalnızca embedding kısmını
+   yeniden hesaplayıp şema kısmını koruyan daha ince taneli bir yol kapsam
+   dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`), `backend/app/schema_cache_fingerprint.py`
