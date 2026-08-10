@@ -109,6 +109,18 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_feedback_job_id ON feedback (job_id)"
         )
 
+        # SQL Result Cache tablosu (Sprint 28.9)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sql_cache (
+                cache_key        TEXT PRIMARY KEY,
+                sql              TEXT NOT NULL,
+                dialect          TEXT,
+                schema_signature TEXT,
+                created_at       TEXT,
+                hit_count        INTEGER DEFAULT 0
+            )
+        """)
+
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")
