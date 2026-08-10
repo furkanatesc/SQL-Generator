@@ -550,6 +550,39 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   `plan_reindex` onu `to_delete`'e koymaz; gerçek iyileşme yolları yalnızca
   prune-on-rebuild (yukarıda, her rebuild'de otomatik) ve `POST /api/debug/
   schema/reindex` (talep üzerine). (PR #159)
+- **Semantic / Result Cache** (Sprint 28.9 · Phase 9'un SON sprint'i): üretilen
+  SQL'i tamamen aynı (dialect + `schema_signature` + normalize edilmiş
+  natural-language sorgu) istekler için writer-critic LLM döngüsünü atlayarak
+  döndüren **deterministik exact result cache**. Yeni saf
+  `app/cache/result_cache_key.py`: `RESULT_CACHE_KEY_VERSION = "v1"` +
+  `normalize_query` (casefold + whitespace-collapse) +
+  `compute_result_cache_key(natural_query, dialect, schema_signature) -> str`
+  (sha256, stdlib-only, deterministik); `schema_signature`'a (28.7) bağlanma
+  yapısal şema drift'inde anahtarı otomatik değiştirir. Yeni `sql_cache`
+  SQLite tablosu (`database.init_db` migration; **RAW NL query kolonu YOK —
+  secret-free**) + `app/result_cache.py` adaptor: `is_result_cache_enabled`
+  (varsayılan **AÇIK**), `get_cached_sql`/`put_cached_sql`/`bump_hit`/
+  `clear_cache`/`cache_stats`. Yeni `SchemaManager.get_cached_schema_signature()`
+  — ucuz cache-dosyası okuması (DB extract YOK). `run_pipeline`'a yeni
+  `_cache_lookup`: retrieval sonrası/writer-critic öncesi exact-key lookup;
+  **hit'te cache'lenmiş SQL `validate_sql` ile YENİDEN doğrulanır — güvenlik
+  zinciri ASLA bypass edilmez** (geçersiz hit sessizce tam üretime düşer);
+  geçerli hit'te LLM döngüsü **ATLANIR**; miss+başarıda yeni SQL yazılır.
+  Sonuçta yeni `cache_hit: bool` sonuç alanı + legacy trace metadata'sında
+  aynı bayrak. Cache yalnız hem config açık hem gerçek `schema_signature`
+  varsa aktif. Yeni debug-gated `GET /api/debug/cache/stats`
+  (`entries`/`total_hits`) + `POST /api/debug/cache/clear` (silinen kayıt
+  sayısı). Config `sql_result_cache_enabled` varsayılan **AÇIK**.
+  **Benchmark etkilenmedi** (28.9 dört benchmark hedefine de dokunmuyor) —
+  versiyon bump gerekmedi, gate yeşil (exit 0). **Bilinçli kapsam dışı**
+  (TECH-DEBT §17): semantik/embedding-benzerlik cache (precision riski),
+  execution/result-set (satır) cache (→ Phase 10), TTL/boyut-tabanlı otomatik
+  eviction (yalnız `POST /clear`), prompt-template/model değişikliğinde
+  invalidation (anahtar yalnız `schema_signature`'a bağlı — freshness-only),
+  cache-hit-rate agregasyonu/dashboard paneli (yalnız `cache_hit` bayrağı),
+  frontend `maxNodesLimit=5` kalıcı çözümü (farklı — frontend — katman, AÇIK
+  kalır). Full suite 2609 passed/9 skipped. **Bununla Phase 9 (Large Schema
+  Production Scale) kapanır.** (PR TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
