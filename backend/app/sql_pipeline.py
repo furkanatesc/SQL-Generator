@@ -18,6 +18,10 @@ from app.schema.schema_context_selector import select_schema_context
 from app.schema.schema_prompt_serializer import serialize_selection_for_prompt
 from app.schema.table_selection_cost import from_config as _cost_model_from_config
 from app.database import get_config
+from app.result_cache import (
+    is_result_cache_enabled, get_cached_sql, put_cached_sql, bump_hit,
+)
+from app.cache.result_cache_key import compute_result_cache_key
 
 logger = logging.getLogger("sql_pipeline")
 
@@ -336,6 +340,28 @@ class SQLGenerationPipeline:
 
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
         return pruned_schema, prompt_schema_context, schema_selection_trace, None, elapsed_ms
+
+    def _cache_lookup(self, *, aqr, dialect, pruned_schema, log_callback):
+        """28.9: exact result-cache lookup. Returns (hit_outcome | None, cache_key | None,
+        schema_signature | None, cache_active). Hit is re-validated via validate_sql; an
+        invalid hit returns (None, key, sig, True) so the caller regenerates."""
+        schema_signature = self.schema_manager.get_cached_schema_signature()
+        # isinstance (not just "is not None"): schema_manager doubles in older tests are bare
+        # Mocks that don't implement this 28.9 method — their auto-attribute return is neither
+        # None nor a str. Treat anything but an actual str signature as "cache unavailable".
+        cache_active = (is_result_cache_enabled(get_config("sql_result_cache_enabled"))
+                        and isinstance(schema_signature, str))
+        if not cache_active:
+            return None, None, None, False
+        cache_key = compute_result_cache_key(
+            aqr.get("natural_query", ""), dialect, schema_signature)
+        cached_sql = get_cached_sql(cache_key)
+        if not cached_sql:
+            return None, cache_key, schema_signature, True
+        outcome = self.validate_sql(cached_sql, pruned_schema, dialect, log_callback=log_callback)
+        if outcome.valid:
+            return outcome, cache_key, schema_signature, True
+        return None, cache_key, schema_signature, True
 
     def validate_sql(
         self,
@@ -710,12 +736,37 @@ class SQLGenerationPipeline:
             return redact_sensitive(result, known_secrets)
         result["pruned_schema_tables"] = list(pruned_schema.get("tables", {}).keys())
 
-        # 3. İteratif üretim döngüsü (writer-critic)
-        wc, wc_timings = self._stage_writer_critic(
-            aqr=aqr, natural_query=natural_query, previous_sql=previous_sql,
-            prompt_schema_context=prompt_schema_context,
-            pruned_schema=pruned_schema, dialect=dialect, api_key=api_key,
-            max_attempts=max_attempts, log_callback=log_callback, result=result)
+        # 2.5 Result cache lookup (Sprint 28.9) — after retrieval, before generation.
+        hit_outcome, cache_key, schema_signature, cache_active = self._cache_lookup(
+            aqr=aqr, dialect=dialect, pruned_schema=pruned_schema, log_callback=log_callback)
+        cache_hit = hit_outcome is not None
+
+        if cache_hit:
+            if log_callback:
+                log_callback("Result cache hit — üretilen SQL cache'ten doğrulanıp döndürülüyor.", 3)
+            result["success"] = True
+            result["generated_sql"] = hit_outcome.sql
+            result["attempts"].append(
+                {"attempt": 1, "action": "cache_hit", "sql": hit_outcome.sql,
+                 "valid": True, "error": None})
+            bump_hit(cache_key)
+            wc = {"last_generated_sql": hit_outcome.sql, "validation_errors": [],
+                  "prompt_sha256": None, "prompt_char_count": None,
+                  "natural_query": aqr.get("natural_query", "")}
+            wc_timings = {"prompt": 0, "generation": 0,
+                          "validation": hit_outcome.timings["validation"],
+                          "security": hit_outcome.timings["security"]}
+        else:
+            # 3. İteratif üretim döngüsü (writer-critic)
+            wc, wc_timings = self._stage_writer_critic(
+                aqr=aqr, natural_query=natural_query, previous_sql=previous_sql,
+                prompt_schema_context=prompt_schema_context,
+                pruned_schema=pruned_schema, dialect=dialect, api_key=api_key,
+                max_attempts=max_attempts, log_callback=log_callback, result=result)
+            if cache_active and result["success"]:
+                put_cached_sql(cache_key, result["generated_sql"], dialect, schema_signature)
+
+        result["cache_hit"] = cache_hit
         natural_query = wc["natural_query"]
         last_generated_sql = wc["last_generated_sql"]
         validation_errors = wc["validation_errors"]
@@ -751,7 +802,8 @@ class SQLGenerationPipeline:
             success=result["success"],
             stage_timings={"intent": intent_ms, "retrieval": retrieval_ms, **wc_timings},
             prompt_sha256=wc["prompt_sha256"],
-            prompt_char_count=wc["prompt_char_count"]
+            prompt_char_count=wc["prompt_char_count"],
+            cache_hit=cache_hit
         )
 
         return redact_sensitive(result, known_secrets)
@@ -777,6 +829,7 @@ class SQLGenerationPipeline:
         stage_timings: Optional[Dict[str, int]] = None,
         prompt_sha256: Optional[str] = None,
         prompt_char_count: Optional[int] = None,
+        cache_hit: bool = False,
     ):
         if not self.trace_store:
             return
@@ -815,7 +868,8 @@ class SQLGenerationPipeline:
             metadata={
                 "job_id": job_id,
                 "dialect": dialect,
-                "source": "job_pipeline"
+                "source": "job_pipeline",
+                "cache_hit": cache_hit,
             },
             schema_context_selection=schema_selection_trace
         )
