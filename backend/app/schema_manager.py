@@ -550,10 +550,14 @@ class SchemaManager:
                         rag=_rag,
                         force=force_refresh,
                     )
+                    try:
+                        _rag.prune_schema_ddl_points(set((base_schema or {}).get("tables", {}).keys()))
+                    except Exception as e:
+                        print(f"schema_ddl prune skipped: {e}")
                 except Exception as e:
                     print(f"Failed to build schema embeddings (reindex): {e}")
                     embeddings = None
-                    
+
                 try:
                     from app.schema.schema_signature import (
                         compute_schema_signature, normalize_structure)

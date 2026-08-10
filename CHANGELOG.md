@@ -539,10 +539,17 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   `hash()` id / granüler re-index yok, embedding-model değişikliğinde otomatik
   kısa-devre yok (yalnız `POST /reindex` DB re-extract'ten kaçınır), Qdrant
   collection/vector_size migration, embed-text zenginleştirme (örnek
-  değerler), batch-size tuning değişmedi. Dar bir edge-case AÇIK bırakıldı:
-  `force=True` + eşzamanlı tablo kaldırma o zorlanmış rebuild'de kaldırılan
-  tablonun Qdrant point'ini tahliye ETMEZ (bir sonraki `prune_schema_ddl_points`
-  çağrısı veya force-olmayan bir drift ile kendiliğinden düzelir). (PR TBD)
+  değerler), batch-size tuning değişmedi. Dar bir edge-case NARROWED (final-review
+  fix wave): `force=True` + eşzamanlı tablo kaldırma o zorlanmış rebuild'in kendi
+  `reindex_embeddings` çağrısında kaldırılan tablonun Qdrant point'ini tahliye
+  ETMEZ; aynı rebuild bloğunda hemen ardından çağrılan
+  `RAGManager.prune_schema_ddl_points` ile aynı rebuild içinde temizleniyor
+  (orphan + 28.8-öncesi `hash()`-id legacy point'ler birlikte). "Bir sonraki
+  force-olmayan `load_schema` drift'i yakalar" iddiası YANLIŞTI ve kaldırıldı —
+  kaldırılan tablo `fingerprints`'te hiç yer almadığından hiçbir sonraki
+  `plan_reindex` onu `to_delete`'e koymaz; gerçek iyileşme yolları yalnızca
+  prune-on-rebuild (yukarıda, her rebuild'de otomatik) ve `POST /api/debug/
+  schema/reindex` (talep üzerine). (PR TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
