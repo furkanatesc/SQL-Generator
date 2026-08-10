@@ -13,12 +13,20 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.schemas import SchemaDriftEnvelopeResponse, SchemaSyncEnvelopeResponse
+from app.api.schemas import (
+    ReindexEnvelopeResponse, ReindexStatusEnvelopeResponse,
+    SchemaDriftEnvelopeResponse, SchemaSyncEnvelopeResponse)
 from app.auth import verify_api_key
+from app.database import get_config
+from app.rag_manager import RAGManager
+from app.schema.reindex_planner import plan_reindex
 from app.schema.schema_signature import (
     SCHEMA_SIGNATURE_VERSION, compute_schema_signature, diff_structures,
     normalize_structure)
+from app.schema_cache_fingerprint import compute_cache_fingerprint
+from app.schema_embedding import SchemaEmbeddingIndex
 from app.schema_manager import CACHE_PATH, SchemaManager
+from app.schema_reindex import reindex_embeddings
 from app.settings import get_settings
 
 router = APIRouter(
@@ -89,3 +97,78 @@ def schema_sync(force: bool = Query(default=False)):
         "current_signature": current_sig,
         "drift": drift.as_dict(),
     }
+
+
+def _current_model():
+    return SchemaEmbeddingIndex().embedding_client.model
+
+
+@router.get("/reindex-status", response_model=ReindexStatusEnvelopeResponse)
+def reindex_status():
+    ensure_debug_enabled()
+    cache = _read_cache() or {}
+    schema = cache.get("schema") or {"tables": {}}
+    old_fp = (cache.get("embeddings") or {}).get("fingerprints") or {}
+    model = _current_model()
+    plan = plan_reindex(old_fp, schema, model)
+    valid = set((schema.get("tables") or {}).keys())
+    try:
+        audit = RAGManager().audit_schema_ddl_points(valid)
+    except Exception:
+        audit = {"orphaned": [], "stale_id": []}
+    new = [t for t in plan.to_embed if t not in old_fp]
+    stale = [t for t in plan.to_embed if t in old_fp]
+    return {
+        "status": "success", "model": model,
+        "fresh": len(plan.to_keep), "stale": stale, "new": new,
+        "to_delete": list(plan.to_delete),
+        "orphaned_qdrant": sorted(set(audit.get("orphaned", [])) | set(audit.get("stale_id", []))),
+    }
+
+
+@router.post("/reindex", response_model=ReindexEnvelopeResponse)
+def reindex(force: bool = Query(default=False)):
+    ensure_debug_enabled()
+    cache = _read_cache() or {}
+    schema = cache.get("schema") or {"tables": {}}
+    old_embeddings = cache.get("embeddings")
+    model = _current_model()
+    embedder = SchemaEmbeddingIndex()
+    rag = RAGManager()
+
+    new_embeddings, report = reindex_embeddings(
+        old_embeddings=old_embeddings, new_schema=schema, model=model,
+        embedder=embedder, rag=rag, force=force)
+
+    # prune orphan/stale Qdrant points, then upsert current via precomputed vectors
+    valid = set((schema.get("tables") or {}).keys())
+    try:
+        pruned = rag.prune_schema_ddl_points(valid)
+    except Exception:
+        pruned = []
+    try:
+        rag.index_schema_batch({**schema, "embeddings": new_embeddings})
+    except Exception:
+        pass
+
+    # persist: only embeddings + refreshed cache_fingerprint (schema/signature preserved)
+    if cache:
+        db_type = cache.get("db_type") or (get_config("target_db_type") or "sqlite")
+        cache["embeddings"] = new_embeddings
+        try:
+            cache["cache_fingerprint"] = compute_cache_fingerprint(
+                db_type=db_type,
+                hidden_tables_raw=get_config(f"hidden_tables_{db_type}"),
+                hidden_columns_raw=get_config(f"hidden_columns_{db_type}"),
+                embedding_model=model,
+            )
+        except Exception:
+            pass
+        try:
+            with open(CACHE_PATH, "w", encoding="utf-8") as f:
+                json.dump(cache, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    return {"status": "success", "embedded": list(report.embedded), "kept": report.kept,
+            "deleted": list(report.deleted), "pruned": list(pruned), "model": model}

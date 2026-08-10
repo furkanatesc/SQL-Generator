@@ -537,3 +537,23 @@ class SchemaSyncEnvelopeResponse(BaseModel):
     cached_signature: Optional[str] = None
     current_signature: str
     drift: StructuralDriftResponse
+
+
+# Sprint 28.8 - Embedding re-index
+class ReindexStatusEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    model: str
+    fresh: int
+    stale: List[str]
+    new: List[str]
+    to_delete: List[str]
+    orphaned_qdrant: List[str]
+
+
+class ReindexEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    embedded: List[str]
+    kept: int
+    deleted: List[str]
+    pruned: List[str]
+    model: str
