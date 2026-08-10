@@ -586,6 +586,44 @@
     ],
     "required": []
   },
+  "ReindexEnvelopeResponse": {
+    "properties": [
+      "deleted",
+      "embedded",
+      "kept",
+      "model",
+      "pruned",
+      "status"
+    ],
+    "required": [
+      "deleted",
+      "embedded",
+      "kept",
+      "model",
+      "pruned",
+      "status"
+    ]
+  },
+  "ReindexStatusEnvelopeResponse": {
+    "properties": [
+      "fresh",
+      "model",
+      "new",
+      "orphaned_qdrant",
+      "stale",
+      "status",
+      "to_delete"
+    ],
+    "required": [
+      "fresh",
+      "model",
+      "new",
+      "orphaned_qdrant",
+      "stale",
+      "status",
+      "to_delete"
+    ]
+  },
   "RelationItem": {
     "properties": [
       "source",
