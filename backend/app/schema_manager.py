@@ -505,6 +505,7 @@ class SchemaManager:
             base_schema = None
             embeddings = None
             cached_signature = None
+            old_embeddings_for_reindex = None
 
             if not force_refresh and os.path.exists(CACHE_PATH):
                 try:
@@ -514,6 +515,7 @@ class SchemaManager:
                             base_schema = cache_data["schema"]
                             embeddings = cache_data.get("embeddings")
                             cached_signature = cache_data.get("schema_signature")
+                            old_embeddings_for_reindex = cache_data.get("embeddings")
                 except Exception as e:
                     print(f"Failed to read schema cache: {e}")
 
@@ -532,17 +534,24 @@ class SchemaManager:
                 if base_schema is None:
                     base_schema = self.extract_schema_metadata()
                 
-                # Embedding'leri hesapla
-                print("[SchemaManager] Schema Embedding Index hesaplanıyor, lütfen bekleyin...")
+                # 28.8: granular re-index — embed only new/changed tables, reuse the rest.
+                print("[SchemaManager] Schema Embedding Index (granular re-index) hesaplanıyor...")
                 try:
+                    from app.schema_reindex import reindex_embeddings
                     schema_embedder = SchemaEmbeddingIndex()
-                    table_embeddings = schema_embedder.build_index(base_schema)
-                    embeddings = {
-                        "model": schema_embedder.embedding_client.model,
-                        "tables": table_embeddings
-                    }
+                    _model = schema_embedder.embedding_client.model
+                    from app.rag_manager import RAGManager
+                    _rag = RAGManager()
+                    embeddings, _reindex_report = reindex_embeddings(
+                        old_embeddings=old_embeddings_for_reindex,
+                        new_schema=base_schema,
+                        model=_model,
+                        embedder=schema_embedder,
+                        rag=_rag,
+                        force=force_refresh,
+                    )
                 except Exception as e:
-                    print(f"Failed to build schema embeddings: {e}")
+                    print(f"Failed to build schema embeddings (reindex): {e}")
                     embeddings = None
                     
                 try:
