@@ -155,8 +155,17 @@ class SchemaManager:
                 
         except Exception as e:
             print(f"Filter application failed: {e}")
-            
+
         return schema
+
+    def _current_normalized_structure(self) -> Dict[str, Any]:
+        """28.7: filtered structural view for drift detection (reuses extract; no new SQL)."""
+        from app.schema.schema_signature import normalize_structure
+        return normalize_structure(self.extract_schema_metadata())
+
+    def _current_schema_signature(self) -> str:
+        from app.schema.schema_signature import compute_schema_signature
+        return compute_schema_signature(self._current_normalized_structure())
 
     def _extract_sqlite_metadata(self) -> Dict[str, Any]:
         schema = {"tables": {}, "graph": {"nodes": [], "edges": []}}
@@ -518,9 +527,14 @@ class SchemaManager:
                     embeddings = None
                     
                 try:
+                    from app.schema.schema_signature import (
+                        compute_schema_signature, normalize_structure)
+                    schema_signature = compute_schema_signature(
+                        normalize_structure(base_schema))
                     cache_payload = {
                         "cache_fingerprint": current_fp,
                         "db_type": self.params["type"],
+                        "schema_signature": schema_signature,
                         "schema": base_schema,
                         "embeddings": embeddings
                     }
