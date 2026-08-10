@@ -324,6 +324,49 @@
         "title": "BusinessRuleIndexRequest",
         "type": "object"
       },
+      "CacheClearEnvelopeResponse": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "deleted"
+        ],
+        "title": "CacheClearEnvelopeResponse",
+        "type": "object"
+      },
+      "CacheStatsEnvelopeResponse": {
+        "properties": {
+          "entries": {
+            "title": "Entries",
+            "type": "integer"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          },
+          "total_hits": {
+            "title": "Total Hits",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "entries",
+          "total_hits"
+        ],
+        "title": "CacheStatsEnvelopeResponse",
+        "type": "object"
+      },
       "CancelJobResponse": {
         "properties": {
           "job": {
@@ -2893,6 +2936,64 @@
           }
         ],
         "summary": "Set System Config"
+      }
+    },
+    "/api/debug/cache/clear": {
+      "post": {
+        "operationId": "cache_clear_endpoint_api_debug_cache_clear_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CacheClearEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Cache Clear Endpoint",
+        "tags": [
+          "debug-cache"
+        ]
+      }
+    },
+    "/api/debug/cache/stats": {
+      "get": {
+        "operationId": "cache_stats_endpoint_api_debug_cache_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CacheStatsEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Cache Stats Endpoint",
+        "tags": [
+          "debug-cache"
+        ]
       }
     },
     "/api/debug/dashboard": {

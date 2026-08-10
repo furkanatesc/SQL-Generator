@@ -557,3 +557,15 @@ class ReindexEnvelopeResponse(BaseModel):
     deleted: List[str]
     pruned: List[str]
     model: str
+
+
+# Sprint 28.9 - Result cache
+class CacheStatsEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    entries: int
+    total_hits: int
+
+
+class CacheClearEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    deleted: int
