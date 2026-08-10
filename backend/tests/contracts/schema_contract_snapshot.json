@@ -87,6 +87,28 @@
       "sql_mapping"
     ]
   },
+  "CacheClearEnvelopeResponse": {
+    "properties": [
+      "deleted",
+      "status"
+    ],
+    "required": [
+      "deleted",
+      "status"
+    ]
+  },
+  "CacheStatsEnvelopeResponse": {
+    "properties": [
+      "entries",
+      "status",
+      "total_hits"
+    ],
+    "required": [
+      "entries",
+      "status",
+      "total_hits"
+    ]
+  },
   "CancelJobResponse": {
     "properties": [
       "job",
