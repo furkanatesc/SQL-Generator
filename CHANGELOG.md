@@ -582,7 +582,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   cache-hit-rate agregasyonu/dashboard paneli (yalnız `cache_hit` bayrağı),
   frontend `maxNodesLimit=5` kalıcı çözümü (farklı — frontend — katman, AÇIK
   kalır). Full suite 2609 passed/9 skipped. **Bununla Phase 9 (Large Schema
-  Production Scale) kapanır.** (PR TBD)
+  Production Scale) kapanır.** (PR #160)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
