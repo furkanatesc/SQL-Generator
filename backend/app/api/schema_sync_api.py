@@ -13,9 +13,11 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.api.schemas import SchemaDriftEnvelopeResponse, SchemaSyncEnvelopeResponse
 from app.auth import verify_api_key
 from app.schema.schema_signature import (
-    SCHEMA_SIGNATURE_VERSION, diff_structures, normalize_structure)
+    SCHEMA_SIGNATURE_VERSION, compute_schema_signature, diff_structures,
+    normalize_structure)
 from app.schema_manager import CACHE_PATH, SchemaManager
 from app.settings import get_settings
 
@@ -45,7 +47,7 @@ def _compute_drift():
     """Return (drifted, cached_signature, current_signature, StructuralDrift)."""
     mgr = SchemaManager()
     current_norm = mgr._current_normalized_structure()
-    current_sig = mgr._current_schema_signature()
+    current_sig = compute_schema_signature(current_norm)
 
     cache = _read_cache()
     cached_sig = (cache or {}).get("schema_signature")
@@ -55,7 +57,7 @@ def _compute_drift():
     return drifted, cached_sig, current_sig, drift
 
 
-@router.get("/drift", response_model=None)
+@router.get("/drift", response_model=SchemaDriftEnvelopeResponse)
 def schema_drift():
     ensure_debug_enabled()
     drifted, cached_sig, current_sig, drift = _compute_drift()
@@ -69,7 +71,7 @@ def schema_drift():
     }
 
 
-@router.post("/sync", response_model=None)
+@router.post("/sync", response_model=SchemaSyncEnvelopeResponse)
 def schema_sync(force: bool = Query(default=False)):
     ensure_debug_enabled()
     drifted, cached_sig, current_sig, drift = _compute_drift()
