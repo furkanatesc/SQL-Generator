@@ -5,8 +5,9 @@ import logging
 from typing import Dict, Any, List, Optional
 import requests
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Distance, VectorParams, PointStruct, PointIdsList
 from app.llm_client import get_nvidia_api_key
+from app.schema.reindex_planner import stable_point_id
 
 logger = logging.getLogger("rag_manager")
 
@@ -149,7 +150,7 @@ class RAGManager:
         Şema/DDL bilgisini Qdrant'a indeksler.
         """
         vector = self.embedding_client.get_embedding(ddl_text, api_key=api_key)
-        point_id = int(hash(table_name) % 10**8)
+        point_id = stable_point_id(table_name)
         
         self.client.upsert(
             collection_name="schema_ddl",
@@ -194,7 +195,7 @@ class RAGManager:
             columns = [f"{c['name']} ({c.get('type', '')})" for c in tables[name].get("columns", [])]
             ddl_text = f"Table: {name} | Columns: {', '.join(columns)}"
             
-            point_id = int(hash(name) % 10**8)
+            point_id = stable_point_id(name)
             
             points.append(
                 PointStruct(
@@ -216,6 +217,75 @@ class RAGManager:
             logger.info(f"[RAG] Toplam {len(points)} tablo Qdrant'a başarıyla indekslendi.")
             
         return len(points)
+
+    def delete_schema_points(self, names) -> int:
+        """schema_ddl'den verilen tablo adlarına ait point'leri deterministik id ile siler."""
+        ids = [stable_point_id(n) for n in (names or [])]
+        if not ids:
+            return 0
+        try:
+            self.client.delete(collection_name="schema_ddl",
+                               points_selector=PointIdsList(points=ids))
+        except Exception as e:
+            logger.warning(f"[RAG] delete_schema_points başarısız: {e}")
+            return 0
+        return len(ids)
+
+    def _scroll_schema_ddl(self):
+        points, offset = [], None
+        while True:
+            batch, offset = self.client.scroll(
+                collection_name="schema_ddl", limit=1000,
+                with_payload=True, offset=offset)
+            points.extend(batch)
+            if not offset:
+                break
+        return points
+
+    def audit_schema_ddl_points(self, valid_table_names) -> dict:
+        """Read-only: schema_ddl'deki orphan (şemada olmayan) ve stale-id point'leri raporlar."""
+        valid = set(valid_table_names or [])
+        try:
+            points = self._scroll_schema_ddl()
+        except Exception as e:
+            logger.warning(f"[RAG] audit scroll başarısız: {e}")
+            return {"orphaned": [], "stale_id": [], "total": 0}
+        orphaned, stale = [], []
+        for p in points:
+            tname = (p.payload or {}).get("table_name")
+            if tname is None:
+                continue
+            if tname not in valid:
+                orphaned.append(tname)
+            elif p.id != stable_point_id(tname):
+                stale.append(tname)
+        return {"orphaned": sorted(set(orphaned)), "stale_id": sorted(set(stale)),
+                "total": len(points)}
+
+    def prune_schema_ddl_points(self, valid_table_names) -> list:
+        """schema_ddl'deki orphan + stale-id point'leri siler; silinen tablo adlarını döner."""
+        valid = set(valid_table_names or [])
+        try:
+            points = self._scroll_schema_ddl()
+        except Exception as e:
+            logger.warning(f"[RAG] prune scroll başarısız: {e}")
+            return []
+        to_delete_ids, deleted_names = [], []
+        for p in points:
+            tname = (p.payload or {}).get("table_name")
+            if tname is None:
+                continue
+            if tname not in valid or p.id != stable_point_id(tname):
+                to_delete_ids.append(p.id)
+                deleted_names.append(tname)
+        if to_delete_ids:
+            try:
+                self.client.delete(collection_name="schema_ddl",
+                                   points_selector=PointIdsList(points=to_delete_ids))
+            except Exception as e:
+                logger.warning(f"[RAG] prune delete başarısız: {e}")
+                return []
+        return sorted(set(deleted_names))
 
     def index_business_rule(self, rule_id: str, rule_text: str, sql_mapping: str, api_key: str = None) -> str:
         """
