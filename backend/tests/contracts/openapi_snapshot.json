@@ -1707,6 +1707,110 @@
         "title": "RecentTraceResponse",
         "type": "object"
       },
+      "ReindexEnvelopeResponse": {
+        "properties": {
+          "deleted": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Deleted",
+            "type": "array"
+          },
+          "embedded": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Embedded",
+            "type": "array"
+          },
+          "kept": {
+            "title": "Kept",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "pruned": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pruned",
+            "type": "array"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "embedded",
+          "kept",
+          "deleted",
+          "pruned",
+          "model"
+        ],
+        "title": "ReindexEnvelopeResponse",
+        "type": "object"
+      },
+      "ReindexStatusEnvelopeResponse": {
+        "properties": {
+          "fresh": {
+            "title": "Fresh",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "new": {
+            "items": {
+              "type": "string"
+            },
+            "title": "New",
+            "type": "array"
+          },
+          "orphaned_qdrant": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Orphaned Qdrant",
+            "type": "array"
+          },
+          "stale": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stale",
+            "type": "array"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          },
+          "to_delete": {
+            "items": {
+              "type": "string"
+            },
+            "title": "To Delete",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "model",
+          "fresh",
+          "stale",
+          "new",
+          "to_delete",
+          "orphaned_qdrant"
+        ],
+        "title": "ReindexStatusEnvelopeResponse",
+        "type": "object"
+      },
       "RelationItem": {
         "properties": {
           "source": {
@@ -3311,6 +3415,86 @@
           }
         ],
         "summary": "Schema Drift",
+        "tags": [
+          "debug-schema-sync"
+        ]
+      }
+    },
+    "/api/debug/schema/reindex": {
+      "post": {
+        "operationId": "reindex_api_debug_schema_reindex_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReindexEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Reindex",
+        "tags": [
+          "debug-schema-sync"
+        ]
+      }
+    },
+    "/api/debug/schema/reindex-status": {
+      "get": {
+        "operationId": "reindex_status_api_debug_schema_reindex_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReindexStatusEnvelopeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Reindex Status",
         "tags": [
           "debug-schema-sync"
         ]
