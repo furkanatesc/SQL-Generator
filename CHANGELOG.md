@@ -478,6 +478,33 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   üzerinde çalışır, `SchemaManager.load_schema`'yı egzersiz etmez) — gate
   yeşil, versiyon bump gerekmedi. Full suite 2509 passed/9 skipped.
   (PR #157)
+- **Incremental Schema Sync** (Sprint 28.7): 28.6'nın notunda bırakılan
+  "ham DB şema drift'i self-contained fingerprint'le yakalanmaz" sınırını
+  giderdi. Yeni saf `app/schema/schema_signature.py`:
+  `SCHEMA_SIGNATURE_VERSION = "v1"` + `normalize_structure(schema)`
+  (dialect-agnostic, sıra-bağımsız kanonik yapı) + `compute_schema_signature`
+  (sha256) + `diff_structures(old, new) -> StructuralDrift` (added/removed
+  tables, added/removed/changed columns, added/removed FKs). `SchemaManager`
+  yeni `_current_normalized_structure()`/`_current_schema_signature()`
+  helper'larını kazandı; cache payload'ı yeni `schema_signature` alanını
+  taşıyor. `load_schema`'da yeni **opt-in** yapısal drift kontrolü: config
+  `auto_schema_drift_check` **varsayılan KAPALI** — kapalıyken 28.6 davranışı
+  **byte-for-byte korunur**; açıldığında güncel signature cache'tekiyle
+  karşılaştırılır, uyuşmazlıkta tam yeniden çıkarım + yeniden embedding
+  tetiklenir. Yeni debug-gated router `app/api/schema_sync_api.py`:
+  yan-etkisiz `GET /api/debug/schema/drift` (cache okur + taze signature
+  hesaplar, ASLA `load_schema` çağırmaz) ve drift-aware
+  `POST /api/debug/schema/sync?force=` (yalnız drift varsa veya `force=true`
+  ise `force_refresh=True` ile yeniden inşa eder). **Benchmark etkilenmedi**
+  (28.7 benchmark hedeflerine de `load_schema`'nın egzersiz edilen yoluna da
+  dokunmuyor) — versiyon bump gerekmedi. **Bilinçli kapsam dışı** (TECH-DEBT
+  §15): true per-table incremental re-extract/merge (drift'te hâlâ TAM
+  yeniden çıkarım), granüler embedding-only re-index (→ 28.8), TTL/zaman-
+  tabanlı invalidation (§14.2 hâlâ açık), ultra-ucuz tek-sorgulu drift
+  sinyali kullanılmadı (extract-reuse tercih edildi), yalnızca yapısal drift
+  (satır/veri-seviyesi drift yok), sync rebuild'i tüm-cache'dir, kısmi değil.
+  TECH-DEBT §14.1/§14.3 **ÇÖZÜLDÜ**. Full suite 2537 passed/9 skipped.
+  (PR TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
