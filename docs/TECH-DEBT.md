@@ -618,7 +618,7 @@ bırakıldı (sessiz düşürme yok).
    olarak kapsam dışı bırakıldı.
    *İlgili Dosya:* `backend/app/schema/implicit_relationships.py`
 
-## §14. Sprint 28.6 (Schema Cache Invalidation) devirleri — AÇIK
+## §14. Sprint 28.6 (Schema Cache Invalidation) devirleri — KISMEN ÇÖZÜLDÜ (28.7)
 
 `SchemaManager.load_schema` artık içerik-fingerprint'li (yeni saf
 `app/schema_cache_fingerprint.py`: `compute_cache_fingerprint(*, db_type,
@@ -626,29 +626,86 @@ hidden_tables_raw, hidden_columns_raw, embedding_model, cache_version=
 SCHEMA_CACHE_VERSION)` → sha256); aşağıdakiler tasarım spec'inde bilinçli
 olarak kapsam dışı bırakıldı (sessiz düşürme yok).
 
-1. **Ham DB şema drift'i (tablo/kolon değişikliği) yakalanmıyor.**
+1. ~~**Ham DB şema drift'i (tablo/kolon değişikliği) yakalanmıyor.**
    Fingerprint self-contained'dır (yalnız `db_type` + hidden-tables/columns
    config'i + embedding model'i özetler); veritabanında bir tablo/kolon
    eklenip/kaldırılırsa/tipi değişirse cache bunu göremez — yeni bir DB
-   sorgusu (ör. hafif per-dialect bir DB fingerprint sorgusu:
-   `information_schema`/`sqlite_master` üzerinde tablo/kolon sayımı veya
-   `updated_at`/DDL-versiyon benzeri bir sinyal) gerekir. 28.7 Incremental
-   Schema Sync ile örtüşebilir — o sprintte ele alınıp alınmayacağı orada
-   netleştirilmeli.
-   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`), `backend/app/schema_cache_fingerprint.py`
-2. **TTL/zaman-tabanlı invalidation yok.** Cache yalnızca fingerprint
-   uyuşmazlığında veya `force_refresh=True` ile yenilenir; belirli bir süre
-   sonra otomatik "bayatla" mekanizması (ör. `cache_ttl_seconds`) kapsam
-   dışı bırakıldı.
+   sorgusu gerekir.~~ — **✅ ÇÖZÜLDÜ (28.7).** Yeni saf
+   `app/schema/schema_signature.py`: `normalize_structure` (dialect-agnostic,
+   sıra-bağımsız kanonik yapı) + `compute_schema_signature` (sha256) +
+   `diff_structures` → `StructuralDrift`. `SchemaManager._current_schema_signature()`
+   `extract_schema_metadata()`'yı yeniden çalıştırıp taze bir signature üretir
+   (ultra-ucuz ayrı bir DB fingerprint sorgusu **değil** — extract-reuse
+   tercih edildi, bkz. §15.4); cache payload'ı artık `schema_signature`
+   taşıyor. `load_schema`'da **opt-in** kontrol (`auto_schema_drift_check`
+   config, varsayılan KAPALI — 28.6 davranışı korunur); açıldığında
+   uyuşmazlıkta tam yeniden çıkarım tetiklenir.
+   *İlgili Dosya:* `backend/app/schema/schema_signature.py`, `backend/app/schema_manager.py` (`load_schema`, `_current_schema_signature`)
+2. **AÇIK — TTL/zaman-tabanlı invalidation yok.** Cache yalnızca fingerprint/
+   signature uyuşmazlığında veya `force_refresh=True` ile yenilenir; belirli
+   bir süre sonra otomatik "bayatla" mekanizması (ör. `cache_ttl_seconds`)
+   kapsam dışı bırakıldı. 28.7 de kapsamadı.
    *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`)
-3. **Explicit invalidation endpoint/event yok.** Cache'i manuel/programatik
-   olarak temizleyen bir debug endpoint'i veya olay-tabanlı (ör. admin
-   panelinden "şemayı yenile") tetikleyici eklenmedi; tek yol hâlâ
-   `force_refresh=True` parametresi veya cache dosyasının silinmesi.
-   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`)
-4. **Granüler embedding-only invalidation yok.** Embedding model değişince
+3. ~~**Explicit invalidation endpoint/event yok.** Cache'i manuel/programatik
+   olarak temizleyen bir debug endpoint'i veya olay-tabanlı tetikleyici
+   eklenmedi; tek yol hâlâ `force_refresh=True` parametresi veya cache
+   dosyasının silinmesi.~~ — **✅ ÇÖZÜLDÜ (28.7).** Yeni debug-gated router
+   `app/api/schema_sync_api.py`: yan-etkisiz `GET /api/debug/schema/drift`
+   (cache okur + taze signature hesaplar, rebuild YOK) ve drift-aware
+   `POST /api/debug/schema/sync?force=` (yalnız `drifted` veya `force=true`
+   ise `load_schema(force_refresh=True)` çağırır). Rebuild hâlâ tüm-cache'dir
+   (kısmi/seçici değil, bkz. §15.6).
+   *İlgili Dosya:* `backend/app/api/schema_sync_api.py`
+4. **AÇIK — Granüler embedding-only invalidation yok.** Embedding model değişince
    (veya herhangi bir fingerprint girdisi değişince) tüm cache
    (`schema` + `embeddings`) yeniden yazılıyor; yalnızca embedding kısmını
    yeniden hesaplayıp şema kısmını koruyan daha ince taneli bir yol kapsam
    dışı bırakıldı.
    *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`), `backend/app/schema_cache_fingerprint.py`
+
+## §15. Sprint 28.7 (Incremental Schema Sync) devirleri — AÇIK
+
+`app/schema/schema_signature.py` (saf, sha256 tabanlı yapısal signature) +
+`SchemaManager`'ın opt-in `auto_schema_drift_check`'i (varsayılan KAPALI) +
+debug-gated `GET /api/debug/schema/drift` / `POST /api/debug/schema/sync`
+§14.1 ve §14.3'ü çözdü; aşağıdakiler tasarım spec'inde bilinçli olarak
+kapsam dışı bırakıldı (sessiz düşürme yok).
+
+1. **True per-table incremental re-extract/merge yok.** Drift tespit
+   edildiğinde (opt-in kontrol veya `POST /sync`) hâlâ **tam** şema yeniden
+   çıkarımı (`extract_schema_metadata()`) tetiklenir; yalnızca değişen
+   tablo(lar)ı tespit edip cache'teki değişmeyen tabloları koruyarak
+   birleştiren (merge) daha ince taneli bir yol kapsam dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`)
+2. **Granüler embedding-only re-index yok (→ 28.8).** Drift'te tüm cache
+   (`schema` + `embeddings`) yeniden yazılıyor; yalnızca embedding kısmını
+   yeniden hesaplayıp şema kısmını koruyan bir yol hâlâ kapsam dışı — bu
+   §14.4'ün devamıdır, 28.8 Embedding/RAG Re-Index Pipeline'a ertelendi.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`)
+3. **TTL/zaman-tabanlı invalidation hâlâ yok (§14.2 devam ediyor).** 28.7
+   yalnızca yapısal drift kontrolü ekledi; belirli bir süre sonra otomatik
+   "bayatla" mekanizması kapsam dışı kaldı.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`)
+4. **Ultra-ucuz tek-sorgulu DB-taraflı drift sinyali kullanılmadı.**
+   `_current_schema_signature()` taze bir signature üretmek için tam
+   `extract_schema_metadata()`'yı yeniden çalıştırır (extract-reuse); hafif
+   per-dialect bir DB-side sinyal (ör. `information_schema`/`sqlite_master`
+   üzerinde tablo/kolon sayımı veya DDL-versiyon/`updated_at` benzeri ucuz
+   bir sorgu) bilinçli olarak tercih edilmedi — extract zaten mevcut ve
+   deterministik olduğu için basitlik/tutarlılık tercih edildi; büyük
+   şemalarda (2000+ tablo) `GET /drift`'in her çağrısı tam extract maliyeti
+   taşır.
+   *İlgili Dosya:* `backend/app/schema/schema_signature.py`, `backend/app/schema_manager.py`
+5. **Yalnızca yapısal drift; satır/veri-seviyesi drift yok.**
+   `normalize_structure`/`compute_schema_signature` yalnız tablo/kolon/FK
+   metadata'sını (isim, tip, PK, nullable, referans) özetler; satır sayısı,
+   veri dağılımı, cardinality veya değer-seviyesi değişiklikler drift olarak
+   sayılmaz (schema-only tasarım kararı, 28.5'in `implicit_relationships`
+   kapsam dışılarıyla tutarlı).
+   *İlgili Dosya:* `backend/app/schema/schema_signature.py`
+6. **`POST /sync` rebuild'i tüm-cache'dir, kısmi/seçici değil.** Drift
+   tespit edilince `SchemaManager().load_schema(force_refresh=True)`
+   çağrılır — bu, madde 1'deki "true incremental" eksikliğinin endpoint
+   yüzeyindeki yansımasıdır; yalnızca drift'e uğrayan tabloları hedefleyen
+   seçici bir sync kapsam dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/api/schema_sync_api.py` (`schema_sync`)
