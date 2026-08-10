@@ -1,12 +1,15 @@
-"""Schema drift / sync debug router (Sprint 28.7).
+"""Schema drift / sync / reindex debug router (Sprint 28.7 + 28.8).
 
-GET  /api/debug/schema/drift  - read-only structural drift report (no rebuild).
-POST /api/debug/schema/sync   - drift-aware sync (Task 6).
+GET  /api/debug/schema/drift            - read-only structural drift report (no rebuild).
+POST /api/debug/schema/sync             - drift-aware sync (Task 6).
+GET  /api/debug/schema/reindex-status   - read-only embedding-staleness report (28.8).
+POST /api/debug/schema/reindex          - granular embedding re-index over the cached schema (28.8).
 
 Follows the metrics_api/rule_suggestions_api pattern: own APIRouter, verify_api_key
 dependency, per-handler ensure_debug_enabled() -> 404 when debug is disabled.
-The drift report is SIDE-EFFECT-FREE: it reads the cache file and a fresh
-structural signature, and never calls load_schema (never rebuilds).
+The drift and reindex-status reports are SIDE-EFFECT-FREE: they read the cache
+file (and, for reindex-status, embedding fingerprints) without calling
+load_schema (never rebuild).
 """
 import json
 import os
