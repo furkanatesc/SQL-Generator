@@ -618,7 +618,7 @@ bırakıldı (sessiz düşürme yok).
    olarak kapsam dışı bırakıldı.
    *İlgili Dosya:* `backend/app/schema/implicit_relationships.py`
 
-## §14. Sprint 28.6 (Schema Cache Invalidation) devirleri — KISMEN ÇÖZÜLDÜ (28.7)
+## §14. Sprint 28.6 (Schema Cache Invalidation) devirleri — KISMEN ÇÖZÜLDÜ (28.7, 28.8)
 
 `SchemaManager.load_schema` artık içerik-fingerprint'li (yeni saf
 `app/schema_cache_fingerprint.py`: `compute_cache_fingerprint(*, db_type,
@@ -656,14 +656,22 @@ olarak kapsam dışı bırakıldı (sessiz düşürme yok).
    ise `load_schema(force_refresh=True)` çağırır). Rebuild hâlâ tüm-cache'dir
    (kısmi/seçici değil, bkz. §15.6).
    *İlgili Dosya:* `backend/app/api/schema_sync_api.py`
-4. **AÇIK — Granüler embedding-only invalidation yok.** Embedding model değişince
-   (veya herhangi bir fingerprint girdisi değişince) tüm cache
+4. ~~**AÇIK — Granüler embedding-only invalidation yok.** Embedding model
+   değişince (veya herhangi bir fingerprint girdisi değişince) tüm cache
    (`schema` + `embeddings`) yeniden yazılıyor; yalnızca embedding kısmını
    yeniden hesaplayıp şema kısmını koruyan daha ince taneli bir yol kapsam
-   dışı bırakıldı.
-   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`), `backend/app/schema_cache_fingerprint.py`
+   dışı bırakıldı.~~ — **✅ ÇÖZÜLDÜ (28.8).** Yeni saf `app/schema/
+   reindex_planner.py` (`plan_reindex` → `to_embed`/`to_keep`/`to_delete`) +
+   `app/schema_reindex.py::reindex_embeddings` yalnız yeni/değişen tabloları
+   embed eder, değişmeyenlerin vektörünü reuse eder. `load_schema`'nın
+   rebuild dalı artık bu granüler yolu kullanıyor; `force_refresh=True` hâlâ
+   tam yeniden-embed yapar (bilinçli — bkz. §16). Ayrıca `POST /api/debug/
+   schema/reindex` embedding-model değişikliğinde **DB re-extract'e hiç
+   dokunmadan** yalnız embedding'i güncelleyen elle-tetiklenen bir kısa yol
+   sağlıyor (otomatik kısa-devre değil — bkz. §16 madde 2).
+   *İlgili Dosya:* `backend/app/schema/reindex_planner.py`, `backend/app/schema_reindex.py`, `backend/app/schema_manager.py` (`load_schema`)
 
-## §15. Sprint 28.7 (Incremental Schema Sync) devirleri — AÇIK
+## §15. Sprint 28.7 (Incremental Schema Sync) devirleri — KISMEN ÇÖZÜLDÜ (28.8)
 
 `app/schema/schema_signature.py` (saf, sha256 tabanlı yapısal signature) +
 `SchemaManager`'ın opt-in `auto_schema_drift_check`'i (varsayılan KAPALI) +
@@ -677,11 +685,16 @@ kapsam dışı bırakıldı (sessiz düşürme yok).
    tablo(lar)ı tespit edip cache'teki değişmeyen tabloları koruyarak
    birleştiren (merge) daha ince taneli bir yol kapsam dışı bırakıldı.
    *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`)
-2. **Granüler embedding-only re-index yok (→ 28.8).** Drift'te tüm cache
+2. ~~**Granüler embedding-only re-index yok (→ 28.8).** Drift'te tüm cache
    (`schema` + `embeddings`) yeniden yazılıyor; yalnızca embedding kısmını
    yeniden hesaplayıp şema kısmını koruyan bir yol hâlâ kapsam dışı — bu
-   §14.4'ün devamıdır, 28.8 Embedding/RAG Re-Index Pipeline'a ertelendi.
-   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`)
+   §14.4'ün devamıdır, 28.8 Embedding/RAG Re-Index Pipeline'a ertelendi.~~ —
+   **✅ ÇÖZÜLDÜ (28.8).** Bkz. §14 madde 4 ve §16. `load_schema`'nın rebuild
+   dalı artık `reindex_embeddings` ile yalnız yeni/değişen tabloları embed
+   eder; drift'te `schema` yine tam yeniden çıkarılır (§15 madde 1 ile aynı
+   yapısal sınır — bu 28.8'in kapsamı dışı, yalnız embedding tarafı kapandı),
+   ama `embeddings` artık granüler güncellenir.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`), `backend/app/schema_reindex.py`
 3. **TTL/zaman-tabanlı invalidation hâlâ yok (§14.2 devam ediyor).** 28.7
    yalnızca yapısal drift kontrolü ekledi; belirli bir süre sonra otomatik
    "bayatla" mekanizması kapsam dışı kaldı.
@@ -709,3 +722,74 @@ kapsam dışı bırakıldı (sessiz düşürme yok).
    yüzeyindeki yansımasıdır; yalnızca drift'e uğrayan tabloları hedefleyen
    seçici bir sync kapsam dışı bırakıldı.
    *İlgili Dosya:* `backend/app/api/schema_sync_api.py` (`schema_sync`)
+
+## §16. Sprint 28.8 (Embedding / RAG Re-Index Pipeline) devirleri — AÇIK
+
+`app/schema/reindex_planner.py` (saf: `build_table_embedding_text`/
+`compute_embedding_fingerprint`/`stable_point_id`/`plan_reindex`) +
+`app/schema_reindex.py::reindex_embeddings` + `rag_manager.py`'nin
+deterministik point id'leri + `GET /reindex-status`/`POST /reindex`
+§14.4 ve §15.2'yi çözdü; aşağıdakiler tasarım spec'inde bilinçli olarak
+kapsam dışı bırakıldı (sessiz düşürme yok).
+
+1. **`business_rules`/`sql_history` koleksiyonları hâlâ non-deterministic
+   `hash()` point id kullanıyor; granüler re-index yok.** 28.8 yalnızca
+   `schema_ddl` koleksiyonunu (ve onu besleyen `index_ddl`/
+   `index_schema_batch`'i) `stable_point_id`'ye taşıdı.
+   `index_business_rule`/`index_sql_history` (`rag_manager.py`) hâlâ eski
+   `hash(...) % 10**8` desenini kullanıyor — aynı restart-bağımlı
+   orphan/duplicate-point riski bu iki koleksiyonda **devam ediyor**;
+   granüler embed-only re-index de yalnız `schema_ddl` için var, bu iki
+   koleksiyon için bir `reindex_embeddings` eşdeğeri yok. Bilinçli kapsam
+   dışı — kapsam `schema_ddl` ile sınırlandı (28.8 spec).
+   *İlgili Dosya:* `backend/app/rag_manager.py` (`index_business_rule`, `index_sql_history`)
+2. **Embedding-model değişikliğinde otomatik embedding-only kısa-devre
+   yok.** 28.6'nın `compute_cache_fingerprint` girdileri arasında
+   `embedding_model` var; model değişince fingerprint uyuşmazlığı `load_schema`
+   içinde hâlâ **TAM** `base_schema is None` dalını tetikler (DB'den yeniden
+   `extract_schema_metadata()` — 28.8 bunu granüler embedding re-index'e
+   bağladı ama `extract` adımının kendisini atlamıyor). Yalnızca elle
+   çağrılan `POST /api/debug/schema/reindex` DB re-extract'e hiç dokunmadan
+   embedding-only kısa yolu sağlıyor — otomatik/algılanan bir kısa-devre
+   (ör. "yalnız `embedding_model` değiştiyse `extract`'i atla") kapsam dışı
+   bırakıldı.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`), `backend/app/api/schema_sync_api.py` (`reindex`)
+3. **Qdrant collection/vector_size migration kapsam dışı.** `stable_point_id`
+   yalnızca point id üretim şemasını değiştirdi; koleksiyonun kendisinin
+   (`schema_ddl`, sabit `vector_size`) yeniden boyutlandırılması/migrate
+   edilmesi bir senaryo olarak ele alınmadı — embedding modeli vektör
+   boyutunu değiştirirse (bkz. TECH-DEBT §1) ayrı bir migration adımı
+   gerekir, 28.8 bunu üstlenmedi.
+   *İlgili Dosya:* `backend/app/rag_manager.py`
+4. **Embed-text zenginleştirme (örnek değerler) kapsam dışı.**
+   `build_table_embedding_text` yalnız tablo adı + kolon adı/tipi + FK
+   referanslarını birleştirir (schema-only); düşük-kardinaliteli kolonların
+   örnek/distinct değerlerini (bkz. ROADMAP "Değer Düzeyi Semantik RAG"
+   backlog fikri) embed metnine katma bilinçli olarak kapsam dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/schema/reindex_planner.py` (`build_table_embedding_text`)
+5. **Batch-size tuning değişmedi.** `reindex_embeddings`, `embedder.
+   build_index`'i yalnız `to_embed`+eksik-vektörlü `to_keep` tablolarının
+   alt-şeması üzerinde çağırır (istek sayısı azalır) ama `build_index`'in
+   kendi iç batching/rate-limit davranışı (NVIDIA NIM embedding API'sine
+   kaç tablo/istek gönderildiği) dokunulmadı — 28.8 yalnız *hangi* tabloların
+   embed edildiğini daralttı, *nasıl* embed edildiğini değiştirmedi.
+   *İlgili Dosya:* `backend/app/schema_embedding.py` (`build_index`)
+6. **AÇIK (dar edge-case, executor review'den) — `force=True` + eşzamanlı
+   tablo kaldırma, o zorlanmış rebuild'de kaldırılan tablonun Qdrant
+   point'ini tahliye ETMEZ.** `SchemaManager.load_schema`'da `force_refresh=
+   True` iken cache-okuma bloğu (`if not force_refresh and os.path.exists(...)`)
+   tamamen atlanır, dolayısıyla `old_embeddings_for_reindex` hep `None`
+   kalır; `reindex_embeddings` bu durumda `force=True` ile çağrılır ve
+   `old_fp={}`/`old_tables={}` ile başlar → `plan_reindex`'in `to_delete`'i
+   (eski fingerprint kümesi ile yeni tablo kümesinin farkı) hep **boş**
+   çıkar — kaldırılan bir tablo varsa bile. Sonuç: force-refresh sırasında
+   DB'den artık gelmeyen bir tablonun eski `schema_ddl` Qdrant point'i
+   **silinmez** (orphan kalır). Self-heals: bir sonraki `POST /api/debug/
+   schema/reindex` çağrısı `RAGManager.prune_schema_ddl_points` ile gerçek
+   Qdrant durumunu (cache fingerprint'inden bağımsız) tarayıp orphan/stale-id
+   point'leri temizler; ya da bir sonraki **force-olmayan** `load_schema`
+   çağrısı (gerçek cache'i okuyarak) drift'i doğru şekilde `to_delete`'e
+   yakalar. Düşük etkili (orphan point aramaya/isabet etmeye katkı sağlamaz,
+   yalnızca Qdrant'ta kullanılmayan yer kaplar) ama sessizce bırakılmadı —
+   burada işaretlendi.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`, `old_embeddings_for_reindex`), `backend/app/schema_reindex.py` (`reindex_embeddings`)

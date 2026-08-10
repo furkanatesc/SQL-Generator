@@ -505,6 +505,44 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   (satır/veri-seviyesi drift yok), sync rebuild'i tüm-cache'dir, kısmi değil.
   TECH-DEBT §14.1/§14.3 **ÇÖZÜLDÜ**. Full suite 2537 passed/9 skipped.
   (PR #158)
+- **Embedding / RAG Re-Index Pipeline** (Sprint 28.8): 28.7'nin notunda
+  bırakılan "drift'te tüm cache (`schema`+`embeddings`) yeniden yazılıyor"
+  sınırını embedding tarafında giderdi. Yeni saf `app/schema/reindex_planner.py`:
+  `build_table_embedding_text` (embed edilen metnin tek doğruluk kaynağı),
+  `compute_embedding_fingerprint(text, model)` (model-aware sha256),
+  `stable_point_id(name)` (deterministik, restart-bağımsız Qdrant id) ve
+  `plan_reindex(old_fingerprints, new_schema, model) -> ReindexPlan`
+  (`to_embed`/`to_keep`/`to_delete` diff'i). `SchemaEmbeddingIndex.
+  _generate_table_fingerprint` artık `build_table_embedding_text`'i delege
+  ediyor (çıktı byte-identical). **Kök düzeltme:** `rag_manager.py`'deki
+  `index_ddl`/`index_schema_batch` eskiden `int(hash(table_name) % 10**8)`
+  ile point id üretiyordu — Python'un `hash()`'i `PYTHONHASHSEED`'e bağlı ve
+  **süreç-başına farklı**dır; her restart aynı tabloya farklı bir Qdrant
+  point id verip eskisini orphan bırakabiliyordu. Artık `stable_point_id`
+  kullanılıyor (`business_rules`/`sql_history` koleksiyonları bilinçli
+  olarak `hash()`'te bırakıldı, TECH-DEBT §16). Yeni
+  `delete_schema_points`/`audit_schema_ddl_points`/`prune_schema_ddl_points`
+  (`schema_ddl` koleksiyonuna özel, best-effort). Yeni `app/schema_reindex.py`:
+  `reindex_embeddings(...)` — yalnız yeni/değişen tabloları embed eder,
+  değişmeyenlerin vektörünü cache'ten reuse eder, kaldırılanları Qdrant'tan
+  tahliye eder; aynı model+şema için tam `build_index`'e **çıktı-eşdeğerdir**.
+  `SchemaManager.load_schema`'nın rebuild dalı artık bu executor'ı çağırıyor
+  (cache `embeddings` yeni `fingerprints` alanını kazandı); `force_refresh=True`
+  → tam yeniden-embed (28.6/28.7 davranışı korunur). Yeni debug-gated
+  `GET /api/debug/schema/reindex-status` (yan etkisiz — fresh/stale/new/
+  to_delete/orphaned_qdrant raporlar) + `POST /api/debug/schema/reindex?force=`
+  (yalnız cache'li şema üzerinde embedding-only re-index — DB re-extract YOK).
+  **Benchmark etkilenmedi** (28.8 dört benchmark hedefine de dokunmuyor) —
+  versiyon bump gerekmedi, gate yeşil (exit 0). TECH-DEBT §14.4/§15.2
+  **ÇÖZÜLDÜ**. Full suite 2569 passed/9 skipped. **Bilinçli kapsam dışı**
+  (TECH-DEBT §16): `business_rules`/`sql_history` hâlâ non-deterministic
+  `hash()` id / granüler re-index yok, embedding-model değişikliğinde otomatik
+  kısa-devre yok (yalnız `POST /reindex` DB re-extract'ten kaçınır), Qdrant
+  collection/vector_size migration, embed-text zenginleştirme (örnek
+  değerler), batch-size tuning değişmedi. Dar bir edge-case AÇIK bırakıldı:
+  `force=True` + eşzamanlı tablo kaldırma o zorlanmış rebuild'de kaldırılan
+  tablonun Qdrant point'ini tahliye ETMEZ (bir sonraki `prune_schema_ddl_points`
+  çağrısı veya force-olmayan bir drift ile kendiliğinden düzelir). (PR TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
