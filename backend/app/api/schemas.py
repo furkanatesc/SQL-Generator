@@ -507,3 +507,33 @@ class RuleSuggestionsDetailResponse(BaseModel):
 class RuleSuggestionsEnvelopeResponse(BaseModel):
     status: Literal["success"]
     suggestions: RuleSuggestionsDetailResponse
+
+
+# Sprint 28.7 - Schema drift / sync
+class StructuralDriftResponse(BaseModel):
+    added_tables: List[str]
+    removed_tables: List[str]
+    added_columns: List[dict]
+    removed_columns: List[dict]
+    changed_columns: List[dict]
+    added_fks: List[dict]
+    removed_fks: List[dict]
+
+
+class SchemaDriftEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    drifted: bool
+    signature_version: str
+    cached_signature: Optional[str] = None
+    current_signature: str
+    drift: StructuralDriftResponse
+
+
+class SchemaSyncEnvelopeResponse(BaseModel):
+    status: Literal["success"]
+    action: Literal["rebuilt", "up_to_date"]
+    drifted: bool
+    signature_version: str
+    cached_signature: Optional[str] = None
+    current_signature: str
+    drift: StructuralDriftResponse
