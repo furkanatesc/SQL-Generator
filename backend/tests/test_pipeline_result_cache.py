@@ -104,6 +104,27 @@ def test_no_signature_disables_cache(monkeypatch):
     assert res["cache_hit"] is False
 
 
+def test_previous_sql_bypasses_cache(monkeypatch):
+    # A revision request (previous_sql set) must never consult or write the cache,
+    # even with a valid signature and a cached entry present.
+    p = _pipeline(monkeypatch)                     # sig="SIG", cache enabled
+    called = {"get": 0, "put": 0}
+    monkeypatch.setattr(sp, "get_cached_sql", lambda key: called.__setitem__("get", called["get"] + 1) or "SELECT cached")
+    monkeypatch.setattr(sp, "put_cached_sql", lambda *a, **k: called.__setitem__("put", called["put"] + 1))
+    def _fake_wc(**k):
+        k["result"]["success"] = True
+        k["result"]["generated_sql"] = "SELECT revised"
+        return ({"last_generated_sql": "SELECT revised", "validation_errors": [], "prompt_sha256": None,
+                 "prompt_char_count": None, "natural_query": "q"},
+                {"prompt": 1, "generation": 5, "validation": 1, "security": 1})
+    monkeypatch.setattr(p, "_stage_writer_critic", _fake_wc)
+    res = p.run_pipeline(natural_query="q", dialect="postgres", previous_sql="SELECT old")
+    assert called["get"] == 0                       # cache never consulted
+    assert called["put"] == 0                       # and never written
+    assert res["cache_hit"] is False
+    assert res["generated_sql"] == "SELECT revised"
+
+
 def test_disabled_config_always_generates(monkeypatch):
     p = _pipeline(monkeypatch, cache_config="off")
     called = {"get": 0}

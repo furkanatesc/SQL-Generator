@@ -341,10 +341,17 @@ class SQLGenerationPipeline:
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
         return pruned_schema, prompt_schema_context, schema_selection_trace, None, elapsed_ms
 
-    def _cache_lookup(self, *, aqr, dialect, pruned_schema, log_callback):
+    def _cache_lookup(self, *, aqr, dialect, pruned_schema, log_callback, previous_sql=None):
         """28.9: exact result-cache lookup. Returns (hit_outcome | None, cache_key | None,
         schema_signature | None, cache_active). Hit is re-validated via validate_sql; an
-        invalid hit returns (None, key, sig, True) so the caller regenerates."""
+        invalid hit returns (None, key, sig, True) so the caller regenerates.
+
+        A revision request (previous_sql set) is inherently non-cacheable — the writer
+        prompt injects previous_sql as an explicit revision instruction, but the cache
+        key does not include it. Bypass the cache entirely (no lookup, no store) so a
+        revision is never silently answered with a stale cached SQL."""
+        if previous_sql and str(previous_sql).strip():
+            return None, None, None, False
         schema_signature = self.schema_manager.get_cached_schema_signature()
         # isinstance (not just "is not None"): schema_manager doubles in older tests are bare
         # Mocks that don't implement this 28.9 method — their auto-attribute return is neither
@@ -738,7 +745,8 @@ class SQLGenerationPipeline:
 
         # 2.5 Result cache lookup (Sprint 28.9) — after retrieval, before generation.
         hit_outcome, cache_key, schema_signature, cache_active = self._cache_lookup(
-            aqr=aqr, dialect=dialect, pruned_schema=pruned_schema, log_callback=log_callback)
+            aqr=aqr, dialect=dialect, pruned_schema=pruned_schema, log_callback=log_callback,
+            previous_sql=previous_sql)
         cache_hit = hit_outcome is not None
 
         if cache_hit:

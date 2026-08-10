@@ -45,12 +45,15 @@ def test_clear_cache_deletes_and_counts(cache_db):
     assert rc.cache_stats() == {"entries": 0, "total_hits": 0}
 
 
-def test_no_raw_query_column():
+def test_no_raw_query_column(cache_db):
     # sql_cache must NOT have a natural_query / query column (secret-free).
+    # Inspects the LIVE schema via PRAGMA table_info, not a hardcoded set.
     import sqlite3
-    cols = {c.split()[0] for c in
-            ["cache_key", "sql", "dialect", "schema_signature", "created_at", "hit_count"]}
+    conn = sqlite3.connect(cache_db)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(sql_cache)").fetchall()}
+    conn.close()
     assert "natural_query" not in cols and "query" not in cols
+    assert {"cache_key", "sql", "dialect", "schema_signature", "created_at", "hit_count"} <= cols
 
 
 @pytest.mark.parametrize("value,expected", [
