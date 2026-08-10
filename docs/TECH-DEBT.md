@@ -774,22 +774,31 @@ kapsam dışı bırakıldı (sessiz düşürme yok).
    kaç tablo/istek gönderildiği) dokunulmadı — 28.8 yalnız *hangi* tabloların
    embed edildiğini daralttı, *nasıl* embed edildiğini değiştirmedi.
    *İlgili Dosya:* `backend/app/schema_embedding.py` (`build_index`)
-6. **AÇIK (dar edge-case, executor review'den) — `force=True` + eşzamanlı
-   tablo kaldırma, o zorlanmış rebuild'de kaldırılan tablonun Qdrant
-   point'ini tahliye ETMEZ.** `SchemaManager.load_schema`'da `force_refresh=
+6. **NARROWED (final-review fix, 28.8 sonrası) — `force=True` + eşzamanlı
+   tablo kaldırma, o zorlanmış rebuild'in kendi `reindex_embeddings` çağrısında
+   kaldırılan tablonun Qdrant point'ini tahliye ETMEZ; artık aynı rebuild'in
+   sonunda prune ile temizleniyor.** `SchemaManager.load_schema`'da `force_refresh=
    True` iken cache-okuma bloğu (`if not force_refresh and os.path.exists(...)`)
    tamamen atlanır, dolayısıyla `old_embeddings_for_reindex` hep `None`
    kalır; `reindex_embeddings` bu durumda `force=True` ile çağrılır ve
    `old_fp={}`/`old_tables={}` ile başlar → `plan_reindex`'in `to_delete`'i
    (eski fingerprint kümesi ile yeni tablo kümesinin farkı) hep **boş**
-   çıkar — kaldırılan bir tablo varsa bile. Sonuç: force-refresh sırasında
-   DB'den artık gelmeyen bir tablonun eski `schema_ddl` Qdrant point'i
-   **silinmez** (orphan kalır). Self-heals: bir sonraki `POST /api/debug/
-   schema/reindex` çağrısı `RAGManager.prune_schema_ddl_points` ile gerçek
-   Qdrant durumunu (cache fingerprint'inden bağımsız) tarayıp orphan/stale-id
-   point'leri temizler; ya da bir sonraki **force-olmayan** `load_schema`
-   çağrısı (gerçek cache'i okuyarak) drift'i doğru şekilde `to_delete`'e
-   yakalar. Düşük etkili (orphan point aramaya/isabet etmeye katkı sağlamaz,
-   yalnızca Qdrant'ta kullanılmayan yer kaplar) ama sessizce bırakılmadı —
-   burada işaretlendi.
-   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`, `old_embeddings_for_reindex`), `backend/app/schema_reindex.py` (`reindex_embeddings`)
+   çıkar — kaldırılan bir tablo varsa bile, o çağrının kendisi eski point'i
+   silmez. **Düzeltme (final-review fix wave):** aynı rebuild bloğunda
+   `reindex_embeddings` çağrısından hemen sonra, aynı `_rag` (`RAGManager`)
+   örneğiyle `_rag.prune_schema_ddl_points(set(base_schema["tables"].keys()))`
+   çağrılıyor — bu, taze (re-)build edilmiş şemadaki tablo kümesine göre
+   `schema_ddl` koleksiyonunu tarayıp hem orphan (artık var olmayan tablo)
+   hem de stale-id (28.8 öncesi `hash()` tabanlı) point'leri temizler. Not:
+   ~~"bir sonraki **force-olmayan** `load_schema` çağrısı drift'i `to_delete`'e
+   yakalar" iddiası YANLIŞTI~~ — force rebuild sonrası kaldırılan tablo
+   `fingerprints`'te hiç yer almadığı için hiçbir sonraki `plan_reindex`
+   onu `to_delete`'e koymaz; bu path'e güvenilemezdi. Gerçek iyileşme yolları
+   yalnızca: (a) yukarıdaki prune-on-rebuild (her rebuild'de otomatik) ve
+   (b) `POST /api/debug/schema/reindex` (talep üzerine prune eder). Cache-hit
+   yolunda (rebuild olmayan `load_schema` çağrıları) prune ÇALIŞMAZ — orphan,
+   bir sonraki rebuild'e (herhangi bir sebeple, force veya değil) veya elle
+   tetiklenen `POST /reindex`'e kadar Qdrant'ta kalabilir. Düşük etkili
+   (orphan point aramaya/isabet etmeye katkı sağlamaz, yalnızca Qdrant'ta
+   kullanılmayan yer kaplar) ama sessizce bırakılmadı — burada işaretlendi.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`, `old_embeddings_for_reindex`, prune-on-rebuild çağrısı), `backend/app/schema_reindex.py` (`reindex_embeddings`), `backend/app/rag_manager.py` (`prune_schema_ddl_points`)
