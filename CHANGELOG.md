@@ -504,7 +504,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   sinyali kullanılmadı (extract-reuse tercih edildi), yalnızca yapısal drift
   (satır/veri-seviyesi drift yok), sync rebuild'i tüm-cache'dir, kısmi değil.
   TECH-DEBT §14.1/§14.3 **ÇÖZÜLDÜ**. Full suite 2537 passed/9 skipped.
-  (PR TBD)
+  (PR #158)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
