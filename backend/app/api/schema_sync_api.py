@@ -11,7 +11,7 @@ structural signature, and never calls load_schema (never rebuilds).
 import json
 import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import verify_api_key
 from app.schema.schema_signature import (
@@ -61,6 +61,26 @@ def schema_drift():
     drifted, cached_sig, current_sig, drift = _compute_drift()
     return {
         "status": "success",
+        "drifted": drifted,
+        "signature_version": SCHEMA_SIGNATURE_VERSION,
+        "cached_signature": cached_sig,
+        "current_signature": current_sig,
+        "drift": drift.as_dict(),
+    }
+
+
+@router.post("/sync", response_model=None)
+def schema_sync(force: bool = Query(default=False)):
+    ensure_debug_enabled()
+    drifted, cached_sig, current_sig, drift = _compute_drift()
+    if drifted or force:
+        SchemaManager().load_schema(force_refresh=True)
+        action = "rebuilt"
+    else:
+        action = "up_to_date"
+    return {
+        "status": "success",
+        "action": action,
         "drifted": drifted,
         "signature_version": SCHEMA_SIGNATURE_VERSION,
         "cached_signature": cached_sig,
