@@ -78,3 +78,58 @@ def test_drift_404_when_debug_disabled(wire, monkeypatch):
         debug_endpoints_enabled = False
     monkeypatch.setattr(api, "get_settings", lambda: _Off())
     assert client.get("/api/debug/schema/drift", headers=HEADERS).status_code == 404
+
+
+def test_sync_rebuilds_when_drifted(wire, monkeypatch):
+    wire(cache={"schema_signature": "OLD", "schema": {"tables": {}, "graph": {}}},
+         current_norm=_NORM_A, current_sig="NEW")
+    called = {"n": 0}
+
+    class _M2:
+        def _current_normalized_structure(self): return _NORM_A
+        def _current_schema_signature(self): return "NEW"
+        def load_schema(self, force_refresh=False): called["n"] += 1; return {}
+    monkeypatch.setattr(api, "SchemaManager", _M2)
+    r = client.post("/api/debug/schema/sync", headers=HEADERS)
+    assert r.status_code == 200
+    assert r.json()["action"] == "rebuilt"
+    assert called["n"] == 1
+
+
+def test_sync_skips_rebuild_when_up_to_date(wire, monkeypatch):
+    wire(cache={"schema_signature": "SIG", "schema": {"tables": {}, "graph": {}}},
+         current_norm={}, current_sig="SIG")
+    called = {"n": 0}
+
+    class _M2:
+        def _current_normalized_structure(self): return {}
+        def _current_schema_signature(self): return "SIG"
+        def load_schema(self, force_refresh=False): called["n"] += 1; return {}
+    monkeypatch.setattr(api, "SchemaManager", _M2)
+    r = client.post("/api/debug/schema/sync", headers=HEADERS)
+    assert r.json()["action"] == "up_to_date"
+    assert called["n"] == 0
+
+
+def test_sync_force_rebuilds_when_up_to_date(wire, monkeypatch):
+    wire(cache={"schema_signature": "SIG", "schema": {"tables": {}, "graph": {}}},
+         current_norm={}, current_sig="SIG")
+    called = {"n": 0}
+
+    class _M2:
+        def _current_normalized_structure(self): return {}
+        def _current_schema_signature(self): return "SIG"
+        def load_schema(self, force_refresh=False): called["n"] += 1; return {}
+    monkeypatch.setattr(api, "SchemaManager", _M2)
+    r = client.post("/api/debug/schema/sync?force=true", headers=HEADERS)
+    assert r.json()["action"] == "rebuilt"
+    assert called["n"] == 1
+
+
+def test_sync_404_when_debug_disabled(wire, monkeypatch):
+    wire(cache=None, current_norm=_NORM_A, current_sig="NEW")
+
+    class _Off:
+        debug_endpoints_enabled = False
+    monkeypatch.setattr(api, "get_settings", lambda: _Off())
+    assert client.post("/api/debug/schema/sync", headers=HEADERS).status_code == 404
