@@ -756,6 +756,23 @@
       "sql"
     ]
   },
+  "SchemaDriftEnvelopeResponse": {
+    "properties": [
+      "cached_signature",
+      "current_signature",
+      "drift",
+      "drifted",
+      "signature_version",
+      "status"
+    ],
+    "required": [
+      "current_signature",
+      "drift",
+      "drifted",
+      "signature_version",
+      "status"
+    ]
+  },
   "SchemaFilterUpdate": {
     "properties": [
       "hidden_columns",
@@ -766,9 +783,48 @@
       "hidden_tables"
     ]
   },
+  "SchemaSyncEnvelopeResponse": {
+    "properties": [
+      "action",
+      "cached_signature",
+      "current_signature",
+      "drift",
+      "drifted",
+      "signature_version",
+      "status"
+    ],
+    "required": [
+      "action",
+      "current_signature",
+      "drift",
+      "drifted",
+      "signature_version",
+      "status"
+    ]
+  },
   "SortOrder": {
     "properties": [],
     "required": []
+  },
+  "StructuralDriftResponse": {
+    "properties": [
+      "added_columns",
+      "added_fks",
+      "added_tables",
+      "changed_columns",
+      "removed_columns",
+      "removed_fks",
+      "removed_tables"
+    ],
+    "required": [
+      "added_columns",
+      "added_fks",
+      "added_tables",
+      "changed_columns",
+      "removed_columns",
+      "removed_fks",
+      "removed_tables"
+    ]
   },
   "SuggestionWindowResponse": {
     "properties": [

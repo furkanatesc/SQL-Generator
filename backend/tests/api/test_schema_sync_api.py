@@ -4,9 +4,11 @@ from fastapi.testclient import TestClient
 
 import app.api.schema_sync_api as api
 from app.main import app
+from app.schema.schema_signature import compute_schema_signature
 
 client = TestClient(app)
 HEADERS = {"X-API-Key": "sqlgen_secret_dev_key"}
+_SIG_EMPTY = compute_schema_signature({})
 
 _NORM_A = {"t": {"columns": (("id", "INTEGER", True, False),), "foreign_keys": ()}}
 _NORM_B = {"t": {"columns": (("id", "INTEGER", True, False),
@@ -37,13 +39,13 @@ def wire(monkeypatch, tmp_path):
 
 
 def test_drift_false_when_signature_matches(wire):
-    wire(cache={"schema_signature": "SIG", "schema": {"tables": {}, "graph": {}}},
-         current_norm={}, current_sig="SIG")
+    wire(cache={"schema_signature": _SIG_EMPTY, "schema": {"tables": {}, "graph": {}}},
+         current_norm={}, current_sig=_SIG_EMPTY)
     r = client.get("/api/debug/schema/drift", headers=HEADERS)
     assert r.status_code == 200
     body = r.json()
     assert body["drifted"] is False
-    assert body["current_signature"] == "SIG"
+    assert body["current_signature"] == _SIG_EMPTY
 
 
 def test_drift_true_reports_added_column(wire):
@@ -97,13 +99,13 @@ def test_sync_rebuilds_when_drifted(wire, monkeypatch):
 
 
 def test_sync_skips_rebuild_when_up_to_date(wire, monkeypatch):
-    wire(cache={"schema_signature": "SIG", "schema": {"tables": {}, "graph": {}}},
-         current_norm={}, current_sig="SIG")
+    wire(cache={"schema_signature": _SIG_EMPTY, "schema": {"tables": {}, "graph": {}}},
+         current_norm={}, current_sig=_SIG_EMPTY)
     called = {"n": 0}
 
     class _M2:
         def _current_normalized_structure(self): return {}
-        def _current_schema_signature(self): return "SIG"
+        def _current_schema_signature(self): return _SIG_EMPTY
         def load_schema(self, force_refresh=False): called["n"] += 1; return {}
     monkeypatch.setattr(api, "SchemaManager", _M2)
     r = client.post("/api/debug/schema/sync", headers=HEADERS)
@@ -112,13 +114,13 @@ def test_sync_skips_rebuild_when_up_to_date(wire, monkeypatch):
 
 
 def test_sync_force_rebuilds_when_up_to_date(wire, monkeypatch):
-    wire(cache={"schema_signature": "SIG", "schema": {"tables": {}, "graph": {}}},
-         current_norm={}, current_sig="SIG")
+    wire(cache={"schema_signature": _SIG_EMPTY, "schema": {"tables": {}, "graph": {}}},
+         current_norm={}, current_sig=_SIG_EMPTY)
     called = {"n": 0}
 
     class _M2:
         def _current_normalized_structure(self): return {}
-        def _current_schema_signature(self): return "SIG"
+        def _current_schema_signature(self): return _SIG_EMPTY
         def load_schema(self, force_refresh=False): called["n"] += 1; return {}
     monkeypatch.setattr(api, "SchemaManager", _M2)
     r = client.post("/api/debug/schema/sync?force=true", headers=HEADERS)

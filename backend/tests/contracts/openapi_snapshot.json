@@ -2153,6 +2153,50 @@
         "title": "SQLHistoryIndexRequest",
         "type": "object"
       },
+      "SchemaDriftEnvelopeResponse": {
+        "properties": {
+          "cached_signature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Signature"
+          },
+          "current_signature": {
+            "title": "Current Signature",
+            "type": "string"
+          },
+          "drift": {
+            "$ref": "#/components/schemas/StructuralDriftResponse"
+          },
+          "drifted": {
+            "title": "Drifted",
+            "type": "boolean"
+          },
+          "signature_version": {
+            "title": "Signature Version",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "drifted",
+          "signature_version",
+          "current_signature",
+          "drift"
+        ],
+        "title": "SchemaDriftEnvelopeResponse",
+        "type": "object"
+      },
       "SchemaFilterUpdate": {
         "properties": {
           "hidden_columns": {
@@ -2180,6 +2224,59 @@
         "title": "SchemaFilterUpdate",
         "type": "object"
       },
+      "SchemaSyncEnvelopeResponse": {
+        "properties": {
+          "action": {
+            "enum": [
+              "rebuilt",
+              "up_to_date"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "cached_signature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Signature"
+          },
+          "current_signature": {
+            "title": "Current Signature",
+            "type": "string"
+          },
+          "drift": {
+            "$ref": "#/components/schemas/StructuralDriftResponse"
+          },
+          "drifted": {
+            "title": "Drifted",
+            "type": "boolean"
+          },
+          "signature_version": {
+            "title": "Signature Version",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "drifted",
+          "signature_version",
+          "current_signature",
+          "drift"
+        ],
+        "title": "SchemaSyncEnvelopeResponse",
+        "type": "object"
+      },
       "SortOrder": {
         "enum": [
           "asc",
@@ -2187,6 +2284,75 @@
         ],
         "title": "SortOrder",
         "type": "string"
+      },
+      "StructuralDriftResponse": {
+        "properties": {
+          "added_columns": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Added Columns",
+            "type": "array"
+          },
+          "added_fks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Added Fks",
+            "type": "array"
+          },
+          "added_tables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Added Tables",
+            "type": "array"
+          },
+          "changed_columns": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Changed Columns",
+            "type": "array"
+          },
+          "removed_columns": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Removed Columns",
+            "type": "array"
+          },
+          "removed_fks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Removed Fks",
+            "type": "array"
+          },
+          "removed_tables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed Tables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "added_tables",
+          "removed_tables",
+          "added_columns",
+          "removed_columns",
+          "changed_columns",
+          "added_fks",
+          "removed_fks"
+        ],
+        "title": "StructuralDriftResponse",
+        "type": "object"
       },
       "SuggestionWindowResponse": {
         "properties": {
@@ -3128,7 +3294,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaDriftEnvelopeResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -3167,7 +3335,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaSyncEnvelopeResponse"
+                }
               }
             },
             "description": "Successful Response"
