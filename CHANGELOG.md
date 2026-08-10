@@ -549,7 +549,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   kaldırılan tablo `fingerprints`'te hiç yer almadığından hiçbir sonraki
   `plan_reindex` onu `to_delete`'e koymaz; gerçek iyileşme yolları yalnızca
   prune-on-rebuild (yukarıda, her rebuild'de otomatik) ve `POST /api/debug/
-  schema/reindex` (talep üzerine). (PR TBD)
+  schema/reindex` (talep üzerine). (PR #159)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
