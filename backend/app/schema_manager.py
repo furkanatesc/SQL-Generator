@@ -19,6 +19,12 @@ import threading
 CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "schema_cache.json")
 _schema_lock = threading.Lock()
 
+
+def _is_truthy_config(value) -> bool:
+    """Tolerant truthiness for configs-table string flags (28.x pattern)."""
+    return str(value).strip().lower() in {"1", "true", "yes", "on"} if value is not None else False
+
+
 def get_db_connection_params() -> Dict[str, Any]:
     """
     SQLite settings tablosundan bağlantı parametrelerini okur.
@@ -498,6 +504,7 @@ class SchemaManager:
 
             base_schema = None
             embeddings = None
+            cached_signature = None
 
             if not force_refresh and os.path.exists(CACHE_PATH):
                 try:
@@ -506,9 +513,21 @@ class SchemaManager:
                         if cache_data.get("cache_fingerprint") == current_fp:
                             base_schema = cache_data["schema"]
                             embeddings = cache_data.get("embeddings")
+                            cached_signature = cache_data.get("schema_signature")
                 except Exception as e:
                     print(f"Failed to read schema cache: {e}")
-                    
+
+            # 28.7: opt-in structural drift check (default OFF preserves 28.6 semantics).
+            if base_schema is not None and not force_refresh \
+                    and _is_truthy_config(get_config("auto_schema_drift_check")):
+                try:
+                    if self._current_schema_signature() != cached_signature:
+                        print("[SchemaManager] Structural schema drift detected; re-extracting.")
+                        base_schema = None
+                        embeddings = None
+                except Exception as e:
+                    print(f"Schema drift check failed: {e}")
+
             if base_schema is None or embeddings is None or force_refresh:
                 if base_schema is None:
                     base_schema = self.extract_schema_metadata()
