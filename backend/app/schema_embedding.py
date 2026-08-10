@@ -10,30 +10,13 @@ class SchemaEmbeddingIndex:
         self.embedding_client = embedding_client or NVIDIAEmbeddingClient()
 
     def _generate_table_fingerprint(self, table_name: str, table_meta: Dict[str, Any]) -> str:
+        """Her tablo için embed edilen semantik metni üretir.
+
+        Tek doğruluk kaynağı: app.schema.reindex_planner.build_table_embedding_text
+        (28.8). Embed edilen metin ile fingerprint'lenen metin böylece hep aynıdır.
         """
-        Her tablo için semantik bir parmak izi (fingerprint) oluşturur.
-        Bu parmak izi, tablonun içeriğini ve ilişkilerini anlamsal olarak temsil eder.
-        """
-        # Kolon isimleri ve veri tiplerini birleştir (bağlamı güçlendirmek için)
-        columns = []
-        for col in table_meta.get("columns", []):
-            col_name = col.get("name", "")
-            col_type = col.get("type") or col.get("data_type") or ""
-            if col_type:
-                columns.append(f"{col_name} ({col_type})")
-            else:
-                columns.append(col_name)
-                
-        # Foreign key referanslarını ekleyerek anlamsal bağı güçlendir
-        fks = []
-        for fk in table_meta.get("foreign_keys", []):
-            fks.append(f"references {fk.get('referenced_table')}")
-            
-        fingerprint = f"Table: {table_name} | Columns: {', '.join(columns)}"
-        if fks:
-            fingerprint += f" | Relations: {', '.join(fks)}"
-            
-        return fingerprint
+        from app.schema.reindex_planner import build_table_embedding_text
+        return build_table_embedding_text(table_name, table_meta)
 
     def build_index(self, schema: Dict[str, Any], api_key: str = None) -> Dict[str, List[float]]:
         """
