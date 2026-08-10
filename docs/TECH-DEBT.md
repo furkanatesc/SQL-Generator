@@ -802,3 +802,66 @@ kapsam dışı bırakıldı (sessiz düşürme yok).
    (orphan point aramaya/isabet etmeye katkı sağlamaz, yalnızca Qdrant'ta
    kullanılmayan yer kaplar) ama sessizce bırakılmadı — burada işaretlendi.
    *İlgili Dosya:* `backend/app/schema_manager.py` (`load_schema`, `old_embeddings_for_reindex`, prune-on-rebuild çağrısı), `backend/app/schema_reindex.py` (`reindex_embeddings`), `backend/app/rag_manager.py` (`prune_schema_ddl_points`)
+
+## §17. Sprint 28.9 (Semantic / Result Cache) devirleri — AÇIK
+
+`app/cache/result_cache_key.py` (saf: `normalize_query`/`compute_result_cache_key`)
++ `sql_cache` tablosu + `app/result_cache.py` adaptor + `SchemaManager.
+get_cached_schema_signature` + `run_pipeline`'ın `_cache_lookup` entegrasyonu
++ `GET /api/debug/cache/stats`/`POST /api/debug/cache/clear`, üretilen SQL'i
+tamamen aynı (dialect + `schema_signature` + normalize edilmiş natural-language
+sorgu) istekler için writer-critic LLM döngüsünü atlayan **deterministik exact
+result cache**'i teslim etti; aşağıdakiler tasarım spec'inde bilinçli olarak
+kapsam dışı bırakıldı (sessiz düşürme yok). **Bununla Phase 9 (Large Schema
+Production Scale) kapanır** — sıradaki Phase 10 (29.0 PostgreSQL Docker
+Integration Adapter).
+
+1. **Semantik/embedding-benzerlik cache ertelendi (precision riski).** 28.9
+   yalnızca **exact-match** anahtar kullanır (`compute_result_cache_key` —
+   normalize edilmiş sorgu + dialect + schema_signature birebir aynı olmalı).
+   Anlamca eşdeğer ama farklı ifade edilmiş sorgular ("son 30 günün siparişleri"
+   vs "geçen ay verilen siparişler") cache miss olur — LLM her seferinde
+   yeniden üretir. Embedding-benzerlik tabanlı bir yaklaşım (ROADMAP backlog
+   "Semantik Önbellekleme") isabet oranını artırır ama yanlış-pozitif riski
+   taşır (anlamca *yakın* ama SQL-semantiği *farklı* iki sorgu aynı SQL'i
+   döndürebilir) — bilinçli olarak bu sprint'in kapsamı dışında bırakıldı;
+   güvenlik/doğruluk trade-off'u ayrı bir tasarım kararı gerektirir.
+   *İlgili Dosya:* `backend/app/cache/result_cache_key.py`
+2. **Execution/result-set (satır-seviyesi) cache yok.** 28.9 yalnızca
+   **üretilen SQL metnini** cache'ler; sorgunun DB üzerinde çalıştırılmasıyla
+   dönen satırları (result set) cache'lemek kapsam dışı — bu, gerçek DB
+   execution/adapter katmanı (Phase 10, 29.x) gerektirir ve veri tazeliği
+   (staleness) sorununu SQL-cache'ten çok daha ciddi şekilde gündeme getirir.
+   *İlgili Dosya:* Phase 10 · 29.0 (henüz mevcut değil)
+3. **TTL/boyut-tabanlı otomatik eviction yok.** `sql_cache` tablosu sınırsız
+   büyür; tek temizlik yolu elle çağrılan `POST /api/debug/cache/clear`
+   (tüm tabloyu boşaltır — seçici/kısmi silme yok). Zaman-aşımlı (TTL) veya
+   LRU/boyut-tavanlı otomatik eviction bilinçli olarak kapsam dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/result_cache.py` (`clear_cache`)
+4. **Prompt-template/model değişikliğinde otomatik invalidation yok.**
+   `compute_result_cache_key`'in girdileri yalnız `version`/`dialect`/
+   `schema_signature`/normalize edilmiş sorgu — LLM modeli, prompt template'i
+   veya writer-critic mantığı değişse bile cache anahtarı **değişmez**; eski
+   cache'lenmiş SQL sunulmaya devam eder. Bu **bilinçli bir tasarım kararı**:
+   anahtar yalnız *şema tazeliğini* (freshness) garanti eder — cache'lenmiş
+   SQL, `schema_signature` değişmediği sürece hâlâ **geçerli** bir SQL'dir
+   (üretildiği zamanki şemaya göre; hit yine de `validate_sql` ile yeniden
+   doğrulanır). Model/prompt değişikliğinde yalnızca "muhtemelen artık daha
+   iyi üretilebilir" bir SQL'i eskisiyle değiştirmemek — yanlışlık riski
+   değil, iyileştirme fırsatı kayıp riski. Değişikliğe duyarlı invalidation
+   (ör. `RESULT_CACHE_KEY_VERSION` bump veya model-fingerprint) ileride
+   `POST /cache/clear` ile elle veya bir sonraki `RESULT_CACHE_KEY_VERSION`
+   artışıyla ele alınabilir.
+   *İlgili Dosya:* `backend/app/cache/result_cache_key.py` (`RESULT_CACHE_KEY_VERSION`)
+5. **Cache-hit-rate agregasyonu/dedike metrics-dashboard paneli yok.**
+   `run_pipeline` sonuçta ham `cache_hit: bool` alanını + trace metadata'da
+   aynı bayrağı emit eder, ama bunu zaman-pencereli hit-rate/toplam
+   tasarruf gibi bir agregat metriğe çeviren bir bileşen (27.6 `metrics`/27.7
+   `dashboard` desenine benzer) bu sprint'te eklenmedi — dedike bir "cache
+   performance" paneli ileriye ertelendi.
+   *İlgili Dosya:* `backend/app/sql_pipeline.py` (`cache_hit` alanı), 27.6/27.7 (`app/dashboard.py`/`app/metrics.py`) potansiyel genişletme noktası
+6. **AÇIK (devam) — frontend `maxNodesLimit` kalıcı çözümü yok.** Bkz. §2 ve
+   §12 kalem 12/§16'daki tekrarlanan not; 28.9 backend-only bir sprint —
+   frontend D3 graph UI performans limiti farklı bir (frontend) katmanda,
+   bu sprint'in kapsamı dışında AÇIK kalmaya devam eder.
+   *İlgili Dosya:* frontend (`maxNodesLimit`, bkz. §2)
