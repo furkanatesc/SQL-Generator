@@ -173,6 +173,19 @@ class SchemaManager:
         from app.schema.schema_signature import compute_schema_signature
         return compute_schema_signature(self._current_normalized_structure())
 
+    def get_cached_schema_signature(self) -> Optional[str]:
+        """28.9: cheap read of the persisted schema_signature (NO DB extract).
+
+        Returns None on missing/legacy/unreadable cache -> caller disables the
+        result cache for that request (safe degradation)."""
+        try:
+            with open(CACHE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            sig = data.get("schema_signature")
+            return sig if isinstance(sig, str) else None
+        except Exception:
+            return None
+
     def _extract_sqlite_metadata(self) -> Dict[str, Any]:
         schema = {"tables": {}, "graph": {"nodes": [], "edges": []}}
         
