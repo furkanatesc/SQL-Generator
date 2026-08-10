@@ -20,6 +20,7 @@ from app.api.metrics_api import router as metrics_router
 from app.api.dashboard_api import router as dashboard_router
 from app.api.llm_usage_api import router as llm_usage_router
 from app.api.rule_suggestions_api import router as rule_suggestions_router
+from app.api.schema_sync_api import router as schema_sync_router
 from fastapi.exceptions import RequestValidationError
 from app.settings import get_settings
 from app.api.errors import http_exception_handler, validation_exception_handler, unhandled_exception_handler
@@ -89,6 +90,7 @@ app.include_router(metrics_router)
 app.include_router(dashboard_router)
 app.include_router(llm_usage_router)
 app.include_router(rule_suggestions_router)
+app.include_router(schema_sync_router)
 
 # CORS
 app.add_middleware(

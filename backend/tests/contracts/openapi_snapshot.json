@@ -3121,6 +3121,33 @@
         ]
       }
     },
+    "/api/debug/schema/drift": {
+      "get": {
+        "operationId": "schema_drift_api_debug_schema_drift_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Schema Drift",
+        "tags": [
+          "debug-schema-sync"
+        ]
+      }
+    },
     "/api/debug/traces": {
       "get": {
         "operationId": "list_traces_api_debug_traces_get",
