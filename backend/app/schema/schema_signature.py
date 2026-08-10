@@ -62,3 +62,78 @@ def _canonical_str(normalized):
 def compute_schema_signature(normalized, *, version=SCHEMA_SIGNATURE_VERSION):
     payload = version + "\n" + _canonical_str(normalized)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class StructuralDrift:
+    added_tables: tuple = ()
+    removed_tables: tuple = ()
+    added_columns: tuple = ()      # (table, column)
+    removed_columns: tuple = ()    # (table, column)
+    changed_columns: tuple = ()    # (table, column, old_type, new_type)
+    added_fks: tuple = ()          # (table, column, ref_table, ref_col)
+    removed_fks: tuple = ()        # (table, column, ref_table, ref_col)
+
+    @property
+    def has_drift(self):
+        return any((self.added_tables, self.removed_tables, self.added_columns,
+                    self.removed_columns, self.changed_columns,
+                    self.added_fks, self.removed_fks))
+
+    def as_dict(self):
+        return {
+            "added_tables": list(self.added_tables),
+            "removed_tables": list(self.removed_tables),
+            "added_columns": [{"table": t, "column": c} for (t, c) in self.added_columns],
+            "removed_columns": [{"table": t, "column": c} for (t, c) in self.removed_columns],
+            "changed_columns": [
+                {"table": t, "column": c, "old_type": o, "new_type": n}
+                for (t, c, o, n) in self.changed_columns
+            ],
+            "added_fks": [
+                {"table": t, "column": c, "referenced_table": rt, "referenced_column": rc}
+                for (t, c, rt, rc) in self.added_fks
+            ],
+            "removed_fks": [
+                {"table": t, "column": c, "referenced_table": rt, "referenced_column": rc}
+                for (t, c, rt, rc) in self.removed_fks
+            ],
+        }
+
+
+def _col_maps(entry):
+    # column name -> (type, pk, nullable)
+    return {n: (t, pk, nl) for (n, t, pk, nl) in entry["columns"]}
+
+
+def diff_structures(old_norm, new_norm):
+    old_t, new_t = set(old_norm), set(new_norm)
+    added_tables = tuple(sorted(new_t - old_t))
+    removed_tables = tuple(sorted(old_t - new_t))
+
+    added_columns, removed_columns, changed_columns = [], [], []
+    added_fks, removed_fks = [], []
+    for t in sorted(old_t & new_t):
+        old_cols, new_cols = _col_maps(old_norm[t]), _col_maps(new_norm[t])
+        for c in sorted(set(new_cols) - set(old_cols)):
+            added_columns.append((t, c))
+        for c in sorted(set(old_cols) - set(new_cols)):
+            removed_columns.append((t, c))
+        for c in sorted(set(old_cols) & set(new_cols)):
+            if old_cols[c] != new_cols[c]:
+                changed_columns.append((t, c, old_cols[c][0], new_cols[c][0]))
+        old_fks, new_fks = set(old_norm[t]["foreign_keys"]), set(new_norm[t]["foreign_keys"])
+        for (col, rt, rc) in sorted(new_fks - old_fks):
+            added_fks.append((t, col, rt, rc))
+        for (col, rt, rc) in sorted(old_fks - new_fks):
+            removed_fks.append((t, col, rt, rc))
+
+    return StructuralDrift(
+        added_tables=added_tables, removed_tables=removed_tables,
+        added_columns=tuple(added_columns), removed_columns=tuple(removed_columns),
+        changed_columns=tuple(changed_columns),
+        added_fks=tuple(added_fks), removed_fks=tuple(removed_fks),
+    )
