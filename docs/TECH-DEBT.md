@@ -865,3 +865,28 @@ Integration Adapter).
    frontend D3 graph UI performans limiti farklı bir (frontend) katmanda,
    bu sprint'in kapsamı dışında AÇIK kalmaya devam eder.
    *İlgili Dosya:* frontend (`maxNodesLimit`, bkz. §2)
+7. **Cache anahtarı yalnız `schema_signature`'a bağlı — `business_rules`/
+   synonym-ignore kuralları/RAG retrieval bağlamı değişikliklerini
+   YAKALAMAZ.** `compute_result_cache_key` girdileri `version`/`dialect`/
+   `schema_signature`/normalize edilmiş sorgu ile sınırlı; AQR içindeki
+   `business_rules`, synonym/ignore-rule konfigürasyonu ya da RAG'ın
+   retrieval bağlamı (örnek/kural önerileri) değişse bile — şema
+   değişmediği sürece — cache anahtarı **aynı kalır** ve eski üretilmiş SQL
+   sunulmaya devam eder. Bu, kalem 4'teki "yalnızca şema tazeliği garanti
+   edilir" tasarım kararının doğal bir uzantısıdır (dürüst açıklama):
+   cache **taze değildir** iş kuralı/RAG bağlamı açısından, yalnız
+   **güvenlidir** (`validate_sql` ile her hit yeniden doğrulanır — şemaya
+   göre geçersiz bir SQL asla döndürülmez). İş kuralı/RAG-bağlam-duyarlı
+   invalidation kapsam dışı bırakıldı.
+   *İlgili Dosya:* `backend/app/cache/result_cache_key.py` (`compute_result_cache_key`)
+8. **Revizyon isteği (`previous_sql` set) cache'i TAMAMEN bypass eder —
+   kasıtlı tasarım.** `_cache_lookup`, `previous_sql` doluysa (strip sonrası
+   boş değilse) imza/anahtar hesaplamadan ÖNCE `(None, None, None, False)`
+   döner — ne cache okunur ne yazılır. Final review'de yakalanan gerçek bir
+   UX regresyonunu (aynı doğal-dil metniyle gönderilen bir "bu SQL'i
+   revize et" isteği, cache anahtarı `previous_sql`'i içermediği için
+   revizyonu sessizce yok sayıp eski cache'lenmiş SQL'i döndürüyordu) 28.9
+   final-review düzeltme dalgasında giderdi. Revizyon istekleri, tanımı
+   gereği cache'lenemez kabul edilir; `previous_sql`'i anahtara dahil edip
+   cache'lemeyi genişletmek yerine bypass tercih edildi (daha basit, hatasız).
+   *İlgili Dosya:* `backend/app/sql_pipeline.py` (`_cache_lookup`, `run_pipeline`)
