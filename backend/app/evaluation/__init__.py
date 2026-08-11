@@ -118,6 +118,14 @@ from .postgres_connection_resolver import (
     POSTGRES_CONNECTION_RESOLVER_VERSION,
     resolve_local_docker_connection,
 )
+from .postgres_schema_adapter import (
+    SQL_POSTGRES_SCHEMA_ADAPTER_CONTRACT_VERSION,
+    SQLPostgresSchemaAdapterStatus,
+    SQLPostgresSchemaAdapterConfig,
+    SQLPostgresSchemaIntrospectionResult,
+    SQLPostgresSchemaAdapterContract,
+    build_database_schema_from_introspection,
+)
 from .oracle_adapter import (
     SQL_ORACLE_ADAPTER_CONTRACT_VERSION,
     SQLOracleAdapterContractError,
@@ -227,6 +235,12 @@ __all__ = [
     "validate_read_only_select",
     "POSTGRES_CONNECTION_RESOLVER_VERSION",
     "resolve_local_docker_connection",
+    "SQL_POSTGRES_SCHEMA_ADAPTER_CONTRACT_VERSION",
+    "SQLPostgresSchemaAdapterStatus",
+    "SQLPostgresSchemaAdapterConfig",
+    "SQLPostgresSchemaIntrospectionResult",
+    "SQLPostgresSchemaAdapterContract",
+    "build_database_schema_from_introspection",
     "SQL_ORACLE_ADAPTER_CONTRACT_VERSION",
     "SQLOracleAdapterContractError",
     "SQLOracleAdapterStatus",
