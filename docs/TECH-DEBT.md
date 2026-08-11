@@ -890,3 +890,59 @@ Integration Adapter).
    gereği cache'lenemez kabul edilir; `previous_sql`'i anahtara dahil edip
    cache'lemeyi genişletmek yerine bypass tercih edildi (daha basit, hatasız).
    *İlgili Dosya:* `backend/app/sql_pipeline.py` (`_cache_lookup`, `run_pipeline`)
+
+## §18. Sprint 29.0 (PostgreSQL Docker Integration Adapter) devirleri — AÇIK
+
+`app/evaluation/postgres_connection_resolver.py` (saf `resolve_local_docker_connection`)
++ `app/evaluation/postgres_schema_adapter.py` (contract-first `information_schema`
+introspection, `build_database_schema_from_introspection` saf çekirdek, composite FK
+`referential_constraints`+`position_in_unique_constraint` ile ordinal-eşleştirmeli
+doğru) + repo kökü `docker-compose.yml` + deterministik
+`backend/tests/fixtures/postgres/seed.sql` + gated entegrasyon testleri + CI seed
+adımı, Phase 10'un (Real Database Adapter Layer) **ilk** sprint'ini teslim etti —
+25.8'in *contract stub + yalnızca local Docker smoke* sınırını **korur** (production
+execution hâlâ yok), yalnızca **şema okuma** katmanını gerçekleştirir. Aşağıdakiler
+tasarım spec'inde bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
+
+1. **Production request pipeline'ına wiring yok.** `SQLPostgresSchemaAdapterContract`
+   hiçbir orchestrator/`sql_pipeline.py`/`SchemaManager`'a bağlanmadı — adapter
+   inert/standalone bir modül olarak kalır, canlı istek akışında **hiç çağrılmaz**.
+   Gerçek wiring Phase 11'e (30.2 Connection Registry API, 30.3 Schema Sync API)
+   ertelendi — bu iki API, hangi connection'ın hangi tenant/workspace için
+   kullanılacağını çözecek katmanı sağlamadan adapter'ı canlıya bağlamak erken
+   olurdu.
+   *İlgili Dosya:* `backend/app/evaluation/postgres_schema_adapter.py`
+2. **Legacy `SchemaManager._extract_postgres_metadata` bu güvenli contract'a
+   taşınmadı.** Üretimde PostgreSQL şeması hâlâ eski, bu sprint'in dokunmadığı
+   `_extract_postgres_metadata` yoluyla çekiliyor; büyük/kırıcı bir refactor
+   olacağından legacy yol olduğu gibi bırakıldı — iki bağımsız PostgreSQL
+   introspection yolu (legacy + 29.0'ın yenisi) şimdilik **yan yana** duruyor.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`_extract_postgres_metadata`)
+3. **Yalnızca local-Docker connection; uzak/production connection yok.**
+   `resolve_local_docker_connection` yalnızca `localhost`/`127.0.0.1` host'larını
+   kabul eder (25.8'in aynı sınırı) — remote/production bir PostgreSQL'e karşı
+   introspection bu sprint'in kapsamı dışında; gerçek connection registry/secret
+   yönetimi olmadan uzak bağlantıyı açmak güvenlik riski taşırdı.
+   *İlgili Dosya:* `backend/app/evaluation/postgres_connection_resolver.py`
+4. **Yalnız `public` şema BASE TABLE; view/materialized view/non-public şema
+   yok.** `information_schema` sorgusu `table_schema = 'public'` ve
+   `table_type = 'BASE TABLE'` ile filtrelenir — view'lar, materialized view'lar
+   ve `public` dışındaki şema'lar (ör. çok-şemalı bir kurumsal DB) introspect
+   edilmez; schema-only/tek-şema tasarım kararı.
+   *İlgili Dosya:* `backend/app/evaluation/postgres_schema_adapter.py` (`_read_information_schema`)
+5. **Kolon zenginleştirme yok.** Üretilen `DatabaseSchema` yalnız isim/tip/
+   nullable/PK/FK taşır; `pg_description` yorum/açıklama metni veya örnek
+   (sample) değerler embed/prompt'a katılmaz — schema-only kalır (28.8'in
+   `TECH-DEBT §16` madde 4'teki embed-text zenginleştirme kapsam dışılığıyla
+   tutarlı).
+   *İlgili Dosya:* `backend/app/evaluation/postgres_schema_adapter.py`
+6. **Connection Registry / çoklu bağlantı yönetimi yok.** 29.0 tek, doğrudan
+   enjekte edilen bir connection nesnesiyle çalışır; birden fazla PostgreSQL
+   instance'ını (tenant/workspace başına) kayıt altına alıp seçen bir registry
+   katmanı yok — bu, Phase 11 · 30.2 Connection Registry API'ye ait.
+   *İlgili Dosya:* Phase 11 · 30.2 (henüz mevcut değil)
+7. **29.1 execution wiring'i henüz yapılmadı.** 29.0 yalnızca şema *okur*;
+   üretilen `DatabaseSchema`'yı gerçek SQL execution'a (25.8'in read-only adapter'ı
+   ile birleştirip production-grade bir akışa) bağlamak Sprint 29.1
+   (PostgreSQL Read-Only Execution) kapsamına bırakıldı.
+   *İlgili Dosya:* Sprint 29.1 (henüz mevcut değil)
