@@ -7,7 +7,6 @@ provided. Connection params come from POSTGRES_TEST_* env vars (local defaults).
 """
 
 import json
-import os
 
 import pytest
 
@@ -16,8 +15,6 @@ from app.evaluation.postgres_adapter import (
     SQLPostgresAdapterContract,
     SQLPostgresAdapterExecutionRequest,
     SQLPostgresAdapterStatus,
-    SQLPostgresLocalDockerConnection,
-    SQLPostgresAdapterContractError,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.postgres]
