@@ -114,6 +114,10 @@ from .postgres_adapter import (
     default_local_docker_capability,
     validate_read_only_select,
 )
+from .postgres_connection_resolver import (
+    POSTGRES_CONNECTION_RESOLVER_VERSION,
+    resolve_local_docker_connection,
+)
 from .oracle_adapter import (
     SQL_ORACLE_ADAPTER_CONTRACT_VERSION,
     SQLOracleAdapterContractError,
@@ -221,6 +225,8 @@ __all__ = [
     "SQLPostgresAdapterContract",
     "default_local_docker_capability",
     "validate_read_only_select",
+    "POSTGRES_CONNECTION_RESOLVER_VERSION",
+    "resolve_local_docker_connection",
     "SQL_ORACLE_ADAPTER_CONTRACT_VERSION",
     "SQLOracleAdapterContractError",
     "SQLOracleAdapterStatus",
