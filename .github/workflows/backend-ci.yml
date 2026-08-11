@@ -53,6 +53,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Seed PostgreSQL integration schema
+        env:
+          PGPASSWORD: sqlgen
+        run: |
+          psql -h localhost -p 5432 -U sqlgen -d sqlgen_test \
+            -f tests/fixtures/postgres/seed.sql
+
       - name: Run tests
         env:
           NL2SQL_DEBUG_ENDPOINTS_ENABLED: "true"
