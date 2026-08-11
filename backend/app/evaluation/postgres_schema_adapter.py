@@ -222,6 +222,7 @@ class SQLPostgresSchemaAdapterContract:
             JOIN information_schema.key_column_usage kcu
               ON tc.constraint_name = kcu.constraint_name
              AND tc.table_schema = kcu.table_schema
+             AND tc.table_name = kcu.table_name
             WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = %s
             """,
             (schema_name,),
@@ -241,6 +242,7 @@ class SQLPostgresSchemaAdapterContract:
             JOIN information_schema.key_column_usage kcu
               ON tc.constraint_name = kcu.constraint_name
              AND tc.table_schema = kcu.table_schema
+             AND tc.table_name = kcu.table_name
             JOIN information_schema.referential_constraints rc
               ON rc.constraint_name = tc.constraint_name
              AND rc.constraint_schema = tc.table_schema

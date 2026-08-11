@@ -14,7 +14,7 @@ def test_seed_sql_exists_and_defines_three_tables():
     assert os.path.exists(_SEED)
     sql = _read(_SEED).lower()
     for t in ("customers", "orders", "order_items"):
-        assert f"create table" in sql and t in sql
+        assert "create table" in sql and t in sql
     # idempotent: drops before create
     assert "drop table if exists" in sql
     # foreign keys wired
