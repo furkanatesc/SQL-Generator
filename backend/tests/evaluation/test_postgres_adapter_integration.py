@@ -24,22 +24,9 @@ pytestmark = [pytest.mark.integration, pytest.mark.postgres]
 
 
 def _make_test_connection():
-    """Build a local-Docker connection from env (local defaults).
-
-    Returns ``None`` if the configured host is not a permitted local Docker host
-    (the connection contract would reject it) — used by the skip gate.
-    """
-    host = os.environ.get("POSTGRES_TEST_HOST", "localhost")
-    try:
-        return SQLPostgresLocalDockerConnection(
-            host=host,
-            port=int(os.environ.get("POSTGRES_TEST_PORT", "5432")),
-            dbname=os.environ.get("POSTGRES_TEST_DB", "sqlgen_test"),
-            user=os.environ.get("POSTGRES_TEST_USER", "sqlgen"),
-            password=os.environ.get("POSTGRES_TEST_PASSWORD", "sqlgen"),
-        )
-    except (SQLPostgresAdapterContractError, ValueError):
-        return None
+    """Build a local-Docker connection via the shared 29.0 resolver."""
+    from app.evaluation.postgres_connection_resolver import resolve_local_docker_connection
+    return resolve_local_docker_connection()
 
 
 def _local_docker_postgres_available():
