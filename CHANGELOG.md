@@ -638,7 +638,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   materialized view, kolon zenginleştirme (comment/açıklama/örnek değerler —
   schema-only), connection registry/çoklu bağlantı yönetimi (→ 30.2), gerçek
   execution wiring (→ 29.1 PostgreSQL Read-Only Execution). Full suite 2629
-  passed/16 skipped. (PR TBD)
+  passed/16 skipped. (PR #161)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
