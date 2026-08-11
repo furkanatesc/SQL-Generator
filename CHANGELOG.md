@@ -583,6 +583,62 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   frontend `maxNodesLimit=5` kalıcı çözümü (farklı — frontend — katman, AÇIK
   kalır). Full suite 2609 passed/9 skipped. **Bununla Phase 9 (Large Schema
   Production Scale) kapanır.** (PR #160)
+- **PostgreSQL Docker Integration Adapter** (Sprint 29.0 · Phase 10'un ilk
+  sprint'i, **Phase 10 başlar**): 25.7/25.8'in *contract stub + yalnızca local
+  Docker smoke*'unun üzerine gerçek `information_schema` introspection'ı ekleyen
+  sprint — 25.8 sınırı (yalnızca local Docker, production execution yok) bilinçli
+  olarak **korunur**, bu sprint yalnızca *şema okuma* katmanını gerçekleştirir.
+  Repo kökünde yeni `docker-compose.yml`: CI ile parite (`postgres:16-alpine`,
+  `sqlgen`/`sqlgen`/`sqlgen_test`, `5432:5432`, `pg_isready` healthcheck) + seed
+  dosyası init-script olarak mount. Yeni deterministik
+  `backend/tests/fixtures/postgres/seed.sql`: `customers`/`orders`/`order_items`
+  (tek-kolon PK/FK) + `product_variants`/`variant_stock` (composite/çok-kolonlu
+  PK/FK, idempotent `DROP TABLE IF EXISTS CASCADE`). Yeni saf
+  `app/evaluation/postgres_connection_resolver.py`:
+  `resolve_local_docker_connection(env) -> SQLPostgresLocalDockerConnection \|
+  None` — `POSTGRES_TEST_*` env değişkenlerini okur (localhost/5432/sqlgen_test
+  varsayılanlarıyla), **ASLA raise etmez** (uzak host/geçersiz port/boş alan →
+  `None`), DB driver/socket importu yok; bağlantı kurulan **tek** yeniden
+  kullanılabilir yer — 25.8'in entegrasyon test dosyasının
+  `_make_test_connection`'ı artık buna delege ediyor (davranış korunur, aynı
+  `SQLPostgresLocalDockerConnection` tipini döner). Yeni contract-first
+  `app/evaluation/postgres_schema_adapter.py`: `SQLPostgresSchemaAdapterContract.
+  introspect()` **yeni, güvenli** bir bağlantı üzerinden (mevcut execution
+  adapter'ı paylaşmaz — local-docker-only, read-only, lazy `psycopg2` import,
+  `_sanitize_schema_error` ile credential-free hata mesajları, `connection=None`
+  → inert `NOT_IMPLEMENTED`) PostgreSQL `information_schema`'sını (tablo/kolon/PK/
+  FK, yalnız `public` şema BASE TABLE) okur; saf çekirdek
+  `build_database_schema_from_introspection(...)` deterministik (tablo/kolon
+  sıralı) bir `DatabaseSchema` üretir, FK ilişkileri `RelationshipType.EXPLICIT`
+  ve doğru yön (source=child, target=parent) taşır. **Composite (çok-kolonlu) FK
+  introspection'ı kapsam içi** — Task 3 review'ı orijinal FK sorgusunun
+  `constraint_name`-only join'inin çok-kolonlu FK'lerde sessizce YANLIŞ
+  (cross-product) ilişki ürettiğini yakaladı; düzeltme
+  `referential_constraints` + `position_in_unique_constraint` ile ordinal-eşleş-
+  tirmeli bir sorguya geçti (child kolon N, aynı ordinal'deki referenced kolonla
+  eşleşir) — composite FK'ler artık doğru eşleniyor (bkz. tasarım spec'inin
+  2026-08-11 karar notu: "kapsam dışı" iken review-driven olarak kapsam içine
+  alındı). Docker olmadan safe-skip olan, CI'da (Docker service zaten mevcut)
+  fiilen koşan gated entegrasyon testleri: seeded tabloların introspection'ı
+  (PK/kolon tipleri + FK yön/tip + composite-FK'nin doğru 2 kenar ürettiğinin —
+  4 değil — regresyon guard'ı) + determinizm + credential-leak testi (yapısal
+  içerik serileştirilir, `database_name` hariç tutulur çünkü seed'in kendi
+  `sqlgen`/`sqlgen_test` değerleri gerçek dump'ta legitimate görünür) + 25.8
+  execution adapter'ı üzerinden gerçek çok-tablolu `JOIN`. CI'a
+  (`backend-ci.yml`) "Seed PostgreSQL integration schema" adımı eklendi
+  (`psql -f seed.sql`, "Install dependencies" ile "Run tests" arasında).
+  **Production request pipeline'ına HİÇ WIRE EDİLMEDİ** — adapter inert/
+  standalone kalır; legacy `SchemaManager._extract_postgres_metadata` dokunul-
+  madan duruyor. **Benchmark etkilenmedi** (29.0 dört benchmark hedefine de
+  dokunmuyor) — versiyon bump gerekmedi, gate yeşil (exit 0). **Bilinçli
+  kapsam dışı** (TECH-DEBT §18, sessiz düşürme yok): production pipeline'ına
+  wiring (→ Phase 11 · 30.2 Connection Registry / 30.3 Schema Sync API),
+  legacy `_extract_postgres_metadata`'nın bu güvenli contract'a taşınması,
+  uzak/production connection (yalnız local-docker), `public` dışı şema/view/
+  materialized view, kolon zenginleştirme (comment/açıklama/örnek değerler —
+  schema-only), connection registry/çoklu bağlantı yönetimi (→ 30.2), gerçek
+  execution wiring (→ 29.1 PostgreSQL Read-Only Execution). Full suite 2629
+  passed/16 skipped. (PR TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
