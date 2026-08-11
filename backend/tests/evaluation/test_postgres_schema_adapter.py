@@ -1,5 +1,4 @@
 import sys
-import pytest
 
 from app.evaluation.postgres_schema_adapter import (
     SQL_POSTGRES_SCHEMA_ADAPTER_CONTRACT_VERSION,
@@ -7,6 +6,7 @@ from app.evaluation.postgres_schema_adapter import (
     SQLPostgresSchemaAdapterContract,
     SQLPostgresSchemaAdapterStatus,
     build_database_schema_from_introspection,
+    _sanitize_schema_error,
 )
 from app.evaluation.postgres_adapter import SQLPostgresLocalDockerConnection
 from app.schema.schema_contract import DatabaseSchema, RelationshipType
@@ -94,3 +94,21 @@ def test_module_import_is_driver_free():
     assert "import psycopg2" in src  # it IS used, but lazily
     top_level = [ln for ln in src.splitlines() if ln.startswith("import psycopg2") or ln.startswith("from psycopg2")]
     assert top_level == []
+
+
+def test_sanitize_schema_error_is_credential_free():
+    class FakePgError(Exception):
+        pass
+    exc = FakePgError("FATAL: password authentication failed for user 'sqlgen' at host localhost")
+    msg = _sanitize_schema_error(exc)
+    assert "password" not in msg.lower()
+    assert "sqlgen" not in msg
+    assert "localhost" not in msg
+    assert "FakePgError" in msg  # type name is allowed
+
+
+def test_sanitize_schema_error_timeout_message():
+    class Canceled(Exception):
+        pgcode = "57014"
+    msg = _sanitize_schema_error(Canceled("canceling statement due to statement timeout"))
+    assert "timed out" in msg.lower()

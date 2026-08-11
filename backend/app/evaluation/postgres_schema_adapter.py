@@ -9,7 +9,7 @@ connection credentials in errors. The legacy
 """
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -232,13 +232,22 @@ class SQLPostgresSchemaAdapterContract:
         fks: List[Dict[str, str]] = []
         cur.execute(
             """
-            SELECT tc.table_name AS source_table, kcu.column_name AS source_column,
-                   ccu.table_name AS target_table, ccu.column_name AS target_column
+            SELECT
+                tc.table_name       AS source_table,
+                kcu.column_name     AS source_column,
+                ref_kcu.table_name  AS target_table,
+                ref_kcu.column_name AS target_column
             FROM information_schema.table_constraints tc
             JOIN information_schema.key_column_usage kcu
-              ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-            JOIN information_schema.constraint_column_usage ccu
-              ON ccu.constraint_name = tc.constraint_name
+              ON tc.constraint_name = kcu.constraint_name
+             AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.referential_constraints rc
+              ON rc.constraint_name = tc.constraint_name
+             AND rc.constraint_schema = tc.table_schema
+            JOIN information_schema.key_column_usage ref_kcu
+              ON ref_kcu.constraint_name = rc.unique_constraint_name
+             AND ref_kcu.constraint_schema = rc.unique_constraint_schema
+             AND ref_kcu.ordinal_position = kcu.position_in_unique_constraint
             WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = %s
             """,
             (schema_name,),
