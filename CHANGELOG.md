@@ -639,6 +639,40 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   schema-only), connection registry/çoklu bağlantı yönetimi (→ 30.2), gerçek
   execution wiring (→ 29.1 PostgreSQL Read-Only Execution). Full suite 2629
   passed/16 skipped. (PR #161)
+- **PostgreSQL Read-Only Execution** (Sprint 29.1 · 25.8 stub'ının gerçeği):
+  29.0'ın yalnızca *şema okuma* katmanında bıraktığı yerden devam edip,
+  dialect-agnostic paylaşılan execution sözleşmesine (`multi_database_
+  execution.py`, `SQLDatabaseExecutionAdapter`) bağlı yeni
+  `PostgresDatabaseExecutionAdapter`'ı ekleyen sprint — hâlâ **yalnızca local
+  Docker**, hâlâ production pipeline'a wire edilmemiş (standalone/inert). Yeni
+  `backend/app/evaluation/postgres_execution_adapter.py`: 29.0'ın
+  `resolve_local_docker_connection`'ı ile local-Docker connection'ı çözer,
+  gerçek `SELECT`'i 25.8'in `SQLPostgresAdapterContract`'ına delege eder, ham
+  sonucu saf `normalize_postgres_execution_result` ile paylaşılan
+  `SQLDatabaseExecutionResult`'a normalize eder (dict satırlar kolon
+  adlarından kurulur; arity uyuşmazlığında pozisyonel `col_<i>` fallback'i +
+  uyarı). 25.8'e geriye-uyumlu ekleme: `SQLPostgresAdapterExecutionResult.
+  columns` (`cur.description`'dan yakalanır) — dict satırların gerçek kolon
+  adı taşımasını sağlar. Bağlantı çözümlenemediğinde (resolver `None`)
+  adapter **asla raise etmez** — boş `SQLDatabaseExecutionResult` +
+  `execution_error` döner (Docker'sız CI safe-skip + boş sonuçla çalışan
+  runtime'ı korur). Import-time driver-izolasyonu subprocess testiyle
+  kilitlendi (`psycopg2`/`asyncpg`/`sqlalchemy` import edilmez). Docker'sız
+  safe-skip olan gated entegrasyon testleri: gerçek `SELECT` → adlandırılmış
+  dict satırlar, çok-tablolu `JOIN`, `max_rows` truncation,
+  `statement_timeout`. **Production request pipeline'ına HİÇ WIRE
+  EDİLMEDİ** — adapter standalone kalır; 29.0'ın şema-okuma sınırı
+  DEĞİŞMEDİ. **Bilinçli kapsam dışı** (TECH-DEBT §19, sessiz düşürme yok):
+  canlı HTTP pipeline wiring (→ Phase 11 · 30.2 Connection Registry API /
+  30.4 Query Run API), Connection Registry/çoklu-bağlantı (→ 30.2), 26.3/26.4
+  risk/sensitive-tablo gate wiring (yalnız 25.8'in 26.2 read-only gate'i
+  uygulanır), EXPLAIN-only mode (→ 29.2), Oracle/MySQL/SQL Server execution
+  adapter'ları (→ 29.3–29.6), execution trace/audit persistence (→ 30.4),
+  merkezî/canlı execution router registry (`SQLDatabaseExecutionRouter`'a
+  takılabilir ama canlı bir registry'ye kaydedilmedi), import-time
+  **network-client** isolation testi (yalnız DB-driver isolation edildi —
+  `app.evaluation.__init__`'in eager re-export'u `schema_contract →
+  pydantic`'i çeker, benign `asyncio`/`socket` yükler). (PR TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
@@ -777,11 +811,15 @@ taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrat
   11/12/13/14/15). (PR #154)
 
 ### Known limitations
-- **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`):
-  Sprint 25.8 ile read-only `SELECT` execution **yalnızca local Docker** ortamında
-  açıldı; live/remote/production capability'leri hâlâ hard-False'tur ve hiçbir
-  bağlantı orchestrator'a wire edilmediği için varsayılan davranış `NOT_IMPLEMENTED`
-  olarak inert kalır. Production-grade gerçek execution Phase 10 (29.1)'de.
+- **PostgreSQL adapter yalnızca local Docker'da çalışır** (`backend/app/evaluation/postgres_adapter.py`,
+  `backend/app/evaluation/postgres_execution_adapter.py`): Sprint 25.8 ile read-only
+  `SELECT` execution **yalnızca local Docker** ortamında açıldı; Sprint 29.1 bunu
+  paylaşılan `SQLDatabaseExecutionAdapter` sözleşmesine bağlayan
+  `PostgresDatabaseExecutionAdapter`'ı ekledi — ama live/remote/production
+  capability'leri hâlâ hard-False'tur ve hiçbir bağlantı orchestrator'a/production
+  request pipeline'ına wire edilmediği için varsayılan davranış standalone/inert
+  kalır. Canlı wiring Phase 11'de (30.2 Connection Registry API / 30.4 Query Run
+  API).
 - **Oracle adapter henüz hiçbir sorgu çalıştırmaz** (`backend/app/evaluation/oracle_adapter.py`):
   Sprint 25.9 yalnızca sözleşme stub'ıdır; gerçek Oracle execution (driver, DSN/TNS,
   wallet, read-only/EXPLAIN) Phase 10'da (29.3 adapter, 29.4 Docker/test harness).

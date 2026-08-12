@@ -945,4 +945,63 @@ tasarım spec'inde bilinçli olarak kapsam dışı bırakıldı (sessiz düşür
    üretilen `DatabaseSchema`'yı gerçek SQL execution'a (25.8'in read-only adapter'ı
    ile birleştirip production-grade bir akışa) bağlamak Sprint 29.1
    (PostgreSQL Read-Only Execution) kapsamına bırakıldı.
-   *İlgili Dosya:* Sprint 29.1 (henüz mevcut değil)
+   *İlgili Dosya:* Sprint 29.1 — **ÇÖZÜLDÜ**, bkz. §19.
+
+## §19. Sprint 29.1 (PostgreSQL Read-Only Execution) devirleri — AÇIK
+
+Yeni `PostgresDatabaseExecutionAdapter` (`backend/app/evaluation/
+postgres_execution_adapter.py`), dialect-agnostic paylaşılan execution
+sözleşmesini (`app/evaluation/multi_database_execution.py`,
+`SQLDatabaseExecutionAdapter`) uygulayan sprint — local-Docker-only, read-only,
+driver-izole, yan-etkisiz (persistence yok). 29.0'ın
+`resolve_local_docker_connection`'ı ile bir local-Docker connection'ı çözer,
+gerçek `SELECT`'i 25.8'in `SQLPostgresAdapterContract`'ına delege eder, ham
+sonucu saf `normalize_postgres_execution_result` ile paylaşılan
+`SQLDatabaseExecutionResult`'a normalize eder (dict satırlar kolon adlarından
+kurulur; arity uyuşmazlığında pozisyonel `col_<i>` fallback'i + uyarı). 25.8'e
+geriye-uyumlu ekleme: `SQLPostgresAdapterExecutionResult.columns` (`cur.
+description`'dan yakalanır) — dict satırların gerçek kolon adı taşımasını
+sağlar. Bağlantı çözümlenemediğinde (resolver `None`) adapter asla raise
+etmez — boş `SQLDatabaseExecutionResult` + `execution_error` döner (Docker'sız
+CI safe-skip + runtime'ın boş sonuçla çalışmasına izin verir). Import-time
+driver-izolasyonu subprocess testiyle kilitlendi (`psycopg2`/`asyncpg`/
+`sqlalchemy` import edilmez). Docker'sız safe-skip olan gated entegrasyon
+testleri (gerçek `SELECT` → adlandırılmış dict satırlar, çok-tablolu `JOIN`,
+`max_rows` truncation, `statement_timeout`). Bununla 29.0'ın ertelediği
+"gerçek execution" teslim edilir; 29.0'ın şema-okuma sınırı DEĞİŞMEDİ.
+Aşağıdakiler tasarım spec'inde bilinçli olarak kapsam dışı bırakıldı (sessiz
+düşürme yok).
+
+1. **Canlı HTTP request pipeline wiring yok.** `PostgresDatabaseExecutionAdapter`
+   production `sql_pipeline.py`/`/api/jobs` akışına bağlanmadı; standalone/inert
+   kalır, canlı istekte çağrılmaz. → Phase 11 · 30.2 Connection Registry API /
+   30.4 Query Run API.
+   *İlgili Dosya:* `backend/app/evaluation/postgres_execution_adapter.py`
+2. **Connection Registry / uzak & production connection yok.** Yalnız 29.0
+   resolver'ın local-Docker connection'ı kullanılır; çoklu-bağlantı/tenant
+   seçimi yok. → Phase 11 · 30.2.
+   *İlgili Dosya:* Phase 11 · 30.2 (henüz mevcut değil)
+3. **26.3 Query Risk Classifier + 26.4 Sensitive Table/Column gate wiring
+   yok.** Execution öncesi yalnız 25.8'in 26.2 read-only enforcement gate'i
+   uygulanır; risk/sensitive-tablo gate'leri bilinçli olarak bağlanmadı. →
+   ileri sprint.
+   *İlgili Dosya:* `backend/app/evaluation/postgres_execution_adapter.py`
+4. **EXPLAIN-only mode yok.** Adapter yalnız `READ_ONLY` mode kabul eder,
+   `EXPLAIN_ONLY` reddedilir. → 29.2 PostgreSQL EXPLAIN-Only Mode.
+   *İlgili Dosya:* `backend/app/evaluation/postgres_execution_adapter.py`
+5. **Oracle/MySQL/SQL Server execution adapter'ları yok.** → 29.3–29.6.
+   *İlgili Dosya:* Phase 10 · 29.3+
+6. **Execution trace/audit persistence yok.** 25.6 execution-trace üretimi
+   opsiyonel/bağlanmadı; hiçbir store'a yazılmaz. → 30.4 Query Run API.
+   *İlgili Dosya:* yok / gelecekte 30.4
+7. **Merkezî/canlı execution router registry yok.** Adapter router'a
+   takılabilir (`SQLDatabaseExecutionRouter`) ama canlı bir registry'ye
+   kaydedilmedi. → 30.x.
+   *İlgili Dosya:* `backend/app/evaluation/multi_database_execution.py`
+8. **Import-time network-client isolation assert edilmedi** (yalnız
+   DB-driver isolation edildi). `app.evaluation.__init__`'in eager re-export'u
+   `schema_contract → pydantic`'i çeker, o da benign `asyncio`/`socket` yükler
+   — gerçek driver/ağ sızıntısı değil, ama network forbidden-list ile test bu
+   yüzden yazılmadı.
+   *İlgili Dosya:* `backend/tests/evaluation/test_postgres_execution_adapter_integration.py`
+   yakınındaki isolation testi; `backend/app/evaluation/__init__.py`
