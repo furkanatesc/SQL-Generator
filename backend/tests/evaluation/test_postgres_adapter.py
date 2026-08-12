@@ -20,7 +20,7 @@ from app.evaluation.postgres_adapter import (
 
 EXPECTED_RESULT_KEYS = {
     "version", "case_id", "status", "sql_sha256",
-    "rows", "row_count", "truncated", "error", "warnings", "duration_ms",
+    "rows", "row_count", "truncated", "error", "warnings", "columns", "duration_ms",
 }
 
 
@@ -262,3 +262,49 @@ def test_postgres_adapter_contract_rejects_unsafe_custom_capability():
 def test_postgres_adapter_contract_rejects_invalid_connection_object():
     with pytest.raises(SQLPostgresAdapterContractError, match="connection must be a SQLPostgresLocalDockerConnection"):
         SQLPostgresAdapterContract(connection="not-a-connection")  # type: ignore
+
+
+def test_execution_result_columns_defaults_empty():
+    from app.evaluation.postgres_adapter import (
+        SQLPostgresAdapterExecutionResult,
+        SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
+        SQLPostgresAdapterStatus,
+    )
+    import hashlib
+    sql = "SELECT 1"
+    res = SQLPostgresAdapterExecutionResult(
+        version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
+        case_id="c1",
+        status=SQLPostgresAdapterStatus.NOT_IMPLEMENTED,
+        sql_sha256=hashlib.sha256(sql.encode()).hexdigest(),
+    )
+    assert res.columns == ()
+    assert res.to_dict()["columns"] == []
+
+
+def test_execution_result_columns_roundtrip_and_validation():
+    from app.evaluation.postgres_adapter import (
+        SQLPostgresAdapterExecutionResult,
+        SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
+        SQLPostgresAdapterStatus,
+        SQLPostgresAdapterContractError,
+    )
+    import hashlib, pytest
+    sql = "SELECT id, name FROM customers"
+    h = hashlib.sha256(sql.encode()).hexdigest()
+    res = SQLPostgresAdapterExecutionResult(
+        version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION,
+        case_id="c1",
+        status=SQLPostgresAdapterStatus.EXECUTED,
+        sql_sha256=h,
+        rows=((1, "a"),),
+        row_count=1,
+        columns=("id", "name"),
+    )
+    assert res.to_dict()["columns"] == ["id", "name"]
+    with pytest.raises(SQLPostgresAdapterContractError):
+        SQLPostgresAdapterExecutionResult(
+            version=SQL_POSTGRES_ADAPTER_CONTRACT_VERSION, case_id="c1",
+            status=SQLPostgresAdapterStatus.EXECUTED, sql_sha256=h,
+            columns=("id", 5),  # non-str
+        )

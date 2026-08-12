@@ -94,10 +94,11 @@ def test_postgres_adapter_returns_deterministic_executed_result_shape(pg_adapter
     serialized = result.to_dict()
     assert set(serialized.keys()) == {
         "version", "case_id", "status", "sql_sha256",
-        "rows", "row_count", "truncated", "error", "warnings", "duration_ms",
+        "rows", "row_count", "truncated", "error", "warnings", "columns", "duration_ms",
     }
     assert serialized["status"] == "executed"
     assert serialized["rows"] == [[42]]
+    assert serialized["columns"] == ["answer"]
     json.dumps(serialized)  # must be JSON-serializable
 
 
