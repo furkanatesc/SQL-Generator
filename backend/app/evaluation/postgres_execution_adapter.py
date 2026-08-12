@@ -8,17 +8,27 @@ real execution path.
 """
 
 import hashlib
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Mapping, Tuple
 
 from app.evaluation.multi_database_execution import (
     SQL_MULTI_DATABASE_EXECUTION_VERSION,
     SQLDatabaseDialect,
+    SQLDatabaseExecutionAdapter,
     SQLDatabaseExecutionRequest,
     SQLDatabaseExecutionResult,
+    SQLExecutionAdapterCapability,
+    SQLExecutionMode,
+    SQLMultiDatabaseExecutionContractError,
 )
 from app.evaluation.postgres_adapter import (
+    SQLPostgresAdapterConfig,
+    SQLPostgresAdapterContract,
+    SQLPostgresAdapterExecutionRequest,
     SQLPostgresAdapterExecutionResult,
     SQLPostgresAdapterStatus,
+)
+from app.evaluation.postgres_connection_resolver import (
+    resolve_local_docker_connection,
 )
 
 
@@ -83,3 +93,80 @@ def normalize_postgres_execution_result(
         duration_ms=pg.duration_ms,
         warnings=tuple(pg.warnings),
     )
+
+
+class PostgresDatabaseExecutionAdapter(SQLDatabaseExecutionAdapter):
+    """Local-Docker-only, read-only PostgreSQL execution adapter (Sprint 29.1).
+
+    Resolves a local-Docker connection via the Sprint 29.0 resolver and delegates
+    the real ``SELECT`` to the Sprint 25.8 adapter, then normalizes the result to
+    the shared ``SQLDatabaseExecutionResult`` contract. No connection resolved
+    (no local Docker) -> graceful empty result with ``execution_error`` (never
+    raises on that path), matching the inert-by-default posture of 25.8/29.0.
+    """
+
+    def __init__(self, connection_resolver=resolve_local_docker_connection):
+        self._resolve = connection_resolver
+
+    @property
+    def dialect(self) -> SQLDatabaseDialect:
+        return SQLDatabaseDialect.POSTGRESQL
+
+    def capabilities(self):
+        return (
+            SQLExecutionAdapterCapability.CONNECTION_REF,
+            SQLExecutionAdapterCapability.READ_ONLY,
+        )
+
+    def execute(self, request: SQLDatabaseExecutionRequest) -> SQLDatabaseExecutionResult:
+        if not isinstance(request, SQLDatabaseExecutionRequest):
+            raise SQLMultiDatabaseExecutionContractError(
+                "request must be a SQLDatabaseExecutionRequest"
+            )
+        if request.dialect != SQLDatabaseDialect.POSTGRESQL:
+            raise SQLMultiDatabaseExecutionContractError(
+                "PostgreSQL adapter only supports POSTGRESQL dialect requests"
+            )
+        if request.connection_ref is None:
+            raise SQLMultiDatabaseExecutionContractError(
+                "PostgreSQL adapter requires connection_ref"
+            )
+        if request.fixture_ref is not None:
+            raise SQLMultiDatabaseExecutionContractError(
+                "PostgreSQL adapter does not support fixture_ref"
+            )
+        if request.config.execution_mode != SQLExecutionMode.READ_ONLY:
+            raise SQLMultiDatabaseExecutionContractError(
+                "PostgreSQL adapter currently supports only read_only execution mode"
+            )
+
+        connection = self._resolve()
+        if connection is None:
+            return SQLDatabaseExecutionResult(
+                version=SQL_MULTI_DATABASE_EXECUTION_VERSION,
+                case_id=request.case_id,
+                dialect=SQLDatabaseDialect.POSTGRESQL,
+                sql=request.sql,
+                sql_sha256=hashlib.sha256(request.sql.encode("utf-8")).hexdigest(),
+                rows=(),
+                row_count=0,
+                truncated=False,
+                execution_error="No local Docker PostgreSQL connection available",
+                duration_ms=0.0,
+                warnings=(),
+            )
+
+        pg_config = SQLPostgresAdapterConfig(
+            timeout_seconds=request.config.timeout_seconds,
+            max_rows=request.config.max_rows,
+            execution_mode="read_only",
+        )
+        pg_request = SQLPostgresAdapterExecutionRequest(
+            case_id=request.case_id,
+            sql=request.sql,
+            dialect="postgresql",
+            config=pg_config,
+            connection_ref=request.connection_ref,
+        )
+        pg_result = SQLPostgresAdapterContract(connection=connection).execute(pg_request)
+        return normalize_postgres_execution_result(pg_result, request)

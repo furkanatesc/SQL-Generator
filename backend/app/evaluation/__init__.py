@@ -118,6 +118,10 @@ from .postgres_connection_resolver import (
     POSTGRES_CONNECTION_RESOLVER_VERSION,
     resolve_local_docker_connection,
 )
+from .postgres_execution_adapter import (
+    PostgresDatabaseExecutionAdapter,
+    normalize_postgres_execution_result,
+)
 from .postgres_schema_adapter import (
     SQL_POSTGRES_SCHEMA_ADAPTER_CONTRACT_VERSION,
     SQLPostgresSchemaAdapterStatus,
@@ -235,6 +239,8 @@ __all__ = [
     "validate_read_only_select",
     "POSTGRES_CONNECTION_RESOLVER_VERSION",
     "resolve_local_docker_connection",
+    "PostgresDatabaseExecutionAdapter",
+    "normalize_postgres_execution_result",
     "SQL_POSTGRES_SCHEMA_ADAPTER_CONTRACT_VERSION",
     "SQLPostgresSchemaAdapterStatus",
     "SQLPostgresSchemaAdapterConfig",
