@@ -221,6 +221,7 @@ class SQLPostgresAdapterExecutionResult:
     error: Optional[str] = None
     warnings: Tuple[str, ...] = field(default_factory=tuple)
     duration_ms: float = 0.0
+    columns: Tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self):
         if self.version != SQL_POSTGRES_ADAPTER_CONTRACT_VERSION:
@@ -256,6 +257,12 @@ class SQLPostgresAdapterExecutionResult:
         if not isinstance(self.duration_ms, (int, float)) or isinstance(self.duration_ms, bool) or self.duration_ms < 0:
             raise SQLPostgresAdapterContractError("duration_ms must be a non-negative number")
 
+        if not isinstance(self.columns, tuple):
+            raise SQLPostgresAdapterContractError("columns must be a tuple")
+        for c in self.columns:
+            if not isinstance(c, str):
+                raise SQLPostgresAdapterContractError("All columns must be strings")
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "version": self.version,
@@ -267,6 +274,7 @@ class SQLPostgresAdapterExecutionResult:
             "truncated": self.truncated,
             "error": self.error,
             "warnings": list(self.warnings),
+            "columns": list(self.columns),
             "duration_ms": self.duration_ms,
         }
 
@@ -371,6 +379,7 @@ class SQLPostgresAdapterContract:
         rows: Tuple[Tuple[Any, ...], ...] = (),
         row_count: int = 0,
         truncated: bool = False,
+        columns: Tuple[str, ...] = (),
         error: Optional[str] = None,
         warnings: Tuple[str, ...] = (),
         duration_ms: float = 0.0,
@@ -383,6 +392,7 @@ class SQLPostgresAdapterContract:
             rows=rows,
             row_count=row_count,
             truncated=truncated,
+            columns=tuple(columns),
             error=error,
             warnings=tuple(warnings),
             duration_ms=duration_ms,
@@ -423,8 +433,10 @@ class SQLPostgresAdapterContract:
             with db.cursor() as cur:
                 cur.execute(request.sql)
                 fetched = cur.fetchmany(max_rows + 1)
+                description = cur.description
             db.rollback()
 
+            columns = tuple(d[0] for d in description) if description else ()
             truncated = len(fetched) > max_rows
             rows = tuple(_normalize_row(r) for r in fetched[:max_rows])
             duration_ms = (time.monotonic() - started) * 1000.0
@@ -432,7 +444,7 @@ class SQLPostgresAdapterContract:
             return self._result(
                 request, sql_hash, SQLPostgresAdapterStatus.EXECUTED,
                 rows=rows, row_count=len(rows), truncated=truncated,
-                warnings=warnings, duration_ms=duration_ms,
+                columns=columns, warnings=warnings, duration_ms=duration_ms,
             )
         except Exception as exc:  # noqa: BLE001 - must never leak connection details
             duration_ms = (time.monotonic() - started) * 1000.0
