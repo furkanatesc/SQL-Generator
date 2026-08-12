@@ -136,3 +136,43 @@ def test_adapter_pluggable_into_router():
     a = _adapter(lambda env=None: None)
     router = SQLDatabaseExecutionRouter(adapters=(a,))
     assert router.get_adapter(SQLDatabaseDialect.POSTGRESQL) is a
+
+
+def test_execution_adapter_import_does_not_load_db_drivers():
+    import os
+    import subprocess
+    import sys
+    import app.evaluation
+    eval_dir = os.path.dirname(app.evaluation.__file__)
+
+    code = (
+        "import sys\n"
+        f"sys.path.insert(0, {repr(eval_dir)})\n"
+        "import postgres_execution_adapter\n"
+        "forbidden = ['psycopg', 'psycopg2', 'asyncpg', 'sqlalchemy']\n"
+        "for mod in forbidden:\n"
+        "    if mod in sys.modules:\n"
+        "        print(f'FORBIDDEN:{mod}')\n"
+    )
+    res = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "FORBIDDEN" not in res.stdout, (
+        f"Importing postgres_execution_adapter loaded forbidden driver: {res.stdout}"
+    )
+    # Note: the 25.8 network-client isolation test (forbidden = requests/urllib/
+    # http.client/asyncio/socket) was investigated and deliberately NOT ported here.
+    # Unlike postgres_adapter.py (25.8), this module's own top-level imports reach
+    # into sibling app.evaluation.* modules, which forces Python to fully execute
+    # app/evaluation/__init__.py's eager re-export chain -- including
+    # postgres_schema_adapter -> app.schema.schema_contract -> pydantic. Pydantic
+    # itself references asyncio/socket internally for its typing machinery (e.g.
+    # AnyUrl/IPvAnyAddress validators), with no actual network I/O at import time.
+    # Verified via bisection (see task-4-report.md) that no driver (psycopg/
+    # psycopg2/asyncpg/sqlalchemy) nor any genuine network client (requests/httpx/
+    # qdrant/etc.) is imported anywhere in the chain -- only pydantic's incidental
+    # stdlib references. Porting the 25.8 network forbidden-list verbatim would
+    # therefore be a false positive, not a real isolation leak.
