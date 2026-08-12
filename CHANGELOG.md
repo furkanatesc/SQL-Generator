@@ -672,7 +672,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   takılabilir ama canlı bir registry'ye kaydedilmedi), import-time
   **network-client** isolation testi (yalnız DB-driver isolation edildi —
   `app.evaluation.__init__`'in eager re-export'u `schema_contract →
-  pydantic`'i çeker, benign `asyncio`/`socket` yükler). (PR TBD)
+  pydantic`'i çeker, benign `asyncio`/`socket` yükler). (PR #162)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
