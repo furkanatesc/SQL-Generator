@@ -178,6 +178,7 @@ class SQLPostgresAdapterConfig:
     timeout_seconds: float = 2.0
     max_rows: int = 1000
     execution_mode: str = "read_only"
+    explain_analyze: bool = False
 
     def __post_init__(self):
         if not isinstance(self.timeout_seconds, (int, float)) or isinstance(self.timeout_seconds, bool) or self.timeout_seconds <= 0:
@@ -186,6 +187,8 @@ class SQLPostgresAdapterConfig:
             raise SQLPostgresAdapterContractError("max_rows must be a positive integer")
         if self.execution_mode not in {"read_only", "explain_only"}:
             raise SQLPostgresAdapterContractError(f"Invalid execution_mode: {self.execution_mode}")
+        if not isinstance(self.explain_analyze, bool):
+            raise SQLPostgresAdapterContractError("explain_analyze must be a boolean")
 
 
 @dataclass(frozen=True)
