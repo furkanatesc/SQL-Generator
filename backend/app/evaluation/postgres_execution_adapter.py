@@ -14,6 +14,7 @@ from app.evaluation.multi_database_execution import (
     SQL_MULTI_DATABASE_EXECUTION_VERSION,
     SQLDatabaseDialect,
     SQLDatabaseExecutionAdapter,
+    SQLDatabaseExecutionConfig,
     SQLDatabaseExecutionRequest,
     SQLDatabaseExecutionResult,
     SQLExecutionAdapterCapability,
@@ -95,6 +96,16 @@ def normalize_postgres_execution_result(
     )
 
 
+def _to_pg_config(config: SQLDatabaseExecutionConfig) -> SQLPostgresAdapterConfig:
+    """Map the shared execution config to the Sprint 25.8 adapter config."""
+    return SQLPostgresAdapterConfig(
+        timeout_seconds=config.timeout_seconds,
+        max_rows=config.max_rows,
+        execution_mode=config.execution_mode.value,
+        explain_analyze=config.explain_analyze,
+    )
+
+
 class PostgresDatabaseExecutionAdapter(SQLDatabaseExecutionAdapter):
     """Local-Docker-only, read-only PostgreSQL execution adapter (Sprint 29.1).
 
@@ -116,6 +127,7 @@ class PostgresDatabaseExecutionAdapter(SQLDatabaseExecutionAdapter):
         return (
             SQLExecutionAdapterCapability.CONNECTION_REF,
             SQLExecutionAdapterCapability.READ_ONLY,
+            SQLExecutionAdapterCapability.EXPLAIN_ONLY,
         )
 
     def execute(self, request: SQLDatabaseExecutionRequest) -> SQLDatabaseExecutionResult:
@@ -135,9 +147,11 @@ class PostgresDatabaseExecutionAdapter(SQLDatabaseExecutionAdapter):
             raise SQLMultiDatabaseExecutionContractError(
                 "PostgreSQL adapter does not support fixture_ref"
             )
-        if request.config.execution_mode != SQLExecutionMode.READ_ONLY:
+        if request.config.execution_mode not in (
+            SQLExecutionMode.READ_ONLY, SQLExecutionMode.EXPLAIN_ONLY
+        ):
             raise SQLMultiDatabaseExecutionContractError(
-                "PostgreSQL adapter currently supports only read_only execution mode"
+                "PostgreSQL adapter supports only read_only or explain_only execution mode"
             )
 
         connection = self._resolve()
@@ -156,11 +170,7 @@ class PostgresDatabaseExecutionAdapter(SQLDatabaseExecutionAdapter):
                 warnings=(),
             )
 
-        pg_config = SQLPostgresAdapterConfig(
-            timeout_seconds=request.config.timeout_seconds,
-            max_rows=request.config.max_rows,
-            execution_mode="read_only",
-        )
+        pg_config = _to_pg_config(request.config)
         pg_request = SQLPostgresAdapterExecutionRequest(
             case_id=request.case_id,
             sql=request.sql,

@@ -95,6 +95,7 @@ def test_adapter_dialect_and_capabilities():
     assert a.capabilities() == (
         SQLExecutionAdapterCapability.CONNECTION_REF,
         SQLExecutionAdapterCapability.READ_ONLY,
+        SQLExecutionAdapterCapability.EXPLAIN_ONLY,
     )
 
 
@@ -109,16 +110,22 @@ def test_adapter_requires_connection_ref_rejects_fixture():
         a.execute(req)
 
 
-def test_adapter_rejects_explain_only_mode():
+def test_adapter_rejects_unsupported_execution_mode():
+    # Sprint 29.2: EXPLAIN_ONLY is now accepted (see
+    # test_explain_only_mode_not_rejected_graceful_without_connection below).
+    # The adapter's mode gate still defensively rejects any mode outside
+    # {READ_ONLY, EXPLAIN_ONLY}. SQLExecutionMode only defines those two
+    # members, and SQLDatabaseExecutionConfig validates the mode at
+    # construction time, so we bypass that (frozen dataclass) via
+    # object.__setattr__ post-construction to exercise the adapter's own
+    # execute()-time gate directly.
     a = _adapter(lambda env=None: None)
-    cfg = SQLDatabaseExecutionConfig(
-        dialect=SQLDatabaseDialect.POSTGRESQL,
-        execution_mode=SQLExecutionMode.EXPLAIN_ONLY,
-    )
+    cfg = SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.POSTGRESQL)
     req = SQLDatabaseExecutionRequest(
         case_id="c1", sql=SQL, dialect=SQLDatabaseDialect.POSTGRESQL,
         fixture_ref=None, connection_ref="local_docker", config=cfg,
     )
+    object.__setattr__(req.config, "execution_mode", "bogus_mode")
     with pytest.raises(SQLMultiDatabaseExecutionContractError):
         a.execute(req)
 
@@ -176,3 +183,46 @@ def test_execution_adapter_import_does_not_load_db_drivers():
     # qdrant/etc.) is imported anywhere in the chain -- only pydantic's incidental
     # stdlib references. Porting the 25.8 network forbidden-list verbatim would
     # therefore be a false positive, not a real isolation leak.
+
+
+def test_capabilities_include_explain_only():
+    from app.evaluation.postgres_execution_adapter import PostgresDatabaseExecutionAdapter
+    from app.evaluation.multi_database_execution import SQLExecutionAdapterCapability
+    caps = PostgresDatabaseExecutionAdapter().capabilities()
+    assert SQLExecutionAdapterCapability.EXPLAIN_ONLY in caps
+    assert SQLExecutionAdapterCapability.READ_ONLY in caps
+    assert SQLExecutionAdapterCapability.CONNECTION_REF in caps
+
+
+def _exec_request(mode, analyze=False):
+    from app.evaluation.multi_database_execution import (
+        SQLDatabaseDialect, SQLDatabaseExecutionConfig, SQLDatabaseExecutionRequest,
+    )
+    cfg = SQLDatabaseExecutionConfig(
+        dialect=SQLDatabaseDialect.POSTGRESQL, execution_mode=mode, explain_analyze=analyze,
+    )
+    return SQLDatabaseExecutionRequest(
+        case_id="c1", sql="SELECT id FROM customers", dialect=SQLDatabaseDialect.POSTGRESQL,
+        fixture_ref=None, connection_ref="local_docker", config=cfg,
+    )
+
+
+def test_explain_only_mode_not_rejected_graceful_without_connection():
+    from app.evaluation.postgres_execution_adapter import PostgresDatabaseExecutionAdapter
+    from app.evaluation.multi_database_execution import SQLExecutionMode
+    adapter = PostgresDatabaseExecutionAdapter(connection_resolver=lambda: None)
+    out = adapter.execute(_exec_request(SQLExecutionMode.EXPLAIN_ONLY))
+    # No raise; graceful empty result (no local Docker connection)
+    assert out.row_count == 0
+    assert out.execution_error is not None
+
+
+def test_to_pg_config_maps_mode_and_analyze():
+    from app.evaluation.postgres_execution_adapter import _to_pg_config
+    from app.evaluation.multi_database_execution import SQLExecutionMode
+    cfg = _to_pg_config(_exec_request(SQLExecutionMode.EXPLAIN_ONLY, analyze=True).config)
+    assert cfg.execution_mode == "explain_only"
+    assert cfg.explain_analyze is True
+    cfg2 = _to_pg_config(_exec_request(SQLExecutionMode.READ_ONLY).config)
+    assert cfg2.execution_mode == "read_only"
+    assert cfg2.explain_analyze is False
