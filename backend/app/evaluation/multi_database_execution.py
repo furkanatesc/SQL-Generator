@@ -49,6 +49,7 @@ class SQLDatabaseExecutionConfig:
     timeout_seconds: float = 2.0
     max_rows: int = 1000
     execution_mode: SQLExecutionMode = SQLExecutionMode.READ_ONLY
+    explain_analyze: bool = False
 
     def __post_init__(self):
         if not isinstance(self.dialect, SQLDatabaseDialect):
@@ -69,6 +70,9 @@ class SQLDatabaseExecutionConfig:
                 object.__setattr__(self, "execution_mode", SQLExecutionMode(self.execution_mode))
             except ValueError:
                 raise SQLMultiDatabaseExecutionContractError(f"Invalid execution mode: {self.execution_mode}")
+
+        if not isinstance(self.explain_analyze, bool):
+            raise SQLMultiDatabaseExecutionContractError("explain_analyze must be a boolean")
 
 
 @dataclass(frozen=True)
