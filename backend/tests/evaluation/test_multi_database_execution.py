@@ -375,3 +375,29 @@ def test_sqlite_adapter_rejects_fixture_symlink_escape(tmp_path):
         adapter._resolve_db_path("evil")
     assert "escape" in str(exc_info.value)
 
+
+def test_execution_config_explain_analyze_defaults_false():
+    from app.evaluation.multi_database_execution import (
+        SQLDatabaseExecutionConfig, SQLDatabaseDialect,
+    )
+    cfg = SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.POSTGRESQL)
+    assert cfg.explain_analyze is False
+
+
+def test_execution_config_explain_analyze_accepts_true():
+    from app.evaluation.multi_database_execution import (
+        SQLDatabaseExecutionConfig, SQLDatabaseDialect,
+    )
+    cfg = SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.POSTGRESQL, explain_analyze=True)
+    assert cfg.explain_analyze is True
+
+
+def test_execution_config_explain_analyze_rejects_non_bool():
+    import pytest
+    from app.evaluation.multi_database_execution import (
+        SQLDatabaseExecutionConfig, SQLDatabaseDialect,
+        SQLMultiDatabaseExecutionContractError,
+    )
+    with pytest.raises(SQLMultiDatabaseExecutionContractError):
+        SQLDatabaseExecutionConfig(dialect=SQLDatabaseDialect.POSTGRESQL, explain_analyze="yes")
+
