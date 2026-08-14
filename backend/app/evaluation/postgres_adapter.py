@@ -316,6 +316,20 @@ def _normalize_row(row: Any) -> Tuple[Any, ...]:
     return tuple(_normalize_value(v) for v in row)
 
 
+def _build_explain_sql(sql: str, analyze: bool) -> str:
+    """Prefix a validated read-only SELECT with EXPLAIN (never runs writes).
+
+    Strips trailing whitespace and a single trailing ``;`` so the EXPLAIN
+    prefix composes cleanly. The inner ``sql`` has already passed the
+    read-only SELECT gate; EXPLAIN is prepended to that safe statement.
+    """
+    inner = sql.rstrip()
+    if inner.endswith(";"):
+        inner = inner[:-1].rstrip()
+    prefix = "EXPLAIN (ANALYZE) " if analyze else "EXPLAIN "
+    return prefix + inner
+
+
 def _sanitize_db_error(exc: Exception) -> str:
     """Credential-free, deterministic error message.
 
@@ -419,6 +433,11 @@ class SQLPostgresAdapterContract:
         statement_timeout_ms = max(1, int(config.timeout_seconds * 1000))
         connect_timeout_s = max(1, int(round(config.timeout_seconds)))
 
+        if config.execution_mode == "explain_only":
+            sql_to_run = _build_explain_sql(request.sql, config.explain_analyze)
+        else:
+            sql_to_run = request.sql
+
         started = time.monotonic()
         db = None
         try:
@@ -434,7 +453,7 @@ class SQLPostgresAdapterContract:
             )
             db.set_session(readonly=True, autocommit=False)
             with db.cursor() as cur:
-                cur.execute(request.sql)
+                cur.execute(sql_to_run)
                 fetched = cur.fetchmany(max_rows + 1)
                 description = cur.description
             db.rollback()
