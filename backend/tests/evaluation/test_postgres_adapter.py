@@ -330,3 +330,145 @@ def test_adapter_config_explain_analyze_rejects_non_bool():
     )
     with pytest.raises(SQLPostgresAdapterContractError):
         SQLPostgresAdapterConfig(explain_analyze="yes")
+
+
+def test_build_explain_sql_plain_prefixes_explain():
+    from app.evaluation.postgres_adapter import _build_explain_sql
+    assert _build_explain_sql("SELECT 1", analyze=False) == "EXPLAIN SELECT 1"
+
+
+def test_build_explain_sql_analyze_prefixes_explain_analyze():
+    from app.evaluation.postgres_adapter import _build_explain_sql
+    assert _build_explain_sql("SELECT 1", analyze=True) == "EXPLAIN (ANALYZE) SELECT 1"
+
+
+def test_build_explain_sql_strips_trailing_semicolon_and_space():
+    from app.evaluation.postgres_adapter import _build_explain_sql
+    assert _build_explain_sql("SELECT 1 ;  ", analyze=False) == "EXPLAIN SELECT 1"
+    assert _build_explain_sql("SELECT 1;", analyze=True) == "EXPLAIN (ANALYZE) SELECT 1"
+
+
+def _install_fake_psycopg2(monkeypatch, captured, plan_rows, description):
+    import sys
+    import types
+
+    class _FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def execute(self, sql):
+            captured.append(sql)
+
+        def fetchmany(self, n):
+            return list(plan_rows)
+
+        @property
+        def description(self):
+            return description
+
+    class _FakeConn:
+        def set_session(self, **kw):
+            pass
+
+        def cursor(self):
+            return _FakeCursor()
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    fake = types.ModuleType("psycopg2")
+    fake.connect = lambda **kw: _FakeConn()
+    monkeypatch.setitem(sys.modules, "psycopg2", fake)
+
+
+def _explain_request(sql, analyze):
+    from app.evaluation.postgres_adapter import (
+        SQLPostgresAdapterConfig,
+        SQLPostgresAdapterExecutionRequest,
+    )
+    return SQLPostgresAdapterExecutionRequest(
+        case_id="c1",
+        sql=sql,
+        dialect="postgresql",
+        config=SQLPostgresAdapterConfig(execution_mode="explain_only", explain_analyze=analyze),
+    )
+
+
+def _local_conn():
+    from app.evaluation.postgres_adapter import SQLPostgresLocalDockerConnection
+    return SQLPostgresLocalDockerConnection(
+        host="localhost", port=5432, dbname="d", user="u", password="p"
+    )
+
+
+def test_explain_only_runs_explain_prefixed_sql(monkeypatch):
+    from app.evaluation.postgres_adapter import (
+        SQLPostgresAdapterContract,
+        SQLPostgresAdapterStatus,
+    )
+    captured = []
+    _install_fake_psycopg2(
+        monkeypatch, captured,
+        plan_rows=[("Seq Scan on customers  (cost=0.00..1.00 rows=1 width=4)",)],
+        description=[("QUERY PLAN", None, None, None, None, None, None)],
+    )
+    contract = SQLPostgresAdapterContract(connection=_local_conn())
+    result = contract.execute(_explain_request("SELECT id FROM customers", analyze=False))
+    assert captured == ["EXPLAIN SELECT id FROM customers"]
+    assert result.status == SQLPostgresAdapterStatus.EXECUTED
+    assert result.columns == ("QUERY PLAN",)
+    assert result.rows[0][0].startswith("Seq Scan")
+
+
+def test_explain_analyze_runs_explain_analyze_prefixed_sql(monkeypatch):
+    from app.evaluation.postgres_adapter import SQLPostgresAdapterContract
+    captured = []
+    _install_fake_psycopg2(
+        monkeypatch, captured,
+        plan_rows=[("Seq Scan on customers (actual time=0.01..0.02 rows=1 loops=1)",)],
+        description=[("QUERY PLAN", None, None, None, None, None, None)],
+    )
+    contract = SQLPostgresAdapterContract(connection=_local_conn())
+    contract.execute(_explain_request("SELECT id FROM customers", analyze=True))
+    assert captured == ["EXPLAIN (ANALYZE) SELECT id FROM customers"]
+
+
+def test_read_only_mode_runs_raw_sql_unchanged(monkeypatch):
+    from app.evaluation.postgres_adapter import (
+        SQLPostgresAdapterConfig,
+        SQLPostgresAdapterContract,
+        SQLPostgresAdapterExecutionRequest,
+    )
+    captured = []
+    _install_fake_psycopg2(
+        monkeypatch, captured,
+        plan_rows=[(1,)],
+        description=[("id", None, None, None, None, None, None)],
+    )
+    req = SQLPostgresAdapterExecutionRequest(
+        case_id="c1", sql="SELECT id FROM customers", dialect="postgresql",
+        config=SQLPostgresAdapterConfig(execution_mode="read_only"),
+    )
+    SQLPostgresAdapterContract(connection=_local_conn()).execute(req)
+    assert captured == ["SELECT id FROM customers"]
+
+
+def test_explain_only_rejects_non_select_before_driver(monkeypatch):
+    from app.evaluation.postgres_adapter import (
+        SQLPostgresAdapterContract,
+        SQLPostgresAdapterStatus,
+    )
+    captured = []
+    _install_fake_psycopg2(
+        monkeypatch, captured, plan_rows=[], description=[],
+    )
+    contract = SQLPostgresAdapterContract(connection=_local_conn())
+    result = contract.execute(_explain_request("INSERT INTO customers VALUES (1)", analyze=False))
+    assert result.status == SQLPostgresAdapterStatus.REJECTED
+    assert captured == []  # read-only gate rejects before any EXPLAIN is built/run
