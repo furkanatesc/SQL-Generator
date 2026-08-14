@@ -308,3 +308,25 @@ def test_execution_result_columns_roundtrip_and_validation():
             status=SQLPostgresAdapterStatus.EXECUTED, sql_sha256=h,
             columns=("id", 5),  # non-str
         )
+
+
+def test_adapter_config_explain_analyze_defaults_false():
+    from app.evaluation.postgres_adapter import SQLPostgresAdapterConfig
+    cfg = SQLPostgresAdapterConfig()
+    assert cfg.explain_analyze is False
+
+
+def test_adapter_config_explain_analyze_accepts_true():
+    from app.evaluation.postgres_adapter import SQLPostgresAdapterConfig
+    cfg = SQLPostgresAdapterConfig(explain_analyze=True)
+    assert cfg.explain_analyze is True
+
+
+def test_adapter_config_explain_analyze_rejects_non_bool():
+    import pytest
+    from app.evaluation.postgres_adapter import (
+        SQLPostgresAdapterConfig,
+        SQLPostgresAdapterContractError,
+    )
+    with pytest.raises(SQLPostgresAdapterContractError):
+        SQLPostgresAdapterConfig(explain_analyze="yes")
