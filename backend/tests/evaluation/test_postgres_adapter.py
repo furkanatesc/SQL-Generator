@@ -424,6 +424,7 @@ def test_explain_only_runs_explain_prefixed_sql(monkeypatch):
     assert result.status == SQLPostgresAdapterStatus.EXECUTED
     assert result.columns == ("QUERY PLAN",)
     assert result.rows[0][0].startswith("Seq Scan")
+    assert result.sql_sha256 == hashlib.sha256(b"SELECT id FROM customers").hexdigest()
 
 
 def test_explain_analyze_runs_explain_analyze_prefixed_sql(monkeypatch):
