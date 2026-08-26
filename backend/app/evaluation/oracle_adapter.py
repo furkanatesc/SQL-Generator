@@ -452,7 +452,6 @@ class SQLOracleAdapterContract:
                 cur.execute(request.sql)
                 fetched = cur.fetchmany(max_rows + 1)
                 description = cur.description
-            conn.rollback()
 
             columns = tuple(d[0] for d in description) if description else ()
             truncated = len(fetched) > max_rows
@@ -472,6 +471,10 @@ class SQLOracleAdapterContract:
             )
         finally:
             if conn is not None:
+                try:
+                    conn.rollback()
+                except Exception:  # noqa: BLE001
+                    pass
                 try:
                     conn.close()
                 except Exception:  # noqa: BLE001
