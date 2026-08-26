@@ -702,6 +702,36 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   Oracle/MySQL/SQL Server EXPLAIN path'leri (→ 29.3–29.6), merkezî/canlı
   execution router registry (→ 30.x), execution trace/audit persistence (→ 30.4).
   (PR #163)
+- **Oracle Contract Adapter** (Sprint 29.3 · Phase 10): 25.9'un Oracle adapter
+  **stub**'ını (tüm execution flag'leri `False`, hep `NOT_IMPLEMENTED`/`REJECTED`),
+  PostgreSQL 29.0→29.1 desenini birebir izleyerek gerçek bir **local-Docker-only,
+  read-only Oracle execution path**'ine çeviren sprint — hâlâ **standalone/inert**,
+  canlı production pipeline'a wire EDİLMEDİ. Üç katman: **Katman 1**
+  (`oracle_adapter.py`) 25.9 stub kontratı korunarak (all-`False` capability +
+  `connection=None` inert `NOT_IMPLEMENTED`) gerçek `oracledb` **thin mode**
+  read-only SELECT path'i; üç savunma katmanı — 26.2 string-level SELECT gate →
+  lazy `oracledb` import (import-time driver-izolasyon, subprocess testiyle kilitli)
+  → DB-seviyesi `SET TRANSACTION READ ONLY` + `autocommit=False` + `finally`'de
+  guarded `rollback()`/`close()` + `call_timeout` (ms). Yeni `EXECUTED`/
+  `EXECUTION_ERROR` status, `default_local_docker_capability()` (invariant yalnız
+  `live/remote/production`'ı `True`'dan kilitler), `SQLOracleLocalDockerConnection`
+  (local-docker host allowlist + `service_name`), result `columns` alanı,
+  secret-free `_sanitize_oracle_error`. `execute()` **validate-first** (read-only
+  gate → connection-None) — 25.9 "no-connection + unsafe SQL → `REJECTED`"
+  kontratını korur, strictly-safer. **Katman 2** (yeni
+  `oracle_connection_resolver.py`) `ORACLE_TEST_*` env → connection | `None`, asla
+  connect/raise etmez. **Katman 3** (yeni `oracle_execution_adapter.py`)
+  dialect-agnostic köprü — `capabilities() = (CONNECTION_REF, READ_ONLY)`,
+  EXPLAIN_ONLY **reddedilir**, resolver `None` → graceful boş sonuç (raise yok),
+  `col_<i>` fallback + uyarı. `multi_database_execution.py` **DEĞİŞMEDİ**
+  (`SQLDatabaseDialect.ORACLE` zaten mevcut); `oracledb==2.5.1` zaten pinliydi.
+  Docker'sız safe-skip gated integration testleri (bare-Oracle `DUAL`/
+  `CONNECT BY LEVEL`, **seed'siz**) + `oracle` pytest marker; fake-`oracledb` unit
+  testleri + driver-isolation subprocess testleri. **Bilinçli kapsam dışı**
+  (TECH-DEBT §21): gerçek Oracle Docker imajı + seed + CI job (**→ 29.4**), Oracle
+  schema introspection (Postgres 29.0 dengi → ileriye), Oracle EXPLAIN PLAN (29.2
+  dengi → ileriye), canlı pipeline wiring (→ 30.x), connection registry/uzak &
+  production connection/wallet/TNS (→ 30.2), thick mode. (PR #164)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
