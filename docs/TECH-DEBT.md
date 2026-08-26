@@ -1053,3 +1053,54 @@ olarak kapsam dışı bırakıldı (sessiz düşürme yok).
 8. **Deferred minor'lar (bloklamaz):** integration testinde inline `_JOIN_SQL`
    SQL string duplikasyonu (küçük tekrar).
    *İlgili Dosya:* `backend/tests/evaluation/test_postgres_execution_adapter_integration.py`
+
+## §21. Sprint 29.3 (Oracle Contract Adapter) devirleri — AÇIK
+
+25.9'un Oracle adapter stub'ını, PostgreSQL 29.0→29.1 desenini izleyerek gerçek
+bir local-Docker-only, read-only Oracle execution path'ine çeviren sprint —
+`oracledb` thin mode, driver-izole, standalone/inert (canlı pipeline'a wire
+edilmedi). Üç katman: `oracle_adapter.py` (gerçek execute + `SET TRANSACTION
+READ ONLY` + `call_timeout`), `oracle_connection_resolver.py` (env → connection |
+None), `oracle_execution_adapter.py` (shared-contract köprü, `(CONNECTION_REF,
+READ_ONLY)`, EXPLAIN_ONLY reddi). §19.4/§20 postürü korunur. Aşağıdakiler tasarım
+spec'inde bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
+
+1. **Gerçek Oracle Docker imajı + seed şeması + CI job yok.** 29.3'ün gated
+   `integration`+`oracle`-mark'lı testleri bugün her CI koşusunda safe-skip eder
+   (bare-Oracle `DUAL`/`CONNECT BY LEVEL` sorguları kullanır, seed'e ihtiyaç
+   duymaz). → **29.4 Oracle Docker/Test Harness Strategy** (imaj + seed + CI job;
+   Oracle daha yüksek risk — driver/lisans/imaj boyutu — olduğu için ayrı sprint).
+   *İlgili Dosya:* `backend/tests/evaluation/test_oracle_execution_adapter_integration.py`;
+   gelecekte `docker-compose.yml` Oracle service + `.github/workflows/backend-ci.yml`
+2. **Oracle schema introspection adapter yok.** `ALL_TAB_COLUMNS`/`ALL_CONSTRAINTS`/
+   `ALL_CONS_COLUMNS` → `DatabaseSchema` (Postgres 29.0 `postgres_schema_adapter.py`
+   dengi) çıkarılmadı. → ileri sprint.
+   *İlgili Dosya:* gelecekte `backend/app/evaluation/oracle_schema_adapter.py`
+3. **Oracle EXPLAIN-only mode yok.** Köprü `EXPLAIN_ONLY`'yi reddeder;
+   `EXPLAIN PLAN FOR` + `DBMS_XPLAN.DISPLAY` yolu (29.2 PostgreSQL EXPLAIN dengi)
+   eklenmedi. → ileri sprint.
+   *İlgili Dosya:* `backend/app/evaluation/oracle_adapter.py`,
+   `backend/app/evaluation/oracle_execution_adapter.py`
+4. **Tam bridge→low-level real-execution unit testi yok.** `OracleDatabaseExecution
+   Adapter.execute`'un resolver-non-None dalını (gerçek `SQLOracleAdapterExecution
+   Request` kurup low-level'a delege eden satır) yalnız gated (şimdi hep skip)
+   integration testleri egzersiz eder; fake-`oracledb` + resolver enjekte eden bir
+   unit test bu tam yolu şimdi kilitlerdi. → 29.4 (imaj gelince doğal kapsanır).
+   *İlgili Dosya:* `backend/tests/evaluation/test_oracle_execution_adapter.py`
+5. **Connection registry / uzak & production connection / wallet / TNS yok.**
+   Yalnız 29.3 resolver'ın local-Docker connection'ı. → Phase 11 · 30.2.
+   *İlgili Dosya:* Phase 11 · 30.2 (henüz mevcut değil)
+6. **Canlı HTTP pipeline wiring yok / merkezî execution router registry yok.**
+   Adapter router'a takılabilir ama canlı bir registry'ye kaydedilmedi; production
+   `/api/jobs` akışına bağlanmadı. → 30.2 / 30.4 / 30.x.
+   *İlgili Dosya:* `backend/app/evaluation/multi_database_execution.py`
+7. **`oracledb` thick mode / Oracle Instant Client yok.** Yalnız thin mode
+   (saf-Python). Gerekmedikçe ertelenir.
+   *İlgili Dosya:* `backend/app/evaluation/oracle_adapter.py`
+8. **Deferred minor'lar (bloklamaz):** `_result()` already-tuple `columns`/
+   `warnings`'i `tuple(...)` ile yeniden sarar (zararsız, postgres precedent'i);
+   `execute()` check sırasında `fixture_ref` reddi yalnız edge-case'le erişilir
+   (base request zaten ikisinin birden truthy olmasını yasaklar — postgres'ten
+   miras).
+   *İlgili Dosya:* `backend/app/evaluation/oracle_adapter.py`,
+   `backend/app/evaluation/oracle_execution_adapter.py`
