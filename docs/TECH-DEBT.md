@@ -987,7 +987,8 @@ düşürme yok).
    ileri sprint.
    *İlgili Dosya:* `backend/app/evaluation/postgres_execution_adapter.py`
 4. **EXPLAIN-only mode yok.** Adapter yalnız `READ_ONLY` mode kabul eder,
-   `EXPLAIN_ONLY` reddedilir. → 29.2 PostgreSQL EXPLAIN-Only Mode.
+   `EXPLAIN_ONLY` reddedilir. → 29.2 PostgreSQL EXPLAIN-Only Mode — **ÇÖZÜLDÜ**,
+   bkz. §20.
    *İlgili Dosya:* `backend/app/evaluation/postgres_execution_adapter.py`
 5. **Oracle/MySQL/SQL Server execution adapter'ları yok.** → 29.3–29.6.
    *İlgili Dosya:* Phase 10 · 29.3+
@@ -1005,3 +1006,50 @@ düşürme yok).
    yüzden yazılmadı.
    *İlgili Dosya:* `backend/tests/evaluation/test_postgres_execution_adapter_integration.py`
    yakınındaki isolation testi; `backend/app/evaluation/__init__.py`
+
+## §20. Sprint 29.2 (PostgreSQL EXPLAIN-Only Mode) devirleri — AÇIK
+
+29.1'in yalnız `READ_ONLY` kabul edip `EXPLAIN_ONLY`'yi reddettiği yerden devam
+edip, PostgreSQL için gerçek EXPLAIN(-only) execution path'ini ekleyen sprint —
+local-Docker-only, read-only, driver-izole, standalone/inert (canlı pipeline'a
+wire edilmedi). İki katman: **Katman 1** (`backend/app/evaluation/
+postgres_adapter.py`) `execution_mode="explain_only"` iken doğrulanmış iç
+SELECT'in önüne `EXPLAIN <sql>` (opt-in `EXPLAIN (ANALYZE) <sql>`) ekleyip koşar
+(`SQLPostgresAdapterConfig.explain_analyze: bool = False` + saf
+`_build_explain_sql`); 25.8'in read-only gate'i iç SELECT üzerinde değişmedi,
+`sql_sha256` her zaman orijinal SQL'den. **Katman 2** (`backend/app/evaluation/
+postgres_execution_adapter.py`) `EXPLAIN_ONLY` kabul eder, `capabilities()`'e
+eklenir, `_to_pg_config` shared→25.8 config eşler; plan satırları `"QUERY PLAN"`
+dict-row'ları olarak döner (kontrat değişmedi). Shared
+`SQLDatabaseExecutionConfig.explain_analyze` geriye-uyumlu eklendi. §19.4
+(EXPLAIN-only mode yok) ile bu ÇÖZÜLDÜ. Aşağıdakiler tasarım spec'inde bilinçli
+olarak kapsam dışı bırakıldı (sessiz düşürme yok).
+
+1. **Canlı HTTP request pipeline wiring yok.** İki adapter da production
+   `sql_pipeline.py`/`/api/jobs` akışına bağlanmadı; standalone/inert kalır,
+   canlı istekte çağrılmaz. → Phase 11 · 30.2 Connection Registry API / 30.4
+   Query Run API.
+   *İlgili Dosya:* `backend/app/evaluation/postgres_execution_adapter.py`
+2. **`connection_aware_execution.py` non-READ_ONLY'yi hard-reject ederken adapter
+   EXPLAIN_ONLY advertise ediyor.** Bu katman `capabilities()`'in `EXPLAIN_ONLY`
+   içerdiğini hesaba katmadan non-`READ_ONLY` modları reddeder. 29.2'de **bug
+   yok** (adapter inert, canlı pipeline'a wire değil); 30.x wiring'de bu ikisi
+   uzlaştırılacak (EXPLAIN_ONLY mode'unun bu gate'ten geçmesine izin ver).
+   *İlgili Dosya:* `backend/app/evaluation/connection_aware_execution.py`
+3. **`EXPLAIN (FORMAT JSON)` / yapılandırılmış plan + plan-tabanlı maliyet gate
+   yok.** Yalnız düz metin plan (`"QUERY PLAN"` satırları) döner; makine-okunur
+   JSON plan ve plan-tabanlı maliyet/analiz gate bilinçli ertelendi. → ileri
+   sprint.
+   *İlgili Dosya:* `backend/app/evaluation/postgres_adapter.py`
+4. **Connection registry / uzak & production connection yok.** Yalnız 29.0
+   resolver'ın local-Docker connection'ı kullanılır. → Phase 11 · 30.2.
+   *İlgili Dosya:* Phase 11 · 30.2 (henüz mevcut değil)
+5. **Oracle/MySQL/SQL Server EXPLAIN path'leri yok.** → 29.3–29.6.
+   *İlgili Dosya:* Phase 10 · 29.3+
+6. **Merkezî/canlı execution router registry yok.** → 30.x.
+   *İlgili Dosya:* `backend/app/evaluation/multi_database_execution.py`
+7. **Execution trace/audit persistence yok.** → 30.4 Query Run API.
+   *İlgili Dosya:* yok / gelecekte 30.4
+8. **Deferred minor'lar (bloklamaz):** integration testinde inline `_JOIN_SQL`
+   SQL string duplikasyonu (küçük tekrar).
+   *İlgili Dosya:* `backend/tests/evaluation/test_postgres_execution_adapter_integration.py`
