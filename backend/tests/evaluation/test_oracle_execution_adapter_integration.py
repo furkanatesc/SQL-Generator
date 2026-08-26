@@ -28,6 +28,7 @@ def _local_docker_oracle_available():
         db = oracledb.connect(
             user=conn.user, password=conn.password,
             dsn=f"{conn.host}:{conn.port}/{conn.service_name}",
+            tcp_connect_timeout=2,
         )
         db.close()
         return True
