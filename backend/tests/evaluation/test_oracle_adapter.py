@@ -20,7 +20,7 @@ from app.evaluation.oracle_adapter import (
 
 EXPECTED_RESULT_KEYS = {
     "version", "case_id", "status", "sql_sha256",
-    "rows", "row_count", "truncated", "error", "warnings", "duration_ms",
+    "rows", "row_count", "truncated", "error", "warnings", "duration_ms", "columns",
 }
 
 _CAPABILITY_FLAGS = (
@@ -78,30 +78,31 @@ def test_oracle_adapter_capability_disables_all_execution_modes():
         assert getattr(cap, flag) is False, f"{flag} must be False in the Oracle stub"
 
 
-@pytest.mark.parametrize("field_name", _CAPABILITY_FLAGS)
-def test_oracle_adapter_capability_rejects_any_execution_flag_true(field_name):
+@pytest.mark.parametrize("field_name", [
+    "supports_live_execution",
+    "supports_remote_execution",
+    "supports_production_execution",
+])
+def test_oracle_adapter_capability_rejects_dangerous_flag_true(field_name):
     with pytest.raises(SQLOracleAdapterContractError):
         SQLOracleAdapterCapability(**_capability_kwargs(**{field_name: True}))
+
+
+@pytest.mark.parametrize("field_name", [
+    "supports_driver_execution",
+    "supports_network_execution",
+    "supports_read_only_queries",
+    "supports_local_docker_execution",
+    "supports_oracle_execution",
+])
+def test_oracle_adapter_capability_allows_local_docker_flag_true(field_name):
+    cap = SQLOracleAdapterCapability(**_capability_kwargs(**{field_name: True}))
+    assert getattr(cap, field_name) is True
 
 
 def test_oracle_adapter_capability_rejects_live_execution_true():
     with pytest.raises(SQLOracleAdapterContractError):
         SQLOracleAdapterCapability(**_capability_kwargs(supports_live_execution=True))
-
-
-def test_oracle_adapter_capability_rejects_driver_execution_true():
-    with pytest.raises(SQLOracleAdapterContractError):
-        SQLOracleAdapterCapability(**_capability_kwargs(supports_driver_execution=True))
-
-
-def test_oracle_adapter_capability_rejects_network_execution_true():
-    with pytest.raises(SQLOracleAdapterContractError):
-        SQLOracleAdapterCapability(**_capability_kwargs(supports_network_execution=True))
-
-
-def test_oracle_adapter_capability_rejects_read_only_queries_true():
-    with pytest.raises(SQLOracleAdapterContractError):
-        SQLOracleAdapterCapability(**_capability_kwargs(supports_read_only_queries=True))
 
 
 def test_oracle_adapter_capability_rejects_wrong_dialect():
@@ -242,3 +243,73 @@ def test_oracle_adapter_rejection_path_opens_no_socket(monkeypatch):
     adapter = SQLOracleAdapterContract()
     result = adapter.execute(_request("DELETE FROM users"))
     assert result.status == SQLOracleAdapterStatus.REJECTED
+
+
+def test_default_local_docker_capability_flags():
+    from app.evaluation.oracle_adapter import default_local_docker_capability
+    cap = default_local_docker_capability()
+    assert cap.supports_live_execution is False
+    assert cap.supports_remote_execution is False
+    assert cap.supports_production_execution is False
+    assert cap.supports_driver_execution is True
+    assert cap.supports_network_execution is True
+    assert cap.supports_read_only_queries is True
+    assert cap.supports_local_docker_execution is True
+    assert cap.supports_oracle_execution is True
+
+
+def test_local_docker_connection_accepts_local_host():
+    from app.evaluation.oracle_adapter import SQLOracleLocalDockerConnection
+    conn = SQLOracleLocalDockerConnection(
+        host="localhost", port=1521, service_name="FREEPDB1", user="u", password="p"
+    )
+    assert conn.service_name == "FREEPDB1"
+
+
+def test_local_docker_connection_rejects_remote_host():
+    import pytest
+    from app.evaluation.oracle_adapter import (
+        SQLOracleLocalDockerConnection, SQLOracleAdapterContractError,
+    )
+    with pytest.raises(SQLOracleAdapterContractError):
+        SQLOracleLocalDockerConnection(
+            host="db.prod.example.com", port=1521, service_name="P", user="u"
+        )
+
+
+def test_local_docker_connection_rejects_bad_port_and_empty_service():
+    import pytest
+    from app.evaluation.oracle_adapter import (
+        SQLOracleLocalDockerConnection, SQLOracleAdapterContractError,
+    )
+    with pytest.raises(SQLOracleAdapterContractError):
+        SQLOracleLocalDockerConnection(host="localhost", port=0, service_name="S", user="u")
+    with pytest.raises(SQLOracleAdapterContractError):
+        SQLOracleLocalDockerConnection(host="localhost", port=1521, service_name="", user="u")
+
+
+def test_oracle_execution_result_columns_default_and_roundtrip():
+    import hashlib, pytest
+    from app.evaluation.oracle_adapter import (
+        SQLOracleAdapterExecutionResult, SQL_ORACLE_ADAPTER_CONTRACT_VERSION,
+        SQLOracleAdapterStatus, SQLOracleAdapterContractError,
+    )
+    h = hashlib.sha256(b"SELECT 1 FROM DUAL").hexdigest()
+    res = SQLOracleAdapterExecutionResult(
+        version=SQL_ORACLE_ADAPTER_CONTRACT_VERSION, case_id="c1",
+        status=SQLOracleAdapterStatus.EXECUTED, sql_sha256=h,
+        rows=((1,),), row_count=1, columns=("N",),
+    )
+    assert res.columns == ("N",)
+    assert res.to_dict()["columns"] == ["N"]
+    with pytest.raises(SQLOracleAdapterContractError):
+        SQLOracleAdapterExecutionResult(
+            version=SQL_ORACLE_ADAPTER_CONTRACT_VERSION, case_id="c1",
+            status=SQLOracleAdapterStatus.EXECUTED, sql_sha256=h, columns=("N", 5),
+        )
+
+
+def test_status_has_executed_and_execution_error():
+    from app.evaluation.oracle_adapter import SQLOracleAdapterStatus
+    assert SQLOracleAdapterStatus.EXECUTED.value == "executed"
+    assert SQLOracleAdapterStatus.EXECUTION_ERROR.value == "execution_error"

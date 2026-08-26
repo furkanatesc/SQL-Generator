@@ -58,6 +58,18 @@ _CAPABILITY_FLAGS = (
     "supports_oracle_execution",
 )
 
+_LOCAL_DOCKER_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+# Only these three flags can never be True — live/remote/production execution is
+# never allowed. The local-Docker flags (driver/network/read_only/local_docker/
+# oracle_execution) are free booleans so BOTH the all-False stub and the
+# local-Docker capability are valid (29.3 relaxes the 25.9 all-False rule).
+_FORBIDDEN_TRUE_FLAGS = (
+    "supports_live_execution",
+    "supports_remote_execution",
+    "supports_production_execution",
+)
+
 
 class SQLOracleAdapterContractError(ValueError):
     """Raised when Oracle adapter contract rules or configurations are violated."""
@@ -67,17 +79,24 @@ class SQLOracleAdapterContractError(ValueError):
 class SQLOracleAdapterStatus(str, Enum):
     NOT_IMPLEMENTED = "not_implemented"
     REJECTED = "rejected"
+    EXECUTED = "executed"
+    EXECUTION_ERROR = "execution_error"
 
 
 @dataclass(frozen=True)
 class SQLOracleAdapterCapability:
-    """Describes what the Oracle adapter is allowed to do — in this sprint, nothing.
+    """Describes what the Oracle adapter is allowed to do.
 
-    Unlike the PostgreSQL 25.8 adapter (which exposes local-Docker read-only
-    execution), the Oracle stub makes NO execution claim of any kind. Every flag
-    is enforced to ``False``; a ``True`` on any flag is a contract violation. This
-    keeps a prematurely-enabled Oracle driver, remote/production access, or
-    credential resolution from slipping in before the real adapter (29.3) exists.
+    Sprint 25.9 shipped an all-``False`` stub (no execution claim at all). Sprint
+    29.3 relaxes the invariant: ``supports_live_execution``,
+    ``supports_remote_execution``, and ``supports_production_execution`` can
+    never be ``True`` (see ``_FORBIDDEN_TRUE_FLAGS``), but the local-Docker flags
+    (``supports_driver_execution``, ``supports_network_execution``,
+    ``supports_read_only_queries``, ``supports_local_docker_execution``,
+    ``supports_oracle_execution``) are free booleans. This keeps live/remote/
+    production Oracle access from ever being claimed while allowing a real,
+    read-only, local-Docker-only Oracle adapter to exist (see
+    ``default_local_docker_capability``).
     """
     version: str
     dialect: str
@@ -97,14 +116,13 @@ class SQLOracleAdapterCapability:
             raise SQLOracleAdapterContractError(f"Dialect must be oracle: {self.dialect}")
 
         for name in _CAPABILITY_FLAGS:
-            value = getattr(self, name)
-            if not isinstance(value, bool):
+            if not isinstance(getattr(self, name), bool):
                 raise SQLOracleAdapterContractError(f"{name} must be a boolean")
-            # Boundaries that can never be crossed in Sprint 25.9 (pure stub).
-            if value is not False:
+        for name in _FORBIDDEN_TRUE_FLAGS:
+            if getattr(self, name) is not False:
                 raise SQLOracleAdapterContractError(
-                    f"Oracle adapter contract stub cannot enable {name}; "
-                    "real Oracle execution arrives in Phase 10 (29.3)"
+                    f"Oracle adapter cannot enable {name}; "
+                    "live/remote/production execution is never allowed"
                 )
 
 
@@ -122,6 +140,47 @@ def default_oracle_stub_capability() -> SQLOracleAdapterCapability:
         supports_production_execution=False,
         supports_oracle_execution=False,
     )
+
+
+def default_local_docker_capability() -> SQLOracleAdapterCapability:
+    """Capability for the real local-Docker read-only Oracle adapter (29.3)."""
+    return SQLOracleAdapterCapability(
+        version=SQL_ORACLE_ADAPTER_CONTRACT_VERSION,
+        dialect="oracle",
+        supports_live_execution=False,
+        supports_driver_execution=True,
+        supports_network_execution=True,
+        supports_read_only_queries=True,
+        supports_local_docker_execution=True,
+        supports_remote_execution=False,
+        supports_production_execution=False,
+        supports_oracle_execution=True,
+    )
+
+
+@dataclass(frozen=True)
+class SQLOracleLocalDockerConnection:
+    """The ONLY way to supply a live Oracle connection (local Docker only)."""
+    host: str
+    port: int
+    service_name: str
+    user: str
+    password: str = ""
+    environment: str = "local_docker"
+
+    def __post_init__(self):
+        if self.environment != "local_docker":
+            raise SQLOracleAdapterContractError("environment must be local_docker")
+        if self.host not in _LOCAL_DOCKER_HOSTS:
+            raise SQLOracleAdapterContractError("host must be a local Docker host")
+        if not isinstance(self.port, int) or isinstance(self.port, bool) or not (1 <= self.port <= 65535):
+            raise SQLOracleAdapterContractError("port must be an int in 1..65535")
+        if not self.service_name or not isinstance(self.service_name, str) or not self.service_name.strip():
+            raise SQLOracleAdapterContractError("service_name cannot be empty")
+        if not self.user or not isinstance(self.user, str) or not self.user.strip():
+            raise SQLOracleAdapterContractError("user cannot be empty")
+        if not isinstance(self.password, str):
+            raise SQLOracleAdapterContractError("password must be a string")
 
 
 @dataclass(frozen=True)
@@ -177,6 +236,7 @@ class SQLOracleAdapterExecutionResult:
     error: Optional[str] = None
     warnings: Tuple[str, ...] = field(default_factory=tuple)
     duration_ms: float = 0.0
+    columns: Tuple[str, ...] = ()
 
     def __post_init__(self):
         if self.version != SQL_ORACLE_ADAPTER_CONTRACT_VERSION:
@@ -212,6 +272,12 @@ class SQLOracleAdapterExecutionResult:
         if not isinstance(self.duration_ms, (int, float)) or isinstance(self.duration_ms, bool) or self.duration_ms < 0:
             raise SQLOracleAdapterContractError("duration_ms must be a non-negative number")
 
+        if not isinstance(self.columns, tuple):
+            raise SQLOracleAdapterContractError("columns must be a tuple")
+        for c in self.columns:
+            if not isinstance(c, str):
+                raise SQLOracleAdapterContractError("all columns must be strings")
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "version": self.version,
@@ -224,6 +290,7 @@ class SQLOracleAdapterExecutionResult:
             "error": self.error,
             "warnings": list(self.warnings),
             "duration_ms": self.duration_ms,
+            "columns": list(self.columns),
         }
 
 
