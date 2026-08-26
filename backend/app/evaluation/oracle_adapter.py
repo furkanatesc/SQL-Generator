@@ -1,31 +1,44 @@
-"""Sprint 25.9 — Oracle Adapter Contract Stub.
+"""Sprint 25.9 / 29.3 — Oracle Adapter Contract + Local-Docker Read-Only Execution.
 
-Maturity: MVP / early beta. NOT production-ready. This sprint does NOT implement
-real Oracle execution; it only locks the *contract* a real Oracle adapter must
-obey later (the production implementation lands in Phase 10 — 29.3 adapter,
-29.4 Docker/test-harness strategy).
+Maturity: MVP / early beta. NOT production-ready. This module locks the
+*contract* a real Oracle adapter must obey, and (as of 29.3) also runs real,
+read-only Oracle queries — but only against a local Docker instance the caller
+explicitly supplies.
 
-Why Oracle stays a pure stub while PostgreSQL (25.8) already runs local-Docker
-read-only queries: Oracle is higher risk. Different driver/licensing, separate
-Docker/test-harness strategy, riskier DSN/TNS/wallet connection formats, and
-enterprise Oracle environments that sit much closer to production. So 25.9 makes
-*no* real-execution claim.
+Two execution paths, selected purely by whether a connection is supplied:
+
+* No connection supplied (``SQLOracleAdapterContract()``) -> the adapter stays
+  fully inert: no driver import, no network access, deterministic
+  ``NOT_IMPLEMENTED`` for any otherwise-safe request (unsafe input is still
+  deterministic ``REJECTED`` without touching a connection at all).
+* A ``SQLOracleLocalDockerConnection`` supplied -> the adapter runs a real,
+  read-only ``oracledb`` (python-oracledb, thin mode) ``SELECT`` against that
+  local Docker instance: it opens the connection, sets
+  ``SET TRANSACTION READ ONLY``, applies ``conn.call_timeout``, executes the
+  (already read-only-gated) SQL, fetches at most ``max_rows + 1`` rows to
+  detect truncation, rolls back, and always closes the connection.
 
 Hard boundaries enforced here (and locked by tests):
 
-* Every execution capability flag is forced ``False`` — no live, driver, network,
-  read-only, local-docker, remote, production, or Oracle execution is claimed.
-* No Oracle driver (``cx_Oracle`` / ``oracledb``), no SQLAlchemy engine, no JDBC.
-* No network / socket access, no DSN / TNS / wallet parsing.
-* No environment-variable or secret-manager credential resolution.
+* Live, remote, and production Oracle execution can never be claimed by any
+  capability (``supports_live_execution`` / ``supports_remote_execution`` /
+  ``supports_production_execution`` are always ``False``); only a local Docker
+  host (``localhost`` / ``127.0.0.1`` / ``::1``) may ever be connected to.
+* The ``oracledb`` driver is imported lazily, only inside the execution path,
+  so importing this module never loads a DB driver, SQLAlchemy, or JDBC.
+* No environment-variable or secret-manager credential resolution; connection
+  credentials must be passed in explicitly via ``SQLOracleLocalDockerConnection``.
 * Results carry only ``sql_sha256`` — never raw SQL, connection refs, DSNs, or
-  credentials.
-* The default path is deterministic ``NOT_IMPLEMENTED``; unsafe input is
-  deterministic ``REJECTED``.
+  credentials — plus (on success) column names and JSON-safe scalar rows, and
+  (on failure) a sanitized, credential-free error message.
+* Unsafe input (non-``SELECT`` / multi-statement / write / DDL / PL-SQL) is
+  deterministic ``REJECTED`` before any driver or network access, regardless
+  of whether a connection is configured.
 """
 
 import hashlib
 import re
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
@@ -319,25 +332,69 @@ def validate_read_only_select(sql: str) -> Optional[str]:
     return result.reason
 
 
-class SQLOracleAdapterContract:
-    """Oracle adapter contract stub.
+def _normalize_value(value: Any) -> Any:
+    if isinstance(value, _JSON_SAFE_TYPES):
+        return value
+    return str(value)
 
-    This adapter NEVER executes a query and has no connection path at all (no
-    DSN, no wallet, no driver). It exists to lock the security / capability /
-    result / rejection contract before any real Oracle connectivity (29.3) is
-    built, so the orchestrator's default path can never gain Oracle execution.
+
+def _normalize_row(row: Any) -> Tuple[Any, ...]:
+    return tuple(_normalize_value(v) for v in row)
+
+
+_TIMEOUT_CODE_PREFIXES = ("DPY-4024", "DPY-4011", "ORA-01013")
+
+
+def _sanitize_oracle_error(exc: Exception) -> str:
+    """Credential-free, deterministic message. Timeouts get a distinct message."""
+    full_code = ""
+    try:
+        err = exc.args[0]
+        full_code = getattr(err, "full_code", "") or ""
+    except (IndexError, AttributeError):
+        full_code = ""
+    if any(full_code.startswith(p) for p in _TIMEOUT_CODE_PREFIXES):
+        return "Oracle execution timed out (call_timeout exceeded)."
+    return f"Oracle execution failed ({type(exc).__name__})."
+
+
+class SQLOracleAdapterContract:
+    """Oracle adapter contract: inert by default, real local-Docker execution
+    when a connection is supplied.
+
+    With no connection, this adapter NEVER executes a query and has no
+    connection path at all (no DSN, no wallet, no driver import). With a
+    ``SQLOracleLocalDockerConnection``, it runs a real, read-only ``oracledb``
+    ``SELECT`` against that local Docker instance.
 
     Behavior:
 
     * Unsafe input (non-``SELECT`` / multi-statement / write / DDL / PL-SQL) ->
-      deterministic :attr:`SQLOracleAdapterStatus.REJECTED`.
-    * Any other request -> deterministic :attr:`SQLOracleAdapterStatus.NOT_IMPLEMENTED`.
+      deterministic :attr:`SQLOracleAdapterStatus.REJECTED`, regardless of
+      whether a connection is configured.
+    * Safe input, no connection configured ->
+      deterministic :attr:`SQLOracleAdapterStatus.NOT_IMPLEMENTED`.
+    * Safe input, connection configured -> real execution ->
+      :attr:`SQLOracleAdapterStatus.EXECUTED` or, on driver/timeout failure,
+      :attr:`SQLOracleAdapterStatus.EXECUTION_ERROR` with a sanitized message.
     """
 
-    def __init__(self, capability: Optional[SQLOracleAdapterCapability] = None):
+    def __init__(
+        self,
+        capability: Optional[SQLOracleAdapterCapability] = None,
+        connection: Optional[SQLOracleLocalDockerConnection] = None,
+    ):
         if capability is not None and not isinstance(capability, SQLOracleAdapterCapability):
             raise SQLOracleAdapterContractError("capability must be a SQLOracleAdapterCapability")
-        self._capability = capability or default_oracle_stub_capability()
+        if connection is not None and not isinstance(connection, SQLOracleLocalDockerConnection):
+            raise SQLOracleAdapterContractError("connection must be a SQLOracleLocalDockerConnection")
+        if capability is not None:
+            self._capability = capability
+        elif connection is not None:
+            self._capability = default_local_docker_capability()
+        else:
+            self._capability = default_oracle_stub_capability()
+        self._connection = connection
 
     @property
     def capability(self) -> SQLOracleAdapterCapability:
@@ -350,16 +407,75 @@ class SQLOracleAdapterContract:
         sql_hash = hashlib.sha256(request.sql.encode("utf-8")).hexdigest()
 
         # Lock the rejection contract: unsafe input is rejected deterministically,
-        # without any connection / driver / network access.
+        # without any connection / driver / network access — regardless of
+        # whether a connection is configured at all.
         reason = validate_read_only_select(request.sql)
         if reason is not None:
             return self._result(request, sql_hash, SQLOracleAdapterStatus.REJECTED, error=reason)
 
-        # No real Oracle execution exists in this sprint -> inert NOT_IMPLEMENTED.
-        return self._result(
-            request, sql_hash, SQLOracleAdapterStatus.NOT_IMPLEMENTED,
-            error="Oracle execution is not implemented under this contract version.",
-        )
+        if self._connection is None:
+            return self._result(
+                request, sql_hash, SQLOracleAdapterStatus.NOT_IMPLEMENTED,
+                error="No local Docker Oracle connection configured; execution is disabled.",
+            )
+
+        return self._execute_select(request, sql_hash)
+
+    def _execute_select(
+        self, request: SQLOracleAdapterExecutionRequest, sql_hash: str
+    ) -> SQLOracleAdapterExecutionResult:
+        try:
+            import oracledb  # noqa: WPS433 - runtime-only import is intentional
+        except ImportError:
+            return self._result(
+                request, sql_hash, SQLOracleAdapterStatus.EXECUTION_ERROR,
+                error="Oracle driver (oracledb) is not available.",
+            )
+
+        conn_info = self._connection
+        config = request.config
+        max_rows = config.max_rows
+        call_timeout_ms = max(1, int(config.timeout_seconds * 1000))
+
+        started = time.monotonic()
+        conn = None
+        try:
+            conn = oracledb.connect(
+                user=conn_info.user,
+                password=conn_info.password,
+                dsn=f"{conn_info.host}:{conn_info.port}/{conn_info.service_name}",
+            )
+            conn.autocommit = False
+            conn.call_timeout = call_timeout_ms
+            with conn.cursor() as cur:
+                cur.execute("SET TRANSACTION READ ONLY")
+                cur.execute(request.sql)
+                fetched = cur.fetchmany(max_rows + 1)
+                description = cur.description
+            conn.rollback()
+
+            columns = tuple(d[0] for d in description) if description else ()
+            truncated = len(fetched) > max_rows
+            rows = tuple(_normalize_row(r) for r in fetched[:max_rows])
+            duration_ms = (time.monotonic() - started) * 1000.0
+            warnings = ("result truncated to max_rows",) if truncated else ()
+            return self._result(
+                request, sql_hash, SQLOracleAdapterStatus.EXECUTED,
+                rows=rows, row_count=len(rows), truncated=truncated,
+                columns=columns, warnings=warnings, duration_ms=duration_ms,
+            )
+        except Exception as exc:  # noqa: BLE001 - must never leak connection details
+            duration_ms = (time.monotonic() - started) * 1000.0
+            return self._result(
+                request, sql_hash, SQLOracleAdapterStatus.EXECUTION_ERROR,
+                error=_sanitize_oracle_error(exc), duration_ms=duration_ms,
+            )
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:  # noqa: BLE001
+                    pass
 
     def _result(
         self,
@@ -367,18 +483,24 @@ class SQLOracleAdapterContract:
         sql_hash: str,
         status: SQLOracleAdapterStatus,
         *,
+        rows: Tuple[Tuple[Any, ...], ...] = (),
+        row_count: int = 0,
+        truncated: bool = False,
+        columns: Tuple[str, ...] = (),
         error: Optional[str] = None,
         warnings: Tuple[str, ...] = (),
+        duration_ms: float = 0.0,
     ) -> SQLOracleAdapterExecutionResult:
         return SQLOracleAdapterExecutionResult(
             version=SQL_ORACLE_ADAPTER_CONTRACT_VERSION,
             case_id=request.case_id,
             status=status,
             sql_sha256=sql_hash,
-            rows=(),
-            row_count=0,
-            truncated=False,
+            rows=rows,
+            row_count=row_count,
+            truncated=truncated,
+            columns=tuple(columns),
             error=error,
             warnings=tuple(warnings),
-            duration_ms=0.0,
+            duration_ms=duration_ms,
         )

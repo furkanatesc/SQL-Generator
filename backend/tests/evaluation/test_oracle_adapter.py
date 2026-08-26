@@ -313,3 +313,177 @@ def test_status_has_executed_and_execution_error():
     from app.evaluation.oracle_adapter import SQLOracleAdapterStatus
     assert SQLOracleAdapterStatus.EXECUTED.value == "executed"
     assert SQLOracleAdapterStatus.EXECUTION_ERROR.value == "execution_error"
+
+
+def _install_fake_oracledb(monkeypatch, captured, rows, description, raise_exc=None):
+    import sys, types
+
+    class _FakeCursor:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def execute(self, sql):
+            captured.append(sql)
+            if raise_exc is not None and sql != "SET TRANSACTION READ ONLY":
+                raise raise_exc
+        def fetchmany(self, n):
+            return list(rows)[:n]
+        @property
+        def description(self):
+            return description
+
+    class _FakeConn:
+        def __init__(self):
+            self.autocommit = None
+            self.call_timeout = None
+            self.rolled_back = False
+            self.closed = False
+        def cursor(self):
+            return _FakeCursor()
+        def rollback(self):
+            self.rolled_back = True
+        def close(self):
+            self.closed = True
+
+    holder = {}
+    def _connect(**kw):
+        holder["conn"] = _FakeConn()
+        holder["connect_kwargs"] = kw
+        return holder["conn"]
+
+    fake = types.ModuleType("oracledb")
+    fake.connect = _connect
+    monkeypatch.setitem(sys.modules, "oracledb", fake)
+    return holder
+
+
+def _oracle_local_conn():
+    from app.evaluation.oracle_adapter import SQLOracleLocalDockerConnection
+    return SQLOracleLocalDockerConnection(
+        host="localhost", port=1521, service_name="FREEPDB1", user="u", password="p"
+    )
+
+
+def _read_only_request(sql, timeout=2.0, max_rows=1000):
+    from app.evaluation.oracle_adapter import (
+        SQLOracleAdapterConfig, SQLOracleAdapterExecutionRequest,
+    )
+    return SQLOracleAdapterExecutionRequest(
+        case_id="c1", sql=sql, dialect="oracle",
+        config=SQLOracleAdapterConfig(timeout_seconds=timeout, max_rows=max_rows),
+    )
+
+
+def test_execute_read_only_sets_transaction_read_only_then_runs_sql(monkeypatch):
+    from app.evaluation.oracle_adapter import (
+        SQLOracleAdapterContract, SQLOracleAdapterStatus,
+    )
+    captured = []
+    holder = _install_fake_oracledb(
+        monkeypatch, captured,
+        rows=[(1,)], description=[("N", None, None, None, None, None, None)],
+    )
+    res = SQLOracleAdapterContract(connection=_oracle_local_conn()).execute(
+        _read_only_request("SELECT 1 AS n FROM DUAL")
+    )
+    assert captured == ["SET TRANSACTION READ ONLY", "SELECT 1 AS n FROM DUAL"]
+    assert res.status == SQLOracleAdapterStatus.EXECUTED
+    assert res.columns == ("N",)
+    assert res.rows == ((1,),)
+    assert holder["conn"].autocommit is False
+    assert holder["conn"].call_timeout == 2000
+    assert holder["conn"].rolled_back is True
+    assert holder["conn"].closed is True
+
+
+def test_execute_truncates_to_max_rows(monkeypatch):
+    from app.evaluation.oracle_adapter import (
+        SQLOracleAdapterContract, SQLOracleAdapterStatus,
+    )
+    captured = []
+    _install_fake_oracledb(
+        monkeypatch, captured,
+        rows=[(1,), (2,), (3,)], description=[("LVL", None, None, None, None, None, None)],
+    )
+    res = SQLOracleAdapterContract(connection=_oracle_local_conn()).execute(
+        _read_only_request("SELECT LEVEL AS lvl FROM DUAL CONNECT BY LEVEL <= 3", max_rows=2)
+    )
+    assert res.status == SQLOracleAdapterStatus.EXECUTED
+    assert res.truncated is True
+    assert res.row_count == 2
+    assert "result truncated to max_rows" in res.warnings
+
+
+def test_execute_driver_error_returns_execution_error(monkeypatch):
+    from app.evaluation.oracle_adapter import (
+        SQLOracleAdapterContract, SQLOracleAdapterStatus,
+    )
+    captured = []
+    boom = RuntimeError("ORA-00942: table or view does not exist; user=secret")
+    _install_fake_oracledb(
+        monkeypatch, captured, rows=[], description=None, raise_exc=boom,
+    )
+    res = SQLOracleAdapterContract(connection=_oracle_local_conn()).execute(
+        _read_only_request("SELECT * FROM missing")
+    )
+    assert res.status == SQLOracleAdapterStatus.EXECUTION_ERROR
+    assert "secret" not in (res.error or "")
+    assert "ORA-00942" not in (res.error or "")
+
+
+def test_execute_timeout_error_maps_to_timeout_message(monkeypatch):
+    from app.evaluation.oracle_adapter import (
+        SQLOracleAdapterContract, SQLOracleAdapterStatus,
+    )
+    class _Err:
+        full_code = "DPY-4024"
+    class _Timeout(Exception):
+        def __init__(self):
+            super().__init__("DPY-4024: call timeout of 50 ms exceeded")
+            self.args = (_Err(),)
+    captured = []
+    _install_fake_oracledb(monkeypatch, captured, rows=[], description=None, raise_exc=_Timeout())
+    res = SQLOracleAdapterContract(connection=_oracle_local_conn()).execute(
+        _read_only_request("SELECT 1 FROM DUAL", timeout=0.05)
+    )
+    assert res.status == SQLOracleAdapterStatus.EXECUTION_ERROR
+    assert "timed out" in (res.error or "").lower()
+
+
+def test_execute_rejects_write_before_touching_driver(monkeypatch):
+    from app.evaluation.oracle_adapter import (
+        SQLOracleAdapterContract, SQLOracleAdapterStatus,
+    )
+    captured = []
+    _install_fake_oracledb(monkeypatch, captured, rows=[], description=None)
+    res = SQLOracleAdapterContract(connection=_oracle_local_conn()).execute(
+        _read_only_request("DELETE FROM customers")
+    )
+    assert res.status == SQLOracleAdapterStatus.REJECTED
+    assert captured == []  # never reached the driver
+
+
+def test_execute_no_connection_is_inert_not_implemented():
+    from app.evaluation.oracle_adapter import (
+        SQLOracleAdapterContract, SQLOracleAdapterStatus,
+    )
+    res = SQLOracleAdapterContract().execute(_read_only_request("SELECT 1 FROM DUAL"))
+    assert res.status == SQLOracleAdapterStatus.NOT_IMPLEMENTED
+
+
+def test_oracle_adapter_import_does_not_load_db_drivers():
+    import os, subprocess, sys
+    import app.evaluation
+    eval_dir = os.path.dirname(app.evaluation.__file__)
+    code = (
+        "import sys\n"
+        f"sys.path.insert(0, {repr(eval_dir)})\n"
+        "import oracle_adapter\n"
+        "forbidden = ['oracledb', 'cx_Oracle', 'sqlalchemy']\n"
+        "for mod in forbidden:\n"
+        "    if mod in sys.modules:\n"
+        "        print(f'FORBIDDEN:{mod}')\n"
+    )
+    res = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert "FORBIDDEN" not in res.stdout, res.stdout
