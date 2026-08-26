@@ -673,6 +673,35 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   **network-client** isolation testi (yalnız DB-driver isolation edildi —
   `app.evaluation.__init__`'in eager re-export'u `schema_contract →
   pydantic`'i çeker, benign `asyncio`/`socket` yükler). (PR #162)
+- **PostgreSQL EXPLAIN-Only Mode** (Sprint 29.2 · Phase 10): 29.1'in yalnız
+  `READ_ONLY` kabul edip `EXPLAIN_ONLY`'yi reddettiği yerden devam edip,
+  PostgreSQL için **gerçek EXPLAIN(-only) execution path'ini** ekleyen sprint —
+  hâlâ **yalnızca local Docker**, hâlâ production pipeline'a wire edilmemiş
+  (standalone/inert). İki katman: **Katman 1** (`postgres_adapter.py`)
+  `execution_mode="explain_only"` iken doğrulanmış iç SELECT'in önüne
+  `EXPLAIN <sql>` (opt-in `EXPLAIN (ANALYZE) <sql>`) ekleyip koşar; yeni
+  `SQLPostgresAdapterConfig.explain_analyze: bool = False` (default güvenli düz
+  EXPLAIN, sessiz side-effect yok) + saf `_build_explain_sql` helper'ı. 25.8'in
+  read-only gate'i (26.2) **iç SELECT üzerinde değişmedi** — EXPLAIN yalnız
+  doğrulanmış SELECT'in önüne eklenir; `sql_sha256` **her zaman orijinal**
+  SQL'den hesaplanır. **Katman 2** (`postgres_execution_adapter.py`)
+  `EXPLAIN_ONLY` modunu kabul eder (artık raise etmez), `capabilities()`'e
+  eklenir, `_to_pg_config` shared→25.8 config'i eşler; plan satırları tek-kolonlu
+  `"QUERY PLAN"` dict-row'ları olarak döner (execution kontratı DEĞİŞMEDİ).
+  Shared `SQLDatabaseExecutionConfig.explain_analyze: bool = False` geriye-uyumlu
+  eklendi. Düz EXPLAIN hiç çalıştırmaz; ANALYZE opt-in ve read-only tx +
+  `statement_timeout` writes'ı/runaway'i bloklar. Docker'sız safe-skip gated
+  entegrasyon testleri (CI'da seeded Postgres ile koşar): `EXPLAIN <JOIN>` →
+  `"QUERY PLAN"` satırları (altındaki verinin sızmadığı doğrulanır),
+  `EXPLAIN (ANALYZE)` → plan + gerçek-execution satırları (gerçek süreye assert
+  edilmez), `max_rows` truncation, kısa `timeout` → `execution_error`.
+  **Production pipeline'ına HİÇ WIRE EDİLMEDİ.** **Bilinçli kapsam dışı**
+  (TECH-DEBT §20, sessiz düşürme yok): canlı HTTP pipeline wiring (→ 30.2/30.4),
+  `EXPLAIN (FORMAT JSON)` yapılandırılmış plan + plan-tabanlı maliyet gate
+  (→ ileri sprint), connection registry/uzak & production connection (→ 30.2),
+  Oracle/MySQL/SQL Server EXPLAIN path'leri (→ 29.3–29.6), merkezî/canlı
+  execution router registry (→ 30.x), execution trace/audit persistence (→ 30.4).
+  (PR #163)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
