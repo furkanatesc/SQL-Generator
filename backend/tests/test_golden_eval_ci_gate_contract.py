@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from app.eval.run_eval import main
 from evals.eval_gate import evaluate_release_gate
@@ -62,6 +63,13 @@ def test_backend_ci_golden_gate_does_not_use_secrets_or_network_env():
         if "Run golden eval profile" in line:
             golden_steps_started = True
         if golden_steps_started:
+            # Stop at the start of the next top-level job (a 2-space-indented
+            # `<job>:` key) so the scan stays within the backend-tests job.
+            # Without this bound the scan runs to EOF and bleeds into sibling
+            # jobs (e.g. oracle-integration) whose own env: blocks are unrelated
+            # to the golden gate's hermeticity.
+            if golden_steps_lines and re.match(r"^  [A-Za-z0-9_-]+:\s*$", line):
+                break
             golden_steps_lines.append(line)
 
     golden_block = "\n".join(golden_steps_lines)
