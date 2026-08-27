@@ -758,12 +758,12 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   ÇÖZÜLDÜ. **Bilinçli kapsam dışı** (TECH-DEBT §21'in kalan kalemleri):
   Oracle schema introspection (§21.2), Oracle EXPLAIN-only (§21.3), connection
   registry/uzak & production/wallet/TNS (§21.5 → 30.2), canlı pipeline wiring
-  (§21.6 → 30.x), thick mode (§21.7). Full suite 2689 passed/31 skipped
-  (skip +3 vs 29.3'ün 28'i). 29.3'ün 3 execution modülünde diff BOŞ. **Bilinen
-  sorun (29.4'ün kendi bug'ı, merge öncesi çözülmeli — TECH-DEBT §22):**
-  `test_backend_ci_golden_gate_does_not_use_secrets_or_network_env` yeni
-  `oracle-integration` job'ının `env:` bloklarını da tarayıp FAIL veriyor (full
-  suite: 2689 passed/**1 failed**/31 skipped). (PR #TBD)
+  (§21.6 → 30.x), thick mode (§21.7). 29.3'ün 3 execution modülünde diff BOŞ.
+  CI golden-gate kontrat testi (`test_backend_ci_golden_gate_does_not_use_secrets_or_network_env`)
+  yeni `oracle-integration` job'ının `env:` bloklarına bulaşıp yanlış-pozitif
+  FAIL veriyordu — tarama sınırı `backend-tests` job'una scope'landı (bir
+  sonraki üst-seviye job header'ında durur), bkz. TECH-DEBT §22 ÇÖZÜLDÜ. Full
+  suite: 2690 passed/31 skipped (skip +3 vs 29.3'ün 28'i). (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
