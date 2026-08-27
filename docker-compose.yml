@@ -16,3 +16,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Sprint 29.4 — local Oracle parity with CI (backend-ci.yml oracle-integration job).
+  # Usage: docker compose up -d oracle  ->  cd backend && pytest -m oracle
+  # Re-seeding: the seed applies once on a fresh volume; `docker compose down -v` to reset.
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    environment:
+      ORACLE_PASSWORD: sqlgen
+      APP_USER: sqlgen
+      APP_USER_PASSWORD: sqlgen
+    ports:
+      - "1521:1521"
+    volumes:
+      - ./backend/tests/fixtures/oracle/seed.sql:/container-entrypoint-initdb.d/seed.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
