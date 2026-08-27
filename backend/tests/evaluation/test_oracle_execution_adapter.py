@@ -103,3 +103,54 @@ def test_execution_adapter_import_does_not_load_db_drivers():
     # NOT ported here — the eval package's eager re-exports pull pydantic, which
     # incidentally references asyncio/socket (no real I/O), a known false positive
     # documented for the PostgreSQL execution adapter.
+
+
+def test_execute_with_resolved_connection_delegates_to_low_level(monkeypatch):
+    # §21.4 — exercise the resolver-non-None branch end to end without Docker,
+    # by injecting a fake oracledb driver + a resolver that returns a real
+    # local-Docker connection object.
+    import sys, types
+    from app.evaluation.oracle_adapter import SQLOracleLocalDockerConnection
+
+    captured = []
+
+    class _FakeCursor:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def execute(self, sql):
+            captured.append(sql)
+        def fetchmany(self, n):
+            return [(1, "x")][:n]
+        @property
+        def description(self):
+            return [("A", None, None, None, None, None, None),
+                    ("B", None, None, None, None, None, None)]
+
+    class _FakeConn:
+        def __init__(self):
+            self.autocommit = None
+            self.call_timeout = None
+        def cursor(self):
+            return _FakeCursor()
+        def rollback(self):
+            pass
+        def close(self):
+            pass
+
+    fake = types.ModuleType("oracledb")
+    fake.connect = lambda **kw: _FakeConn()
+    monkeypatch.setitem(sys.modules, "oracledb", fake)
+
+    conn = SQLOracleLocalDockerConnection(
+        host="localhost", port=1521, service_name="FREEPDB1", user="u", password="p",
+    )
+    adapter = OracleDatabaseExecutionAdapter(connection_resolver=lambda: conn)
+    res = adapter.execute(_request("SELECT a, b FROM t"))
+
+    assert res.execution_error is None
+    assert res.rows == ({"A": 1, "B": "x"},)
+    assert res.row_count == 1
+    assert captured[0] == "SET TRANSACTION READ ONLY"
+    assert "SELECT a, b FROM t" in captured
