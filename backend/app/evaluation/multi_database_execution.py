@@ -22,6 +22,7 @@ class SQLDatabaseDialect(str, Enum):
     SQLITE = "sqlite"
     POSTGRESQL = "postgresql"
     ORACLE = "oracle"
+    MYSQL = "mysql"
 
 
 class SQLExecutionMode(str, Enum):
