@@ -142,6 +142,18 @@ from .oracle_adapter import (
     SQLOracleAdapterContract,
     default_oracle_stub_capability,
 )
+from .mysql_adapter import (
+    SQL_MYSQL_ADAPTER_CONTRACT_VERSION,
+    SQLMySQLAdapterContractError,
+    SQLMySQLAdapterStatus,
+    SQLMySQLAdapterCapability,
+    SQLMySQLLocalDockerConnection,
+    SQLMySQLAdapterConfig,
+    SQLMySQLAdapterExecutionRequest,
+    SQLMySQLAdapterExecutionResult,
+    SQLMySQLAdapterContract,
+    default_mysql_stub_capability,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -258,5 +270,15 @@ __all__ = [
     "SQLOracleAdapterExecutionResult",
     "SQLOracleAdapterContract",
     "default_oracle_stub_capability",
+    "SQL_MYSQL_ADAPTER_CONTRACT_VERSION",
+    "SQLMySQLAdapterContractError",
+    "SQLMySQLAdapterStatus",
+    "SQLMySQLAdapterCapability",
+    "SQLMySQLLocalDockerConnection",
+    "SQLMySQLAdapterConfig",
+    "SQLMySQLAdapterExecutionRequest",
+    "SQLMySQLAdapterExecutionResult",
+    "SQLMySQLAdapterContract",
+    "default_mysql_stub_capability",
 ]
 
