@@ -763,7 +763,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   yeni `oracle-integration` job'ının `env:` bloklarına bulaşıp yanlış-pozitif
   FAIL veriyordu — tarama sınırı `backend-tests` job'una scope'landı (bir
   sonraki üst-seviye job header'ında durur), bkz. TECH-DEBT §22 ÇÖZÜLDÜ. Full
-  suite: 2690 passed/31 skipped (skip +3 vs 29.3'ün 28'i). (PR #TBD)
+  suite: 2690 passed/31 skipped (skip +3 vs 29.3'ün 28'i). (PR #165)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
