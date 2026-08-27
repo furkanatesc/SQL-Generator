@@ -1104,27 +1104,31 @@ spec'inde bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
    *İlgili Dosya:* `backend/app/evaluation/oracle_adapter.py`,
    `backend/app/evaluation/oracle_execution_adapter.py`
 
-## §22. Sprint 29.4 (Oracle Docker/Test Harness) devri — AÇIK
+## §22. Sprint 29.4 (Oracle Docker/Test Harness) devri — ÇÖZÜLDÜ (29.4)
 
 Bu bölüm §21'in kalan (değişmeyen) kalemlerini TEKRARLAMAZ — bkz. §21 (#2/#3/
-#5/#6/#7/#8, hâlâ açık). Yalnız 29.4'ün KENDİ verifikasyonunda ortaya çıkan yeni,
-merge öncesi çözülmesi gereken bir regresyonu kaydeder (sessiz düşürme yok).
+#5/#6/#7/#8, hâlâ açık). Yalnız 29.4'ün KENDİ verifikasyonunda ortaya çıkan ve
+aynı sprint içinde çözülen bir regresyonu kaydeder (arşiv amaçlı — çözülmüş
+tuzaklar aranabilir kalsın).
 
-1. **CI golden-gate kontrat testi yeni `oracle-integration` job'ı yüzünden FAIL
-   veriyor.** `tests/test_golden_eval_ci_gate_contract.py::
+1. **[ÇÖZÜLDÜ] CI golden-gate kontrat testi yeni `oracle-integration` job'ı
+   yüzünden FAIL veriyordu.** `tests/test_golden_eval_ci_gate_contract.py::
    test_backend_ci_golden_gate_does_not_use_secrets_or_network_env`,
    `.github/workflows/backend-ci.yml` içeriğini "Run golden eval profile"
    satırından **dosya sonuna kadar** tarayıp bu blokta `env:`/`secrets`
-   olmadığını doğruluyor — testin tarama sınırı tek bir job'a/step'e scope'lu
-   DEĞİL. 29.4'ün yeni `oracle-integration` job'ı bu satırdan SONRA eklendiği ve
-   kendi (gerçek secret içermeyen, yalnız Oracle local-Docker bağlantı ayarları
-   olan) `env:` bloklarını taşıdığı için test artık yanlış-pozitif FAIL veriyor.
-   Full suite bu yüzden 2689 passed/**1 failed**/31 skipped dönüyor (29.3'ün
-   temiz 2682 passed/28 skipped'inden regresyon). **Whole-branch review'da
-   (Adım 5) düzeltilmeli** — olası çözümler: (a) `oracle-integration` job'ını
-   dosyada golden-eval step'inden ÖNCEye taşımak, (b) testin tarama sınırını
-   "Run golden eval profile" ile bir sonraki üst-seviye `  <job-name>:` satırı
-   arasına daraltmak. Kod DEĞİŞMEDİ (yalnız test/CI-dosyası etkileşimi) — 29.3'ün
-   execution modülleri bu regresyona dahil değil.
+   olmadığını doğruluyordu — testin tarama sınırı tek bir job'a/step'e scope'lu
+   DEĞİLDİ. 29.4'ün yeni `oracle-integration` job'ı bu satırdan SONRA eklendiği
+   ve kendi (gerçek secret içermeyen, yalnız Oracle local-Docker bağlantı
+   ayarları olan) `env:` bloklarını taşıdığı için test yanlış-pozitif FAIL
+   veriyordu. Full suite bu yüzden 2689 passed/**1 failed**/31 skipped
+   dönüyordu (29.3'ün temiz 2682 passed/28 skipped'inden regresyon).
+   **Çözüm:** testin tarama sınırı, "Run golden eval profile" satırından bir
+   sonraki üst-seviye `  <job-name>:` anahtarına (2-boşluklu girinti) kadar
+   daraltıldı — böylece tarama `backend-tests` job'ının dışına taşmıyor, golden
+   step'lerin hermetik olduğu garantisi korunuyor ve yeni `oracle-integration`
+   job'ının kendi `env:` blokları taramaya dahil edilmiyor. `oracle-integration`
+   job'ı yeniden sıralanmadı, hiçbir assertion gevşetilmedi. Kod DEĞİŞMEDİ
+   (yalnız test/CI-dosyası etkileşimi) — 29.3'ün execution modülleri bu
+   regresyona dahil değildi. Full suite artık 2690 passed/31 skipped/0 failed.
    *İlgili Dosya:* `backend/tests/test_golden_eval_ci_gate_contract.py`,
    `.github/workflows/backend-ci.yml`
