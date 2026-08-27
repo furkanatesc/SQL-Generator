@@ -732,6 +732,38 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   schema introspection (Postgres 29.0 dengi → ileriye), Oracle EXPLAIN PLAN (29.2
   dengi → ileriye), canlı pipeline wiring (→ 30.x), connection registry/uzak &
   production connection/wallet/TNS (→ 30.2), thick mode. (PR #164)
+- **Oracle Docker/Test Harness Strategy** (Sprint 29.4 · Phase 10): 29.3'ün
+  Docker'sız her zaman safe-skip eden `oracle`-mark'lı gated entegrasyon
+  testlerine gerçek bir local-Docker imajı + seed şeması + ayrı CI job'ı ekleyen
+  sprint — 29.3'ün üç execution modülüne (`oracle_adapter.py`/
+  `oracle_connection_resolver.py`/`oracle_execution_adapter.py`) **HİÇ
+  DOKUNULMADI** (PostgreSQL 29.0 desenini izler). İmaj `gvenzl/oracle-free:
+  23-slim-faststart` (29.3 resolver varsayılanlarıyla — `FREEPDB1`/1521/
+  `sqlgen` — birebir örtüşür). Yeni `backend/tests/fixtures/oracle/seed.sql`:
+  Oracle dialect (`NUMBER`/`VARCHAR2`/`TO_TIMESTAMP`), 29.0 Postgres seed'inin
+  şeklini birebir yansıtan 5 tablo — `customers`/`orders`/`order_items`
+  (tek-kolon PK/FK) + `product_variants`/`variant_stock` (composite PK/FK),
+  18 statement. Yeni saf `oracle_seed.py`: `split_statements()` +
+  `apply_seed(conn, sql)` + lazy-`oracledb` `main()` (`python -m
+  app.evaluation.oracle_seed` ile CI'dan çağrılır) — bilinçli olarak
+  `app/evaluation/__init__.py`'den re-export edilmedi (yalnız harness/
+  CI-amaçlı). 7 yeni `test_oracle_seed.py` unit testi; `test_oracle_execution_
+  adapter.py`'ye TECH-DEBT §21.4'ü kapatan fake-`oracledb` bridge→low-level
+  unit testi eklendi; yeni `test_oracle_execution_adapter_seeded_integration.py`
+  (3-tablo `JOIN`, composite-FK `JOIN`, `max_rows` truncation — Docker'sız
+  safe-skip). `docker-compose.yml`'e yeni `oracle` servisi (image + seed mount +
+  `healthcheck.sh`). `.github/workflows/backend-ci.yml`'e mevcut
+  `backend-tests`'ten **ayrı, additive** yeni `oracle-integration` job'ı
+  (seed + `pytest -m oracle` artık canlı çalışır). TECH-DEBT §21.1 ve §21.4
+  ÇÖZÜLDÜ. **Bilinçli kapsam dışı** (TECH-DEBT §21'in kalan kalemleri):
+  Oracle schema introspection (§21.2), Oracle EXPLAIN-only (§21.3), connection
+  registry/uzak & production/wallet/TNS (§21.5 → 30.2), canlı pipeline wiring
+  (§21.6 → 30.x), thick mode (§21.7). Full suite 2689 passed/31 skipped
+  (skip +3 vs 29.3'ün 28'i). 29.3'ün 3 execution modülünde diff BOŞ. **Bilinen
+  sorun (29.4'ün kendi bug'ı, merge öncesi çözülmeli — TECH-DEBT §22):**
+  `test_backend_ci_golden_gate_does_not_use_secrets_or_network_env` yeni
+  `oracle-integration` job'ının `env:` bloklarını da tarayıp FAIL veriyor (full
+  suite: 2689 passed/**1 failed**/31 skipped). (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
