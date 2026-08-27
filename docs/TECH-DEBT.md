@@ -1065,13 +1065,13 @@ None), `oracle_execution_adapter.py` (shared-contract köprü, `(CONNECTION_REF,
 READ_ONLY)`, EXPLAIN_ONLY reddi). §19.4/§20 postürü korunur. Aşağıdakiler tasarım
 spec'inde bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
 
-1. **Gerçek Oracle Docker imajı + seed şeması + CI job yok.** 29.3'ün gated
-   `integration`+`oracle`-mark'lı testleri bugün her CI koşusunda safe-skip eder
-   (bare-Oracle `DUAL`/`CONNECT BY LEVEL` sorguları kullanır, seed'e ihtiyaç
-   duymaz). → **29.4 Oracle Docker/Test Harness Strategy** (imaj + seed + CI job;
-   Oracle daha yüksek risk — driver/lisans/imaj boyutu — olduğu için ayrı sprint).
-   *İlgili Dosya:* `backend/tests/evaluation/test_oracle_execution_adapter_integration.py`;
-   gelecekte `docker-compose.yml` Oracle service + `.github/workflows/backend-ci.yml`
+1. **✅ ÇÖZÜLDÜ (29.4).** Gerçek Oracle Docker imajı (`gvenzl/oracle-free:
+   23-slim-faststart`) + seed şeması (`backend/tests/fixtures/oracle/seed.sql`,
+   5 tablo/18 statement) + ayrı `oracle-integration` CI job'ı
+   (`.github/workflows/backend-ci.yml`) eklendi; `oracle`-mark'lı seeded testler
+   artık CI'da canlı koşuyor (bkz. `docs/PLANNED-SPRINTS.md` 29.4 satırı).
+   *İlgili Dosya:* `docker-compose.yml`, `.github/workflows/backend-ci.yml`,
+   `backend/tests/fixtures/oracle/seed.sql`, `backend/app/evaluation/oracle_seed.py`
 2. **Oracle schema introspection adapter yok.** `ALL_TAB_COLUMNS`/`ALL_CONSTRAINTS`/
    `ALL_CONS_COLUMNS` → `DatabaseSchema` (Postgres 29.0 `postgres_schema_adapter.py`
    dengi) çıkarılmadı. → ileri sprint.
@@ -1081,11 +1081,10 @@ spec'inde bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
    eklenmedi. → ileri sprint.
    *İlgili Dosya:* `backend/app/evaluation/oracle_adapter.py`,
    `backend/app/evaluation/oracle_execution_adapter.py`
-4. **Tam bridge→low-level real-execution unit testi yok.** `OracleDatabaseExecution
-   Adapter.execute`'un resolver-non-None dalını (gerçek `SQLOracleAdapterExecution
-   Request` kurup low-level'a delege eden satır) yalnız gated (şimdi hep skip)
-   integration testleri egzersiz eder; fake-`oracledb` + resolver enjekte eden bir
-   unit test bu tam yolu şimdi kilitlerdi. → 29.4 (imaj gelince doğal kapsanır).
+4. **✅ ÇÖZÜLDÜ (29.4).** `tests/evaluation/test_oracle_execution_adapter.py`'ye
+   fake-`oracledb` + enjekte edilmiş resolver kullanan Docker'sız bridge→
+   low-level unit testi eklendi — `OracleDatabaseExecutionAdapter.execute`'un
+   resolver-non-`None` delegasyon yolu artık Docker olmadan da kilitli.
    *İlgili Dosya:* `backend/tests/evaluation/test_oracle_execution_adapter.py`
 5. **Connection registry / uzak & production connection / wallet / TNS yok.**
    Yalnız 29.3 resolver'ın local-Docker connection'ı. → Phase 11 · 30.2.
@@ -1104,3 +1103,28 @@ spec'inde bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
    miras).
    *İlgili Dosya:* `backend/app/evaluation/oracle_adapter.py`,
    `backend/app/evaluation/oracle_execution_adapter.py`
+
+## §22. Sprint 29.4 (Oracle Docker/Test Harness) devri — AÇIK
+
+Bu bölüm §21'in kalan (değişmeyen) kalemlerini TEKRARLAMAZ — bkz. §21 (#2/#3/
+#5/#6/#7/#8, hâlâ açık). Yalnız 29.4'ün KENDİ verifikasyonunda ortaya çıkan yeni,
+merge öncesi çözülmesi gereken bir regresyonu kaydeder (sessiz düşürme yok).
+
+1. **CI golden-gate kontrat testi yeni `oracle-integration` job'ı yüzünden FAIL
+   veriyor.** `tests/test_golden_eval_ci_gate_contract.py::
+   test_backend_ci_golden_gate_does_not_use_secrets_or_network_env`,
+   `.github/workflows/backend-ci.yml` içeriğini "Run golden eval profile"
+   satırından **dosya sonuna kadar** tarayıp bu blokta `env:`/`secrets`
+   olmadığını doğruluyor — testin tarama sınırı tek bir job'a/step'e scope'lu
+   DEĞİL. 29.4'ün yeni `oracle-integration` job'ı bu satırdan SONRA eklendiği ve
+   kendi (gerçek secret içermeyen, yalnız Oracle local-Docker bağlantı ayarları
+   olan) `env:` bloklarını taşıdığı için test artık yanlış-pozitif FAIL veriyor.
+   Full suite bu yüzden 2689 passed/**1 failed**/31 skipped dönüyor (29.3'ün
+   temiz 2682 passed/28 skipped'inden regresyon). **Whole-branch review'da
+   (Adım 5) düzeltilmeli** — olası çözümler: (a) `oracle-integration` job'ını
+   dosyada golden-eval step'inden ÖNCEye taşımak, (b) testin tarama sınırını
+   "Run golden eval profile" ile bir sonraki üst-seviye `  <job-name>:` satırı
+   arasına daraltmak. Kod DEĞİŞMEDİ (yalnız test/CI-dosyası etkileşimi) — 29.3'ün
+   execution modülleri bu regresyona dahil değil.
+   *İlgili Dosya:* `backend/tests/test_golden_eval_ci_gate_contract.py`,
+   `.github/workflows/backend-ci.yml`
