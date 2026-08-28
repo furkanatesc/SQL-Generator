@@ -23,6 +23,7 @@ class SQLDatabaseDialect(str, Enum):
     POSTGRESQL = "postgresql"
     ORACLE = "oracle"
     MYSQL = "mysql"
+    SQLSERVER = "sqlserver"
 
 
 class SQLExecutionMode(str, Enum):
