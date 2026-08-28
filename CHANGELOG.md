@@ -813,6 +813,68 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   wiring/merkezî execution router registry (→ 30.x), connection registry/uzak
   & production connection/TLS (→ Phase 11 · 30.2), C-tabanlı driver'lar
   (`mysqlclient`/`mysql-connector-python`)/thick mode. (PR #166)
+- **SQL Server Adapter Contract** (Sprint 29.6 · Phase 10): MySQL 29.5'in
+  üç-katmanlı desenini SQL Server'a taşıyan sprint; 25.9'un aksine ön-var bir
+  MSSQL stub'ı YOKTU, sıfırdan başladı. `multi_database_execution.py`'ye yeni
+  `SQLDatabaseDialect.SQLSERVER = "sqlserver"` (TEK satır, başka davranış
+  değişikliği yok — `git diff cf7f3bb..HEAD` ile doğrulandı) + `pymssql==2.3.2`
+  pin + `sqlserver` pytest marker. **SQL Server'ın 29.0-29.5'ten temel farkı —
+  read-only bir transaction pre-statement'ı YOK:** diğer üç dialect
+  `SET/START TRANSACTION READ ONLY` ile read-only'yi DB-seviyesinde zorlarken,
+  SQL Server'da read-only **`db_datareader`-only bir login** ile enforce
+  edilir; adapter connection'ı açıp doğrulanmış SQL'i doğrudan çalıştırır,
+  önüne hiçbir pre-statement eklemez. Üç katman (Postgres 29.0→29.1 / Oracle
+  29.3 / MySQL 29.5 desenini izler). **Katman 1** (`mssql_adapter.py`):
+  `SQLMSSQLAdapterContract` — connection yoksa tamamen inert (driver import
+  yok, deterministik `NOT_IMPLEMENTED`; unsafe SQL her koşulda deterministik
+  `REJECTED`), `SQLMSSQLLocalDockerConnection` (host/port/database/user/
+  password, host allowlist) verilince gerçek `pymssql` read-only SELECT
+  path'i: connection **connect anında** `login_timeout`/`timeout` kwarg'larıyla
+  query timeout uygulanır (Oracle'ın `call_timeout`/MySQL'in
+  `max_execution_time`'ına denk, ama connect-kwarg mekanizması) → execute
+  (pre-statement YOK) → `max_rows+1` fetch (truncation tespiti) → her zaman
+  `rollback()` (backstop) + `close()`; secret-free `_sanitize_mssql_error`
+  (pymssql/DB-Library timeout hata kodları 20003/20004 ayrı mesaj). **Katman 2**
+  (yeni `mssql_connection_resolver.py`) `MSSQL_TEST_*` env → connection |
+  `None`, asla connect/raise etmez. **Katman 3** (yeni
+  `mssql_execution_adapter.py`) dialect-agnostic köprü
+  `MSSQLDatabaseExecutionAdapter` — `capabilities() = (CONNECTION_REF,
+  READ_ONLY)`, **EXPLAIN_ONLY reddedilir**, resolver `None` → graceful boş
+  sonuç (raise yok), `col_<i>` fallback + uyarı; Oracle §21.4/MySQL denginin
+  aynısı baştan eklendi (fake-`pymssql` + enjekte resolver, Docker'sız
+  bridge→low-level delegasyon testi). Yeni deterministik
+  `backend/tests/fixtures/mssql/seed.sql`: SQL Server dialect
+  (`NVARCHAR`/`DATETIME2`, **küçük harf** tablo/kolon adları), Postgres/
+  Oracle/MySQL seed'lerinin şeklini birebir yansıtan 5 tablo —
+  `customers`/`orders`/`order_items` (tek-kolon PK/FK) +
+  `product_variants`/`variant_stock` (composite PK/FK), 18 statement. Yeni
+  saf `mssql_seed.py`: `split_statements()` + `apply_seed(conn, sql)`
+  (`mysql_seed.py`'yi birebir yansıtır) + saf, test edilebilir
+  `readonly_login_ddl(login, password, database)` DDL builder'ı +
+  lazy-`pymssql` `main()` — SQL Server diğer üç dialect'ten farklı olarak
+  **ekstra orkestrasyon** gerektirir: seed database'i baştan YOK ve seed'den
+  SONRA ayrı bir `db_datareader`-only login/user çifti provision edilmelidir;
+  `main()` önce `master`'a admin bağlantıyla DB+login'i oluşturur, sonra
+  `sqlgen_test`'e bağlanıp seed'i uygular + user'ı oluşturup `db_datareader`
+  grant eder; container başlangıç gecikmesi için connect-retry döngüsü içerir
+  — bilinçli olarak `app/evaluation/__init__.py`'den re-export edilmedi. Yeni
+  seeded entegrasyon testleri (Docker'sız safe-skip, `sqlserver`-mark'lı):
+  3-tablo `JOIN`, composite-FK `JOIN`, `max_rows` truncation — dict-row
+  anahtarları **küçük harf**. `docker-compose.yml`'e yeni `mssql` servisi
+  (`mcr.microsoft.com/mssql/server:2022-latest`) + `.github/workflows/
+  backend-ci.yml`'e mevcut (değişmeyen) `backend-tests`/`oracle-integration`/
+  `mysql-integration` job'larından **ayrı, additive** yeni
+  `sqlserver-integration` job'ı: MSSQL service container + seed+login
+  provisioning + `pytest -m sqlserver` (canlı çalışır). Full suite: 2760
+  passed/37 skipped (skip +3 vs 29.5'in 34'ü — yeni seeded-integration
+  testleri). **Bilinçli kapsam dışı** (TECH-DEBT §24): SQL Server schema
+  introspection (`INFORMATION_SCHEMA`/`sys.*`; Postgres 29.0 dengi → ileriye),
+  SQL Server EXPLAIN-only/SHOWPLAN (29.2 dengi → ileriye), canlı HTTP pipeline
+  wiring/merkezî execution router registry (→ 30.x), connection registry/uzak
+  & production connection/TLS/Azure AD (→ Phase 11 · 30.2), `pyodbc`/ODBC
+  driver path (yalnız saf-Python `pymssql`). **Bununla Phase 10 (Real
+  Database Adapter Layer) dört dialect'in (Postgres/Oracle/MySQL/SQL Server)
+  tümünde contract-first read-only execution adapter'ına sahip.** (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.

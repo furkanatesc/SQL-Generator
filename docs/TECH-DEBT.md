@@ -1168,3 +1168,43 @@ spec'inde (§1) bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme 
    ertelenir.
    *İlgili Dosya:* `backend/app/evaluation/mysql_adapter.py`,
    `backend/requirements.txt`
+
+## §24. Sprint 29.6 (SQL Server Adapter Contract) devirleri — AÇIK
+
+MySQL 29.5'in üç-katmanlı desenini SQL Server'a taşıyan, gerçek bir
+local-Docker-only, read-only execution path'i (`pymssql`, driver-izole) +
+tam test harness'i (seed şeması + seed applier + `db_datareader`-only login
+provisioning + docker-compose servisi + ayrı canlı CI job'ı) ekleyen sprint —
+standalone/inert (canlı production pipeline'a wire edilmedi). SQL Server'ın
+diğer üç dialect'ten temel farkı: read-only bir transaction pre-statement'ı
+YOK — read-only, `db_datareader`-only bir **login** ile enforce edilir (bkz.
+`mssql_adapter.py` docstring'i). Üç katman: `mssql_adapter.py` (gerçek
+execute; pre-statement yok; connect-kwarg query timeout `login_timeout`/
+`timeout`), `mssql_connection_resolver.py` (env → connection | `None`),
+`mssql_execution_adapter.py` (shared-contract köprü, `(CONNECTION_REF,
+READ_ONLY)`, EXPLAIN_ONLY reddi). Aşağıdakiler tasarım spec'inde (§1)
+bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
+
+1. **SQL Server schema introspection adapter yok.** `INFORMATION_SCHEMA`/
+   `sys.*` → `DatabaseSchema` (Postgres 29.0 `postgres_schema_adapter.py`
+   dengi) çıkarılmadı. → ileri sprint (Postgres 29.0 dengi).
+   *İlgili Dosya:* gelecekte `backend/app/evaluation/mssql_schema_adapter.py`
+2. **SQL Server EXPLAIN-only / SHOWPLAN yok.** Köprü `EXPLAIN_ONLY`'yi
+   reddeder; `SET SHOWPLAN_XML ON` / `SET STATISTICS PROFILE ON` yolu (29.2
+   PostgreSQL EXPLAIN dengi) eklenmedi. → ileri sprint (29.2 dengi).
+   *İlgili Dosya:* `backend/app/evaluation/mssql_adapter.py`,
+   `backend/app/evaluation/mssql_execution_adapter.py`
+3. **Canlı HTTP pipeline wiring yok / merkezî execution router registry
+   yok.** Adapter router'a takılabilir ama canlı bir registry'ye
+   kaydedilmedi; production `/api/jobs` akışına bağlanmadı. → 30.2 / 30.4 /
+   30.x.
+   *İlgili Dosya:* `backend/app/evaluation/multi_database_execution.py`
+4. **Connection registry / uzak & production connection / TLS / Azure AD
+   authentication yok.** Yalnız 29.6 resolver'ın local-Docker connection'ı
+   (`MSSQL_TEST_*` env, SQL Server login/password auth). → Phase 11 · 30.2
+   Connection Registry API.
+   *İlgili Dosya:* Phase 11 · 30.2 (henüz mevcut değil)
+5. **`pyodbc` / ODBC driver path yok.** Yalnız saf-Python `pymssql` (FreeTDS
+   tabanlı, ODBC driver kurulumu gerektirmez). Gerekmedikçe ertelenir.
+   *İlgili Dosya:* `backend/app/evaluation/mssql_adapter.py`,
+   `backend/requirements.txt`
