@@ -1132,3 +1132,39 @@ tuzaklar aranabilir kalsın).
    regresyona dahil değildi. Full suite artık 2690 passed/31 skipped/0 failed.
    *İlgili Dosya:* `backend/tests/test_golden_eval_ci_gate_contract.py`,
    `.github/workflows/backend-ci.yml`
+
+## §23. Sprint 29.5 (MySQL Adapter Contract) devirleri — AÇIK
+
+Oracle 29.3'ün (Contract Adapter) ve 29.4'ün (Docker/Test Harness) ikisini TEK
+sprint'te birleştiren, MySQL için gerçek bir local-Docker-only, read-only
+execution path'i (`pymysql`, driver-izole) + tam test harness'i (seed şeması +
+seed applier + docker-compose servisi + ayrı canlı CI job'ı) ekleyen sprint —
+standalone/inert (canlı production pipeline'a wire edilmedi). Üç katman:
+`mysql_adapter.py` (gerçek execute + `START TRANSACTION READ ONLY` +
+`SET SESSION max_execution_time`), `mysql_connection_resolver.py` (env →
+connection | `None`), `mysql_execution_adapter.py` (shared-contract köprü,
+`(CONNECTION_REF, READ_ONLY)`, EXPLAIN_ONLY reddi). Aşağıdakiler tasarım
+spec'inde (§1) bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
+
+1. **MySQL schema introspection adapter yok.** `information_schema` →
+   `DatabaseSchema` (Postgres 29.0 `postgres_schema_adapter.py` dengi)
+   çıkarılmadı. → ileri sprint (Postgres 29.0 dengi).
+   *İlgili Dosya:* gelecekte `backend/app/evaluation/mysql_schema_adapter.py`
+2. **MySQL EXPLAIN-only mode yok.** Köprü `EXPLAIN_ONLY`'yi reddeder;
+   `EXPLAIN <sql>` / `EXPLAIN FORMAT=JSON <sql>` yolu (29.2 PostgreSQL EXPLAIN
+   dengi) eklenmedi. → ileri sprint (29.2 dengi).
+   *İlgili Dosya:* `backend/app/evaluation/mysql_adapter.py`,
+   `backend/app/evaluation/mysql_execution_adapter.py`
+3. **Canlı HTTP pipeline wiring yok / merkezî execution router registry yok.**
+   Adapter router'a takılabilir ama canlı bir registry'ye kaydedilmedi;
+   production `/api/jobs` akışına bağlanmadı. → 30.2 / 30.4 / 30.x.
+   *İlgili Dosya:* `backend/app/evaluation/multi_database_execution.py`
+4. **Connection registry / uzak & production connection / TLS yok.** Yalnız
+   29.5 resolver'ın local-Docker connection'ı (`MYSQL_TEST_*` env). →
+   Phase 11 · 30.2 Connection Registry API.
+   *İlgili Dosya:* Phase 11 · 30.2 (henüz mevcut değil)
+5. **C-tabanlı driver'lar (`mysqlclient` / `mysql-connector-python`) / thick
+   mode yok.** Yalnız saf-Python `PyMySQL` (thin, pure-Python). Gerekmedikçe
+   ertelenir.
+   *İlgili Dosya:* `backend/app/evaluation/mysql_adapter.py`,
+   `backend/requirements.txt`
