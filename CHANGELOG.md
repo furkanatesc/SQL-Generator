@@ -764,6 +764,55 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   FAIL veriyordu — tarama sınırı `backend-tests` job'una scope'landı (bir
   sonraki üst-seviye job header'ında durur), bkz. TECH-DEBT §22 ÇÖZÜLDÜ. Full
   suite: 2690 passed/31 skipped (skip +3 vs 29.3'ün 28'i). (PR #165)
+- **MySQL Adapter Contract** (Sprint 29.5 · Phase 10): Oracle 29.3'ün (Contract
+  Adapter) ve 29.4'ün (Docker/Test Harness) ikisini TEK sprint'te birleştiren
+  sprint (MySQL, Oracle'a göre daha düşük riskli — saf-Python driver, küçük
+  imaj, lisans sorunu yok); 25.9'un aksine ön-var bir MySQL stub'ı YOKTU,
+  sıfırdan başladı. `multi_database_execution.py`'ye yeni
+  `SQLDatabaseDialect.MYSQL = "mysql"` (TEK satır, başka davranış değişikliği
+  yok — `git diff 24f9679..HEAD` ile doğrulandı) + `PyMySQL==1.1.1` pin + `mysql`
+  pytest marker. Üç katman (Postgres 29.0→29.1 / Oracle 29.3 desenini izler).
+  **Katman 1** (`mysql_adapter.py`): `SQLMySQLAdapterContract` — connection
+  yoksa tamamen inert (driver import yok, deterministik `NOT_IMPLEMENTED`;
+  unsafe SQL her koşulda deterministik `REJECTED`), `SQLMySQLLocalDockerConnection`
+  (host/port/**database**/user/password — Oracle'ın `service_name`'i yerine
+  MySQL'in düz `database` parametresi, host allowlist) verilince gerçek
+  `pymysql` read-only SELECT path'i: `SET SESSION max_execution_time` (Oracle'ın
+  `call_timeout`'una denk MySQL-özgü zaman aşımı) → `START TRANSACTION READ
+  ONLY` → execute → `max_rows+1` fetch (truncation tespiti) → her zaman
+  `rollback()`+`close()`; secret-free `_sanitize_mysql_error` (timeout error
+  code'ları 3024/1969/2013 ayrı mesaj). **Katman 2** (yeni
+  `mysql_connection_resolver.py`) `MYSQL_TEST_*` env → connection | `None`,
+  asla connect/raise etmez. **Katman 3** (yeni `mysql_execution_adapter.py`)
+  dialect-agnostic köprü `MySQLDatabaseExecutionAdapter` —
+  `capabilities() = (CONNECTION_REF, READ_ONLY)`, **EXPLAIN_ONLY reddedilir**
+  (bu kontrat sürümünde desteklenmiyor), resolver `None` → graceful boş sonuç
+  (raise yok), `col_<i>` fallback + uyarı; Oracle'ın §21.4'ünü kapatan testin
+  dengi baştan eklendi (fake-`pymysql` + enjekte resolver, Docker'sız
+  bridge→low-level delegasyon testi). Yeni deterministik
+  `backend/tests/fixtures/mysql/seed.sql`: MySQL/InnoDB dialect
+  (`ENGINE=InnoDB`, **küçük harf** tablo/kolon adları), Postgres 29.0 / Oracle
+  29.4 seed'lerinin şeklini birebir yansıtan 5 tablo — `customers`/`orders`/
+  `order_items` (tek-kolon PK/FK) + `product_variants`/`variant_stock`
+  (composite PK/FK), 18 statement. Yeni saf `mysql_seed.py`:
+  `split_statements()` + `apply_seed(conn, sql)` (`oracle_seed.py`'yi birebir
+  yansıtır) + lazy-`pymysql` `main()` (`python -m app.evaluation.mysql_seed`
+  ile CI'dan çağrılır) — bilinçli olarak `app/evaluation/__init__.py`'den
+  re-export edilmedi (yalnız harness/CI-amaçlı). Yeni seeded entegrasyon
+  testleri (Docker'sız safe-skip, `mysql`-mark'lı): 3-tablo `JOIN`,
+  composite-FK `JOIN`, `max_rows` truncation — dict-row anahtarları **küçük
+  harf** (seed şemasıyla birebir). `docker-compose.yml`'e yeni `mysql` servisi
+  (`mysql:8.4`, `sqlgen`/`sqlgen`/`sqlgen_test`, seed init-script mount,
+  healthcheck) + `.github/workflows/backend-ci.yml`'e mevcut (değişmeyen)
+  `backend-tests`/`oracle-integration` job'larından **ayrı, additive** yeni
+  `mysql-integration` job'ı: MySQL service container + seed +
+  `pytest -m mysql` (canlı çalışır). Full suite: 2724 passed/34 skipped (skip
+  +3 vs 29.4'ün 31'i — yeni seeded-integration testleri). **Bilinçli kapsam
+  dışı** (TECH-DEBT §23): MySQL schema introspection (Postgres 29.0 dengi →
+  ileriye), MySQL EXPLAIN-only mode (29.2 dengi → ileriye), canlı HTTP pipeline
+  wiring/merkezî execution router registry (→ 30.x), connection registry/uzak
+  & production connection/TLS (→ Phase 11 · 30.2), C-tabanlı driver'lar
+  (`mysqlclient`/`mysql-connector-python`)/thick mode. (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
