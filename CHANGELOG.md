@@ -812,7 +812,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   ileriye), MySQL EXPLAIN-only mode (29.2 dengi → ileriye), canlı HTTP pipeline
   wiring/merkezî execution router registry (→ 30.x), connection registry/uzak
   & production connection/TLS (→ Phase 11 · 30.2), C-tabanlı driver'lar
-  (`mysqlclient`/`mysql-connector-python`)/thick mode. (PR #TBD)
+  (`mysqlclient`/`mysql-connector-python`)/thick mode. (PR #166)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
