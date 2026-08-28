@@ -154,6 +154,18 @@ from .mysql_adapter import (
     SQLMySQLAdapterContract,
     default_mysql_stub_capability,
 )
+from .mssql_adapter import (
+    SQL_MSSQL_ADAPTER_CONTRACT_VERSION,
+    SQLMSSQLAdapterContractError,
+    SQLMSSQLAdapterStatus,
+    SQLMSSQLAdapterCapability,
+    SQLMSSQLLocalDockerConnection,
+    SQLMSSQLAdapterConfig,
+    SQLMSSQLAdapterExecutionRequest,
+    SQLMSSQLAdapterExecutionResult,
+    SQLMSSQLAdapterContract,
+    default_mssql_stub_capability,
+)
 
 __all__ = [
     "SQL_GOLDEN_DATASET_VERSION",
@@ -280,5 +292,15 @@ __all__ = [
     "SQLMySQLAdapterExecutionResult",
     "SQLMySQLAdapterContract",
     "default_mysql_stub_capability",
+    "SQL_MSSQL_ADAPTER_CONTRACT_VERSION",
+    "SQLMSSQLAdapterContractError",
+    "SQLMSSQLAdapterStatus",
+    "SQLMSSQLAdapterCapability",
+    "SQLMSSQLLocalDockerConnection",
+    "SQLMSSQLAdapterConfig",
+    "SQLMSSQLAdapterExecutionRequest",
+    "SQLMSSQLAdapterExecutionResult",
+    "SQLMSSQLAdapterContract",
+    "default_mssql_stub_capability",
 ]
 
