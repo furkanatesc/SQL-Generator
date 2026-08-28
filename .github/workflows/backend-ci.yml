@@ -225,3 +225,54 @@ jobs:
           MYSQL_TEST_PASSWORD: sqlgen
         run: |
           pytest -m mysql -q
+
+  sqlserver-integration:
+    name: SQL Server integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Sqlgen_Str0ng!Pass"
+          MSSQL_PID: "Developer"
+        ports:
+          - 1433:1433
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Seed SQL Server integration schema
+        env:
+          MSSQL_TEST_HOST: 127.0.0.1
+          MSSQL_TEST_PORT: "1433"
+          MSSQL_TEST_DB: sqlgen_test
+          MSSQL_TEST_USER: sqlgen_ro
+          MSSQL_TEST_PASSWORD: "Sqlgen_Ro0!Pass"
+          MSSQL_TEST_ADMIN_USER: sa
+          MSSQL_TEST_ADMIN_PASSWORD: "Sqlgen_Str0ng!Pass"
+        run: |
+          python -m app.evaluation.mssql_seed
+      - name: Run SQL Server integration tests
+        env:
+          NL2SQL_DEBUG_ENDPOINTS_ENABLED: "true"
+          MSSQL_TEST_HOST: 127.0.0.1
+          MSSQL_TEST_PORT: "1433"
+          MSSQL_TEST_DB: sqlgen_test
+          MSSQL_TEST_USER: sqlgen_ro
+          MSSQL_TEST_PASSWORD: "Sqlgen_Ro0!Pass"
+        run: |
+          pytest -m sqlserver -q
