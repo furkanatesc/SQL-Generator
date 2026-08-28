@@ -57,3 +57,15 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  # Sprint 29.6 — local SQL Server parity with CI (backend-ci.yml sqlserver-integration job).
+  # Usage: docker compose up -d mssql  ->  python -m app.evaluation.mssql_seed  ->  cd backend && pytest -m sqlserver
+  # Re-seeding: `docker compose down -v` to reset the volume.
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Sqlgen_Str0ng!Pass"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
