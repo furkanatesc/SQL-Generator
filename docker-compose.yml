@@ -36,3 +36,24 @@ services:
       timeout: 10s
       retries: 10
       start_period: 90s
+
+  # Sprint 29.5 — local MySQL parity with CI (backend-ci.yml mysql-integration job).
+  # Usage: docker compose up -d mysql  ->  cd backend && pytest -m mysql
+  # Re-seeding: the seed applies once on a fresh volume; `docker compose down -v` to reset.
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: sqlgen
+      MYSQL_DATABASE: sqlgen_test
+      MYSQL_USER: sqlgen
+      MYSQL_PASSWORD: sqlgen
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./backend/tests/fixtures/mysql/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-psqlgen"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
