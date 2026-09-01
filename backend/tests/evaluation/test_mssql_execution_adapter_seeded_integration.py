@@ -1,7 +1,7 @@
 """Sprint 29.6 — SQL Server seeded read-only execution integration tests.
 
 Safe-skips when no local Docker SQL Server is reachable. Requires the 29.6 seed
-schema (tasks/fixtures/mssql/seed.sql) to have been applied. SQL Server returns
+schema (tests/fixtures/mssql/seed.sql) to have been applied. SQL Server returns
 lowercase unquoted identifiers, so column keys assert lowercase names.
 """
 import pytest
