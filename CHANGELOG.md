@@ -874,7 +874,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   & production connection/TLS/Azure AD (→ Phase 11 · 30.2), `pyodbc`/ODBC
   driver path (yalnız saf-Python `pymssql`). **Bununla Phase 10 (Real
   Database Adapter Layer) dört dialect'in (Postgres/Oracle/MySQL/SQL Server)
-  tümünde contract-first read-only execution adapter'ına sahip.** (PR #TBD)
+  tümünde contract-first read-only execution adapter'ına sahip.** (PR #167)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
