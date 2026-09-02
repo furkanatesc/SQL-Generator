@@ -68,3 +68,83 @@ def test_importing_module_loads_no_db_driver():
     import sys
     for driver in ("pymssql", "pymysql", "oracledb", "psycopg2"):
         assert driver not in sys.modules, f"{driver} must not be imported by adapter_conformance"
+
+
+from app.evaluation.adapter_conformance import (
+    assert_contract_conformance,
+    contract_conformance_report,
+    profiles_for as _profiles_for,
+)
+from app.evaluation.multi_database_execution import (
+    SQLDatabaseExecutionRouter,
+    SQLDatabaseExecutionConfig,
+    SQLDatabaseExecutionRequest,
+    SQLExecutionMode,
+    SQLMultiDatabaseExecutionContractError,
+)
+
+
+@pytest.mark.parametrize("profile", CONFORMANCE_PROFILES, ids=lambda p: p.dialect.value)
+def test_adapter_is_contract_conformant(profile):
+    violations = assert_contract_conformance(profile)
+    assert violations == [], f"{profile.dialect.value}: {violations}"
+
+
+@pytest.mark.parametrize("profile", CONFORMANCE_PROFILES, ids=lambda p: p.dialect.value)
+def test_adapter_dialect_matches_profile(profile):
+    assert profile.adapter_factory().dialect == profile.dialect
+
+
+@pytest.mark.parametrize("profile", CONFORMANCE_PROFILES, ids=lambda p: p.dialect.value)
+def test_adapter_capabilities_match_profile(profile):
+    caps = profile.adapter_factory().capabilities()
+    assert set(caps) == profile.expected_capabilities
+    assert len(caps) == len(set(caps))  # no duplicates
+
+
+def test_all_adapters_register_in_one_router():
+    adapters = tuple(p.adapter_factory() for p in CONFORMANCE_PROFILES)
+    router = SQLDatabaseExecutionRouter(adapters=adapters)
+    for p in CONFORMANCE_PROFILES:
+        assert router.get_adapter(p.dialect).dialect == p.dialect
+
+
+@pytest.mark.parametrize("profile", _profiles_for(connection_based=True), ids=lambda p: p.dialect.value)
+def test_inert_adapter_returns_graceful_empty_result(profile):
+    adapter = profile.inert_adapter_factory()
+    cfg = SQLDatabaseExecutionConfig(dialect=profile.dialect)
+    req = SQLDatabaseExecutionRequest(
+        case_id="conf", sql="SELECT 1", dialect=profile.dialect,
+        fixture_ref=None, connection_ref="local_docker", config=cfg,
+    )
+    res = adapter.execute(req)  # must NOT raise
+    assert res.rows == ()
+    assert res.row_count == 0
+    assert res.execution_error  # non-empty
+    assert res.dialect == profile.dialect
+
+
+@pytest.mark.parametrize("profile", _profiles_for(connection_based=True), ids=lambda p: p.dialect.value)
+def test_explain_only_consistency(profile):
+    adapter = profile.inert_adapter_factory()
+    cfg = SQLDatabaseExecutionConfig(dialect=profile.dialect, execution_mode=SQLExecutionMode.EXPLAIN_ONLY)
+    req = SQLDatabaseExecutionRequest(
+        case_id="conf", sql="SELECT 1", dialect=profile.dialect,
+        fixture_ref=None, connection_ref="local_docker", config=cfg,
+    )
+    if profile.accepts_explain_only:
+        res = adapter.execute(req)  # postgres: accepted; inert -> graceful empty
+        assert res.execution_error
+    else:
+        with pytest.raises(SQLMultiDatabaseExecutionContractError):
+            adapter.execute(req)
+
+
+@pytest.mark.parametrize("profile", CONFORMANCE_PROFILES, ids=lambda p: p.dialect.value)
+def test_contract_conformance_report_shape(profile):
+    rep = contract_conformance_report(profile)
+    assert rep["dialect"] == profile.dialect.value
+    assert set(rep["capabilities"]) == {c.value for c in profile.expected_capabilities}
+    assert rep["accepts_explain_only"] == profile.accepts_explain_only
+    assert rep["contract_conformance"]["ok"] is True
+    assert rep["contract_conformance"]["violations"] == []

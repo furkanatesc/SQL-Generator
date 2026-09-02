@@ -16,8 +16,13 @@ from typing import Any, Callable, FrozenSet, Optional, Tuple
 from app.evaluation.multi_database_execution import (
     SQLDatabaseDialect,
     SQLDatabaseExecutionAdapter,
+    SQLDatabaseExecutionConfig,
+    SQLDatabaseExecutionRequest,
+    SQLDatabaseExecutionRouter,
     SQLExecutionAdapterCapability,
+    SQLExecutionMode,
     SQLiteDatabaseExecutionAdapter,
+    SQLMultiDatabaseExecutionContractError,
 )
 from app.evaluation.postgres_execution_adapter import PostgresDatabaseExecutionAdapter
 from app.evaluation.oracle_execution_adapter import OracleDatabaseExecutionAdapter
@@ -155,3 +160,78 @@ def profiles_for(*, connection_based: Optional[bool] = None) -> Tuple[AdapterCon
     if connection_based is None:
         return CONFORMANCE_PROFILES
     return tuple(p for p in CONFORMANCE_PROFILES if p.is_connection_based == connection_based)
+
+
+def _benign_request(dialect, *, explain: bool = False) -> "SQLDatabaseExecutionRequest":
+    cfg = SQLDatabaseExecutionConfig(
+        dialect=dialect,
+        execution_mode=SQLExecutionMode.EXPLAIN_ONLY if explain else SQLExecutionMode.READ_ONLY,
+    )
+    return SQLDatabaseExecutionRequest(
+        case_id="conformance", sql="SELECT 1", dialect=dialect,
+        fixture_ref=None, connection_ref="local_docker", config=cfg,
+    )
+
+
+def assert_contract_conformance(profile: AdapterConformanceProfile) -> list:
+    """Return a list of contract-conformance violations (empty == conformant).
+
+    Docker-free: connection-based adapters are exercised through an inert
+    resolver (returns ``None``) so nothing ever connects.
+    """
+    violations = []
+    adapter = profile.adapter_factory()
+
+    if adapter.dialect != profile.dialect:
+        violations.append(f"dialect property {adapter.dialect} != profile {profile.dialect}")
+
+    caps = adapter.capabilities()
+    if set(caps) != profile.expected_capabilities:
+        violations.append(
+            f"capabilities {sorted(c.value for c in caps)} != expected "
+            f"{sorted(c.value for c in profile.expected_capabilities)}"
+        )
+    if len(caps) != len(set(caps)):
+        violations.append("capabilities contains duplicates")
+
+    try:
+        SQLDatabaseExecutionRouter(adapters=(adapter,))
+    except SQLMultiDatabaseExecutionContractError as exc:  # pragma: no cover - defensive
+        violations.append(f"adapter rejected by router: {exc}")
+
+    if profile.is_connection_based:
+        inert = profile.inert_adapter_factory()
+
+        res = inert.execute(_benign_request(profile.dialect))
+        if res.rows != () or res.row_count != 0:
+            violations.append("inert adapter returned rows for a no-connection request")
+        if not res.execution_error:
+            violations.append("inert adapter did not set execution_error on no-connection")
+
+        explain_req = _benign_request(profile.dialect, explain=True)
+        if profile.accepts_explain_only:
+            try:
+                inert.execute(explain_req)
+            except SQLMultiDatabaseExecutionContractError:
+                violations.append("adapter advertises EXPLAIN_ONLY but rejected an explain request")
+        else:
+            try:
+                inert.execute(explain_req)
+                violations.append("adapter does not advertise EXPLAIN_ONLY but accepted an explain request")
+            except SQLMultiDatabaseExecutionContractError:
+                pass
+
+    return violations
+
+
+def contract_conformance_report(profile: AdapterConformanceProfile) -> dict:
+    violations = assert_contract_conformance(profile)
+    return {
+        "dialect": profile.dialect.value,
+        "capabilities": sorted(c.value for c in profile.expected_capabilities),
+        "accepts_explain_only": profile.accepts_explain_only,
+        "case_fold": profile.case_fold.value,
+        "is_connection_based": profile.is_connection_based,
+        "driver": profile.driver_module_name,
+        "contract_conformance": {"ok": not violations, "violations": violations},
+    }
