@@ -8,6 +8,9 @@ recorded only as strings; the deterministic conformance core uses inert adapters
 """
 from __future__ import annotations
 
+import argparse
+import json
+import sys as _sys
 import tempfile
 from dataclasses import dataclass
 from enum import Enum
@@ -235,3 +238,44 @@ def contract_conformance_report(profile: AdapterConformanceProfile) -> dict:
         "driver": profile.driver_module_name,
         "contract_conformance": {"ok": not violations, "violations": violations},
     }
+
+
+def build_conformance_report() -> dict:
+    return {
+        "version": SQL_ADAPTER_CONFORMANCE_VERSION,
+        "dialects": [contract_conformance_report(p) for p in CONFORMANCE_PROFILES],
+    }
+
+
+def main(argv: Optional[list] = None) -> int:
+    parser = argparse.ArgumentParser(prog="adapter_conformance")
+    sub = parser.add_subparsers(dest="command", required=True)
+    rep = sub.add_parser("report", help="Emit the Docker-free conformance/capability snapshot")
+    rep.add_argument("--json", action="store_true", help="Emit JSON (default: short human summary)")
+    rep.add_argument("--output", default=None, help="Write to PATH instead of stdout")
+    args = parser.parse_args(argv)
+
+    if args.command == "report":
+        report = build_conformance_report()
+        if args.json:
+            text = json.dumps(report, indent=2, sort_keys=True)
+        else:
+            lines = [f"adapter conformance ({report['version']}):"]
+            for d in report["dialects"]:
+                ok = "OK" if d["contract_conformance"]["ok"] else "FAIL"
+                lines.append(
+                    f"  {d['dialect']:<11} caps={','.join(d['capabilities'])} "
+                    f"explain_only={d['accepts_explain_only']} {ok}"
+                )
+            text = "\n".join(lines)
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as fh:
+                fh.write(text)
+        else:
+            print(text)
+        return 0
+    return 1  # pragma: no cover - argparse requires a subcommand
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main(_sys.argv[1:]))
