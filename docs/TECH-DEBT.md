@@ -1208,3 +1208,42 @@ bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
    tabanlı, ODBC driver kurulumu gerektirmez). Gerekmedikçe ertelenir.
    *İlgili Dosya:* `backend/app/evaluation/mssql_adapter.py`,
    `backend/requirements.txt`
+
+## §25. Sprint 29.7 (Adapter Conformance Eval Suite) devirleri — AÇIK
+
+29.0–29.6'da dört dialect'e (Postgres/Oracle/MySQL/SQL Server) ayrı ayrı
+inşa edilmiş standalone execution adapter'ları tek bir profil kaydı
+(`AdapterConformanceProfile` / `CONFORMANCE_PROFILES`,
+`backend/app/evaluation/adapter_conformance.py`) altında birleştiren,
+Docker-free deterministik bir conformance çekirdeği (5 adapter — sqlite
+dahil, connection-based dört dialect + fixture-based sqlite) + konsolide
+canlı matrix (4 connection-based dialect, per-param `pytest_marker`, üç
+tekrarlı seeded test dosyasını emekli eder) + bir rapor emitter'ı
+(`python -m app.evaluation.adapter_conformance report`) ekleyen sprint.
+Paylaşılan kontrat dosyası (`multi_database_execution.py`) DEĞİŞMEDİ —
+`git diff --stat main..HEAD -- backend/app/evaluation/multi_database_execution.py`
+boş. Aşağıdakiler tasarım spec'inde (§7) bilinçli olarak kapsam dışı
+bırakıldı (sessiz düşürme yok).
+
+1. **SQLite canlı seeded matrix yok.** SQLite fixture-based olduğu için
+   yalnız deterministik çekirdekle (dialect/capabilities/router/inert-graceful/
+   EXPLAIN-consistency/result-integrity) kapsanıyor; diğer dört dialect gibi
+   Docker-seeded bir canlı battery'si yok. → ileri sprint, gerekirse.
+   *İlgili Dosya:* `backend/app/evaluation/adapter_conformance.py`,
+   `backend/tests/evaluation/test_adapter_conformance.py`
+2. **Rapor emitter'ı CI artifact değil / canlı+kontrat birleşik rapor yok.**
+   `report` komutu manuel bir gözlemlenebilirlik aracı olarak kalıyor; canlı
+   pass/skip verisi JSON'a bilinçli olarak dahil edilmedi (Docker gerektirir).
+   CI'da artifact olarak yayınlanmıyor. → ileri sprint (gözlemlenebilirlik
+   ailesi, 27.x tarzı).
+   *İlgili Dosya:* `backend/app/evaluation/adapter_conformance.py`
+3. **Conformance sert bir gate değil.** Ayrı bir gate CLI'ı / CI gate step'i
+   yok (26.x/27.10 golden/regression-gate paritesi); mevcut dialect-başına
+   pytest job'ları (postgres/oracle/mysql/sqlserver-integration) dolaylı
+   olarak gate görevi görüyor. → ileri sprint, istenirse.
+   *İlgili Dosya:* CI workflow dosyaları, `backend/app/evaluation/adapter_conformance.py`
+4. **NL2SQL doğruluk conformance'ı yok.** Bu suite yalnız execution-contract
+   conformance'ıdır (adapter'ın kontrata uyumu); NL→SQL üretim doğruluğu
+   kapsam dışı (26.x/27.10 accuracy regression gate ailesinin işi). →
+   kapsam dışı, karıştırılmasın.
+   *İlgili Dosya:* yok (bilinçli kapsam ayrımı)

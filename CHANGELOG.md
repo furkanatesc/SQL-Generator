@@ -875,6 +875,45 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   driver path (yalnız saf-Python `pymssql`). **Bununla Phase 10 (Real
   Database Adapter Layer) dört dialect'in (Postgres/Oracle/MySQL/SQL Server)
   tümünde contract-first read-only execution adapter'ına sahip.** (PR #167)
+- **Adapter Conformance Eval Suite** (Sprint 29.7 · Phase 10, TAMAMLANDI):
+  29.0–29.6'da dört dialect'e (Postgres/Oracle/MySQL/SQL Server) ayrı ayrı,
+  birbirini yansıtan (ama kopya) şekilde inşa edilmiş execution adapter'larını
+  **tek bir profil kaydı** altında birleştiren sprint — hâlâ standalone/inert,
+  canlı production pipeline'a wire edilmedi; `multi_database_execution.py`
+  **DEĞİŞMEDİ** (`git diff --stat main..HEAD` boş, doğrulandı). Yeni
+  `app/evaluation/adapter_conformance.py`: `AdapterConformanceProfile`
+  dataclass + `CONFORMANCE_PROFILES` (5 dialect — sqlite dahil, tek gerçek
+  kaynak) + `profiles_for(connection_based=...)` (4 connection-based / 1
+  fixture-based sqlite bölümlemesi) + `CaseFold`/`fold()`. Docker-free
+  **deterministik conformance çekirdeği** (marker'sız, `backend-tests`
+  job'ında koşar): dialect eşleşmesi, `capabilities()` beklenen kümeyle
+  birebir, tüm 5 adapter tek `SQLDatabaseExecutionRouter`'a kayıt olabiliyor,
+  inert adapter'lar `execute()`'ta raise ETMEDEN graceful boş sonuç döner,
+  `EXPLAIN_ONLY` tutarlılığı (yalnız Postgres kabul eder), `contract_
+  conformance_report(profile)` şekli. Import-time driver-izolasyonu
+  profil-güdümlü hale geldi — 29.1/29.3/29.5/29.6'nın dört ayrı subprocess
+  testinin yerini tek parametrized test alıyor; modülün kendisinin de sürücü
+  yüklemediğini kilitleyen ayrı subprocess testi taze-interpreter'da koşar
+  (ilk sürümü in-process `sys.modules` kontrolüydü — `sys.modules`
+  process-global olduğundan legacy `schema_manager.py`'nin koşulsuz
+  `oracledb`/`psycopg2` import'uyla kirlenen full-suite sıralamasında
+  yanlış-FAIL veriyordu; taze-subprocess yaklaşımına düzeltildi, production
+  kodu DOKUNULMADI). Yeni **konsolide canlı execution matrix**
+  (`test_adapter_conformance_matrix.py`): dört dialect'in üç kopya seeded-
+  integration test dosyasını **emekli edip** (silindi) tek parametrized
+  dosyaya indiren, `profile.pytest_marker` ile CI job-bazlı slicing'i koruyan
+  matrix; Postgres'in kendi dosyası yalnız matrix'in kapsamadığı EXPLAIN-only
+  + `statement_timeout` testlerine trim edildi (silinmedi). Yeni **rapor
+  emitter'ı** `python -m app.evaluation.adapter_conformance report [--json]`:
+  5 dialect'in kontrat-conformance'ını tek JSON/tabloya toplayan, Docker/DB
+  gerektirmeyen manuel gözlemlenebilirlik CLI'ı. Full suite: 2804 passed/37
+  skipped/0 failed (29.6'nın 2760'ından net +44). **Bilinçli kapsam dışı**
+  (TECH-DEBT §25): SQLite canlı seeded matrix, rapor emitter'ının CI
+  artifact'ı olması / canlı+kontrat birleşik rapor, conformance'ın sert bir
+  gate olması, NL2SQL doğruluk conformance'ı. **Bununla Phase 10 (Real
+  Database Adapter Layer) dört dialect'in tümünde hem contract-first
+  execution adapter'ına HEM de tek-kaynaklı conformance doğrulamasına sahip —
+  Phase 10 TAMAMLANDI.** (PR #TBD)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
