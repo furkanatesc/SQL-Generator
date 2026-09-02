@@ -1,5 +1,12 @@
 """Sprint 29.7 — deterministic adapter-conformance core (Docker-free)."""
+import os
+
 import pytest
+
+
+def _backend_dir():
+    # this file: backend/tests/evaluation/test_adapter_conformance.py -> backend/
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from app.evaluation.adapter_conformance import (
     SQL_ADAPTER_CONFORMANCE_VERSION,
@@ -148,3 +155,24 @@ def test_contract_conformance_report_shape(profile):
     assert rep["accepts_explain_only"] == profile.accepts_explain_only
     assert rep["contract_conformance"]["ok"] is True
     assert rep["contract_conformance"]["violations"] == []
+
+
+import subprocess
+import sys
+
+
+@pytest.mark.parametrize("profile", _profiles_for(connection_based=True), ids=lambda p: p.dialect.value)
+def test_adapter_module_import_is_driver_isolated(profile):
+    code = (
+        "import importlib, sys; "
+        f"importlib.import_module({profile.adapter_module_name!r}); "
+        f"assert {profile.driver_module_name!r} not in sys.modules, "
+        f"'{profile.driver_module_name} imported at module import time'; "
+        "print('ok')"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True, text=True, cwd=_backend_dir(),
+    )
+    assert proc.returncode == 0, f"{profile.dialect.value} isolation failed: {proc.stderr}"
+    assert "ok" in proc.stdout
