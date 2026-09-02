@@ -72,9 +72,24 @@ def test_every_profile_is_well_formed():
 
 
 def test_importing_module_loads_no_db_driver():
-    import sys
-    for driver in ("pymssql", "pymysql", "oracledb", "psycopg2"):
-        assert driver not in sys.modules, f"{driver} must not be imported by adapter_conformance"
+    """Importing adapter_conformance must pull no DB driver.
+
+    Checked in a fresh subprocess because sys.modules is process-global: an
+    earlier test importing app.main (-> schema_manager, which imports oracledb/
+    psycopg2 unconditionally) would pollute an in-process assertion.
+    """
+    code = (
+        "import importlib, sys; "
+        "importlib.import_module('app.evaluation.adapter_conformance'); "
+        "leaked = [d for d in ('pymssql', 'pymysql', 'oracledb', 'psycopg2') if d in sys.modules]; "
+        "assert not leaked, f'drivers imported at import time: {leaked}'; "
+        "print('ok')"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, cwd=_backend_dir(),
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "ok" in proc.stdout
 
 
 from app.evaluation.adapter_conformance import (
