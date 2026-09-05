@@ -913,7 +913,7 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   gate olması, NL2SQL doğruluk conformance'ı. **Bununla Phase 10 (Real
   Database Adapter Layer) dört dialect'in tümünde hem contract-first
   execution adapter'ına HEM de tek-kaynaklı conformance doğrulamasına sahip —
-  Phase 10 TAMAMLANDI.** (PR #TBD)
+  Phase 10 TAMAMLANDI.** (PR #168)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
