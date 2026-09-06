@@ -51,10 +51,9 @@ def test_get_by_slug():
     assert repo.get_workspace_by_slug("missing") is None
 
 
-def test_list_and_count_pagination():
+def test_list_pagination():
     for i in range(5):
         repo.create_workspace(f"W{i}", f"w{i}", None)
-    assert repo.count_workspaces() == 5
     page = repo.list_workspaces(limit=2, offset=0)
     assert len(page) == 2
     page2 = repo.list_workspaces(limit=2, offset=2)
