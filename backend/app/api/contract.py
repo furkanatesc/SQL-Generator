@@ -55,7 +55,7 @@ class ApiResponse(BaseModel, Generic[DataT]):
 # The HTTP status->code vocabulary emitted by app/api/errors.py handlers.
 _REQUIRED_ERROR_CODES: tuple[str, ...] = (
     "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN",
-    "NOT_FOUND", "VALIDATION_ERROR", "INTERNAL_SERVER_ERROR",
+    "NOT_FOUND", "CONFLICT", "VALIDATION_ERROR", "INTERNAL_SERVER_ERROR",
 )
 
 
