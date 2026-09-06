@@ -91,5 +91,8 @@ def delete_workspace(workspace_id: str) -> ApiResponse[WorkspaceResponse]:
     ws = repo.get_workspace(workspace_id)
     if ws is None:
         raise HTTPException(status_code=404, detail="workspace bulunamadı")
-    repo.delete_workspace(workspace_id)
+    # Gate the response on the delete actually removing a row, so a concurrent
+    # delete loses with a 404 instead of a stale 200.
+    if not repo.delete_workspace(workspace_id):
+        raise HTTPException(status_code=404, detail="workspace bulunamadı")
     return ApiResponse[WorkspaceResponse](data=WorkspaceResponse(**ws))
