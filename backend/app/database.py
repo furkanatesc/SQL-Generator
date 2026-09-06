@@ -121,6 +121,19 @@ def init_db():
             )
         """)
 
+        # Sprint 30.1 — Workspace API. Standalone top-level container resource
+        # (Phase 11); existing global tables are NOT retro-scoped yet.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                slug        TEXT NOT NULL UNIQUE,
+                description TEXT,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            )
+        """)
+
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")
