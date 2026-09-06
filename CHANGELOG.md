@@ -914,6 +914,22 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   Database Adapter Layer) dört dialect'in tümünde hem contract-first
   execution adapter'ına HEM de tek-kaynaklı conformance doğrulamasına sahip —
   Phase 10 TAMAMLANDI.** (PR #168)
+- **Public Query API Contract** (Sprint 30.0, Phase 11 başlangıcı): sonraki
+  tüm 30.x yüzeylerinin uyacağı kesişen API konvansiyonu — tek-kaynak
+  `backend/app/api/contract.py` (kanonik `ApiResponse[T]` = `{status, data,
+  meta}` envelope'u, `PageMeta`/`ResponseMeta` offset pagination, `API_VERSION
+  ="v1"`/`/api/v1` sabitleri, frozen & hashable `API_CONTRACT` descriptor +
+  `contract_descriptor()`; mevcut `ErrorResponse` re-export edilir) + public
+  `GET /api/v1` makine-okunur sözleşme-discovery endpoint'i + deterministik,
+  Docker-free, marker'sız 29.7-tarzı conformance guard (v1 route allowlist'i +
+  kanonik envelope/hata/`X-Request-ID` + descriptor↔model drift testleri).
+  Yalnız konvansiyon katmanı — iş endpoint'i EKLEMEZ, mevcut 20+ `/api/*`
+  DEĞİŞMEZ (grandfathered; kod diff'i tamamen additive, 0 silme). `GET /api/v1`
+  bilinçli public (yalnız statik descriptor — zaten public `/openapi.json`/
+  `/docs`'tan az). Full suite 2825 passed/37 skipped. **Bilinçli kapsam dışı**
+  (TECH-DEBT §26): legacy migrasyonu/deprecation, route-miss 404 kanonikleştirme,
+  cursor pagination, `app/errors/`→HTTP code eşlemesi, AuthN (30.8)/rate-limit/
+  OpenAPI publishing, somut `POST /api/v1/query`. **Phase 11 başladı.** (PR #169)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
