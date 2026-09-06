@@ -1,4 +1,14 @@
 {
+  "ApiResponse_ContractDescriptor_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "Body_upload_excel_file_api_files_upload_post": {
     "properties": [
       "file",
@@ -149,6 +159,26 @@
       "key",
       "status",
       "value"
+    ]
+  },
+  "ContractDescriptor": {
+    "properties": [
+      "error_envelope",
+      "pagination_fields",
+      "prefix",
+      "request_id_header",
+      "required_error_codes",
+      "success_envelope_fields",
+      "version"
+    ],
+    "required": [
+      "error_envelope",
+      "pagination_fields",
+      "prefix",
+      "request_id_header",
+      "required_error_codes",
+      "success_envelope_fields",
+      "version"
     ]
   },
   "CustomRelationsUpdate": {
@@ -543,6 +573,18 @@
       "total_tokens"
     ]
   },
+  "PageMeta": {
+    "properties": [
+      "count",
+      "limit",
+      "offset"
+    ],
+    "required": [
+      "count",
+      "limit",
+      "offset"
+    ]
+  },
   "PricingInfoResponse": {
     "properties": [
       "models_missing_price",
@@ -735,6 +777,12 @@
       "changed",
       "observed_issue_types"
     ]
+  },
+  "ResponseMeta": {
+    "properties": [
+      "pagination"
+    ],
+    "required": []
   },
   "RuleSuggestionResponse": {
     "properties": [
