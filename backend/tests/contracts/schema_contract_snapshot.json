@@ -9,6 +9,26 @@
       "data"
     ]
   },
+  "ApiResponse_WorkspaceResponse_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_list_WorkspaceResponse__": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "Body_upload_excel_file_api_files_upload_post": {
     "properties": [
       "file",
@@ -1039,5 +1059,39 @@
       "msg",
       "type"
     ]
+  },
+  "WorkspaceCreate": {
+    "properties": [
+      "description",
+      "name",
+      "slug"
+    ],
+    "required": [
+      "name"
+    ]
+  },
+  "WorkspaceResponse": {
+    "properties": [
+      "created_at",
+      "description",
+      "id",
+      "name",
+      "slug",
+      "updated_at"
+    ],
+    "required": [
+      "created_at",
+      "id",
+      "name",
+      "slug",
+      "updated_at"
+    ]
+  },
+  "WorkspaceUpdate": {
+    "properties": [
+      "description",
+      "name"
+    ],
+    "required": []
   }
 }

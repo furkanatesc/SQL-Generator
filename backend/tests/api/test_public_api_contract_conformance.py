@@ -17,7 +17,14 @@ client = TestClient(app)
 
 # The known-conforming public v1 surface. A new /api/v1 route MUST be added
 # here (and made to conform) or this guard fails -> forces conformance review.
-EXPECTED_V1_ROUTES = {("GET", "/api/v1")}
+EXPECTED_V1_ROUTES = {
+    ("GET", "/api/v1"),
+    ("POST", "/api/v1/workspaces"),
+    ("GET", "/api/v1/workspaces"),
+    ("GET", "/api/v1/workspaces/{workspace_id}"),
+    ("PATCH", "/api/v1/workspaces/{workspace_id}"),
+    ("DELETE", "/api/v1/workspaces/{workspace_id}"),
+}
 
 
 def _is_v1_path(path: str) -> bool:
