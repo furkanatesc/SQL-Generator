@@ -10,16 +10,21 @@ from app.middleware.request_logging import get_sanitized_path
 
 logger = logging.getLogger("app.request_logging")
 
+# HTTP status -> canonical error code vocabulary. Exposed as a module constant
+# so the public API contract descriptor (app/api/contract.py) can be checked
+# against it for drift (see the conformance guard) instead of hand-copying it.
+STATUS_TO_CODE = {
+    400: "BAD_REQUEST",
+    401: "UNAUTHORIZED",
+    403: "FORBIDDEN",
+    404: "NOT_FOUND",
+    422: "VALIDATION_ERROR",
+    500: "INTERNAL_SERVER_ERROR",
+}
+
+
 def map_status_to_code(status_code: int) -> str:
-    mapping = {
-        400: "BAD_REQUEST",
-        401: "UNAUTHORIZED",
-        403: "FORBIDDEN",
-        404: "NOT_FOUND",
-        422: "VALIDATION_ERROR",
-        500: "INTERNAL_SERVER_ERROR",
-    }
-    return mapping.get(status_code, "HTTP_ERROR")
+    return STATUS_TO_CODE.get(status_code, "HTTP_ERROR")
 
 
 def normalize_message(detail: Any, status_code: int) -> str:
