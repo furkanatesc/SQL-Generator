@@ -37,8 +37,8 @@ def _now() -> str:
 def create_workspace(name: str, slug: str, description: Optional[str]) -> dict:
     ws_id = uuid.uuid4().hex
     now = _now()
-    if get_workspace_by_slug(slug) is not None:
-        raise WorkspaceSlugConflict(slug)
+    # The UNIQUE(slug) column + IntegrityError handler below is the sole,
+    # race-free guard against duplicate slugs (no pre-check needed).
     try:
         with get_db_connection() as conn:
             conn.execute(
@@ -77,12 +77,6 @@ def list_workspaces(limit: int, offset: int) -> list[dict]:
             (limit, offset),
         ).fetchall()
         return [dict(r) for r in rows]
-
-
-def count_workspaces() -> int:
-    with get_db_connection() as conn:
-        row = conn.execute("SELECT COUNT(*) AS c FROM workspaces").fetchone()
-        return int(row["c"])
 
 
 # Columns update_workspace may write. SET is built from this whitelist so user
