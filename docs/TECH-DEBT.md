@@ -1285,3 +1285,30 @@ spec'inde (§7) bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme 
    OpenAPI doc publishing/SDK üretimi ve somut query iş-endpoint'i bu sözleşmenin
    üstüne sonraki sprint'lerde inşa edilecek.
    *İlgili Dosya:* `backend/app/api/v1_meta.py` (sözleşme temeli)
+
+## §27. Sprint 30.1 (Workspace API) devirleri — AÇIK
+
+30.1 workspace'i **standalone** bir kaynak olarak ekledi (`/api/v1/workspaces` CRUD,
+30.0 kanonik envelope'una uyan İLK route ailesi); mevcut global tablolar (jobs/
+feedback/query_traces/sql_cache) retro-scope EDİLMEDİ. Bilinçli kapsam dışı
+(sessiz düşürme yok).
+
+1. **Global tabloların workspace'e scope edilmesi yok.** jobs/feedback/
+   query_traces/sql_cache hâlâ global; `workspace_id` FK'leri eklenmedi
+   (kırıcı; ileri sprint). → migrasyon sprint'i.
+   *İlgili Dosya:* `backend/app/database.py`
+2. **Connection/schema/history workspace'e bağlanmadı.** 30.2+ kendi kaynaklarını
+   kurarken `workspace_id` referansını ekleyecek.
+   *İlgili Dosya:* `backend/app/api/workspaces.py`
+3. **Workspace membership / rol / per-workspace izin yok.** AuthN (30.8) gerektirir.
+   *İlgili Dosya:* yok (30.8 bağımlılığı)
+4. **Slug mutasyonu, soft-delete/arşivleme, workspace-seviyesi ayar/kota, name
+   uniqueness yok.** Yalnız slug unique; slug 30.1'de değiştirilemez (`update_workspace`
+   yalnız name/description whitelist'i).
+   *İlgili Dosya:* `backend/app/workspace_repository.py`
+5. **Cursor pagination / sayfa-üstü `total` yok.** 30.0'ın offset-only `PageMeta`'sı
+   devralındı.
+   *İlgili Dosya:* `backend/app/api/contract.py`
+6. **Delete cascade semantiği yok.** Henüz workspace'e referans veren alt-kaynak
+   yok; delete basit satır silme. → alt-kaynaklar (30.2+) eklendiğinde ele alınır.
+   *İlgili Dosya:* `backend/app/workspace_repository.py`
