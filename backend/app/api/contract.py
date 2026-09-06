@@ -65,9 +65,11 @@ class ApiContract:
     prefix: str
     request_id_header: str
     success_envelope_fields: tuple[str, ...]
-    error_envelope_shape: dict  # {"error": ("code", "message", "details")}
+    error_envelope_fields: tuple[str, ...]  # inner fields of the {"error": {...}} body
     pagination_fields: tuple[str, ...]
     required_error_codes: tuple[str, ...]
+    # NOTE: every field is an immutable tuple/str so the frozen dataclass is
+    # genuinely immutable and hashable (no mutable dict field).
 
 
 API_CONTRACT = ApiContract(
@@ -75,7 +77,7 @@ API_CONTRACT = ApiContract(
     prefix=API_V1_PREFIX,
     request_id_header=REQUEST_ID_HEADER,
     success_envelope_fields=tuple(ApiResponse.model_fields.keys()),
-    error_envelope_shape={"error": tuple(ErrorBody.model_fields.keys())},
+    error_envelope_fields=tuple(ErrorBody.model_fields.keys()),
     pagination_fields=tuple(PageMeta.model_fields.keys()),
     required_error_codes=_REQUIRED_ERROR_CODES,
 )
@@ -90,7 +92,7 @@ def contract_descriptor() -> dict:
         "success_envelope_fields": list(API_CONTRACT.success_envelope_fields),
         "pagination_fields": list(API_CONTRACT.pagination_fields),
         "error_envelope": {
-            "error": list(API_CONTRACT.error_envelope_shape["error"]),
+            "error": list(API_CONTRACT.error_envelope_fields),
         },
         "required_error_codes": list(API_CONTRACT.required_error_codes),
     }

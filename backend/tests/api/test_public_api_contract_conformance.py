@@ -20,10 +20,15 @@ client = TestClient(app)
 EXPECTED_V1_ROUTES = {("GET", "/api/v1")}
 
 
+def _is_v1_path(path: str) -> bool:
+    # Segment-boundary match so /api/v1beta and /api/v10 are NOT treated as v1.
+    return path == API_V1_PREFIX or path.startswith(API_V1_PREFIX + "/")
+
+
 def _v1_routes():
     found = set()
     for route in app.routes:
-        if isinstance(route, APIRoute) and route.path.startswith(API_V1_PREFIX):
+        if isinstance(route, APIRoute) and _is_v1_path(route.path):
             for method in route.methods - {"HEAD", "OPTIONS"}:
                 found.add((method, route.path))
     return found
@@ -33,20 +38,41 @@ def test_v1_route_set_matches_known_conforming_allowlist():
     assert _v1_routes() == EXPECTED_V1_ROUTES
 
 
+def _resolve_success_envelope_component(op, components, where):
+    """Resolve a route operation's success (2xx) JSON response to its component
+    schema, turning malformed/undeclared responses into clean assertion
+    failures instead of KeyErrors."""
+    responses = op.get("responses", {})
+    success_codes = sorted(c for c in responses if c.startswith("2"))
+    assert success_codes, f"{where}: no 2xx response declared"
+    code = "200" if "200" in success_codes else success_codes[0]
+    content = responses[code].get("content", {}).get("application/json", {})
+    schema = content.get("schema")
+    assert schema, f"{where}: 2xx response has no application/json schema (missing response_model?)"
+    ref = schema.get("$ref")
+    assert ref, f"{where}: 2xx schema is not a $ref to a canonical envelope model (got {schema!r})"
+    name = ref.split("/")[-1]
+    assert name in components, f"{where}: schema ref {ref} not found in components"
+    return components[name]
+
+
 def test_every_v1_route_success_uses_canonical_envelope():
     schema = app.openapi()
+    components = schema.get("components", {}).get("schemas", {})
     for route in app.routes:
-        if not (isinstance(route, APIRoute) and route.path.startswith(API_V1_PREFIX)):
+        if not (isinstance(route, APIRoute) and _is_v1_path(route.path)):
             continue
         for method in route.methods - {"HEAD", "OPTIONS"}:
+            where = f"{method} {route.path}"
             op = schema["paths"][route.path][method.lower()]
-            ok = op["responses"]["200"]["content"]["application/json"]["schema"]
-            ref = ok.get("$ref", "")
-            comp = schema["components"]["schemas"][ref.split("/")[-1]]
+            comp = _resolve_success_envelope_component(op, components, where)
             # canonical envelope: exactly status/data/meta, status const "success"
-            assert set(comp["properties"].keys()) == {"status", "data", "meta"}
-            assert comp["properties"]["status"].get("const") == "success" \
-                or comp["properties"]["status"].get("default") == "success"
+            assert set(comp["properties"].keys()) == {"status", "data", "meta"}, \
+                f"{where}: success body is not the canonical {{status,data,meta}} envelope"
+            status_prop = comp["properties"]["status"]
+            assert status_prop.get("const") == "success" \
+                or status_prop.get("default") == "success", \
+                f"{where}: envelope status is not const/default 'success'"
 
 
 def test_v1_meta_success_matches_descriptor_and_envelope():
@@ -90,3 +116,19 @@ def test_descriptor_error_envelope_matches_schemas_error():
     from app.api.schemas import ErrorBody
     d = contract_descriptor()
     assert d["error_envelope"]["error"] == list(ErrorBody.model_fields.keys())
+
+
+def test_required_error_codes_match_http_handler_mapping():
+    # The descriptor's advertised error-code vocabulary must stay in sync with
+    # the codes the HTTP exception handlers actually emit (app/api/errors.py).
+    from app.api.errors import STATUS_TO_CODE
+    d = contract_descriptor()
+    assert set(d["required_error_codes"]) == set(STATUS_TO_CODE.values())
+
+
+def test_contract_descriptor_model_covers_all_descriptor_keys():
+    # The ContractDescriptor response model must expose exactly the keys
+    # contract_descriptor() emits, so no descriptor key is silently dropped
+    # from (or invented in) the served /api/v1 body.
+    from app.api.v1_meta import ContractDescriptor
+    assert set(ContractDescriptor.model_fields.keys()) == set(contract_descriptor().keys())
