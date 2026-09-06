@@ -19,6 +19,11 @@ def test_public_endpoint_allowlist():
         ("HEAD", "/redoc"),
         ("GET", "/docs/oauth2-redirect"),
         ("HEAD", "/docs/oauth2-redirect"),
+        # Sprint 30.0: public API-contract discovery endpoint. Returns only the
+        # static contract descriptor (envelope field names, error codes) — no
+        # data, no side effects, strictly less than the already-public
+        # /openapi.json & /docs. Deliberately unauthenticated.
+        ("GET", "/api/v1"),
     }
     
     # Helper to check if a route requires verify_api_key dependency
@@ -74,6 +79,8 @@ def test_protected_endpoints_require_api_key():
         ("GET", "/docs"),
         ("GET", "/redoc"),
         ("GET", "/docs/oauth2-redirect"),
+        # Sprint 30.0: public API-contract discovery endpoint (see note above).
+        ("GET", "/api/v1"),
     }
     
     # Verify all non-allowlisted /api/* endpoints enforce API key protection

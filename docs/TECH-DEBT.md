@@ -1247,3 +1247,41 @@ bırakıldı (sessiz düşürme yok).
    kapsam dışı (26.x/27.10 accuracy regression gate ailesinin işi). →
    kapsam dışı, karıştırılmasın.
    *İlgili Dosya:* yok (bilinçli kapsam ayrımı)
+
+## §26. Sprint 30.0 (Public Query API Contract) devirleri — AÇIK
+
+30.0 kesişen sözleşme konvansiyonunu (kanonik `ApiResponse` envelope + `/api/v1`
+versiyon + offset pagination + mevcut hata sözleşmesinin re-export'u) tek-kaynak
+modül (`backend/app/api/contract.py`) + 29.7 tarzı conformance guard
+(`backend/tests/api/test_public_api_contract_conformance.py`) olarak kurdu;
+mevcut 20+ `/api/*` endpoint grandfathered (DEĞİŞMEDİ). Aşağıdakiler tasarım
+spec'inde (§7) bilinçli olarak kapsam dışı bırakıldı (sessiz düşürme yok).
+
+1. **Legacy endpoint migrasyonu yok.** 20+ mevcut `/api/*` endpoint hâlâ kendi
+   ad-hoc `*EnvelopeResponse` şekillerinde; `/api/v1` + kanonik `data` envelope'a
+   taşınmadı (kırıcı — frontend/testler etkilenir). → her 30.x kendi yüzeyini
+   taşır ya da ayrı bir migrasyon sprint'i.
+   *İlgili Dosya:* `backend/app/api/schemas.py`, `backend/app/main.py`, `backend/app/api/*_api.py`
+2. **Legacy `/api/*` deprecation/sunset yok.** Versiyonsuz yollar kaldırılmadı;
+   client-migration hikayesi gerekir. → migrasyon sprint'i sonrası.
+   *İlgili Dosya:* `backend/app/main.py`
+3. **Route-miss 404 kanonik değil.** Bilinmeyen bir path'e giden 404 Starlette'in
+   default handler'ından geçer ve `{"detail": "..."}` şeklini korur (kanonik
+   `{error:{code,message,details}}` yalnız gerçekten `HTTPException` fırlatan
+   yollarda üretilir). 30.0 mevcut hata handler'larına dokunmadı (spec §7); bir
+   route-not-found handler'ı eklemek ileri işi. → ileri sprint.
+   *İlgili Dosya:* `backend/app/api/errors.py`, `backend/app/main.py`
+4. **Cursor pagination + sayfa-üstü `total` yok.** Yalnız offset + sayfa-içi
+   `count` (`PageMeta`); büyük result-set'ler için cursor tabanlı sayfalama ve
+   toplam sayaç ertelendi. → ileri sprint, gerekirse.
+   *İlgili Dosya:* `backend/app/api/contract.py`
+5. **`app/errors/` domain taksonomisi HTTP `code`'una eşlenmedi.** HTTP katmanı
+   status→code map'ini (`app/api/errors.py::map_status_to_code`) korur; 27.2'nin
+   zengin taksonomisi (`app/errors/{categories,codes,registry}.py`) HTTP hata
+   `code` alanına bağlanmadı. → ileri sprint.
+   *İlgili Dosya:* `backend/app/api/errors.py`, `backend/app/errors/`
+6. **AuthN / rate-limiting / OpenAPI publishing / somut `POST /api/v1/query` yok.**
+   Meta endpoint public (auth 30.8'in işi); rate-limit/quota/request-signing,
+   OpenAPI doc publishing/SDK üretimi ve somut query iş-endpoint'i bu sözleşmenin
+   üstüne sonraki sprint'lerde inşa edilecek.
+   *İlgili Dosya:* `backend/app/api/v1_meta.py` (sözleşme temeli)
