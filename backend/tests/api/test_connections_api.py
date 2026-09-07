@@ -102,6 +102,14 @@ def test_get_update_delete_roundtrip():
     assert client.get(f"/api/v1/connections/{cid}").status_code == 404
 
 
+def test_patch_auth_mode_to_none_clears_secret():
+    cid = client.post("/api/v1/connections", json=_payload()).json()["data"]["id"]
+    r = client.patch(f"/api/v1/connections/{cid}", json={"auth_mode": "none"})
+    assert r.status_code == 200
+    assert r.json()["data"]["auth_mode"] == "none"
+    assert r.json()["data"]["secret_ref"] is None
+
+
 def test_patch_empty_body_422():
     cid = client.post("/api/v1/connections", json=_payload()).json()["data"]["id"]
     assert client.patch(f"/api/v1/connections/{cid}", json={}).status_code == 422

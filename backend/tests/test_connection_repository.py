@@ -84,6 +84,17 @@ def test_update_missing_returns_none():
     assert repo.update_connection("nope", name="x") is None
 
 
+def test_update_auth_mode_to_none_clears_secret():
+    # regression: transitioning secret_ref -> none must clear the stored secret,
+    # otherwise the domain invariant makes the 'none' state unreachable (422 dead-end).
+    c = repo.create_connection(**_mk())
+    up = repo.update_connection(c["id"], auth_mode="none")
+    assert up["auth_mode"] == "none"
+    assert up["secret_provider"] is None and up["secret_key"] is None
+    resp = repo.row_to_response_dict(up)
+    assert resp["secret_ref"] is None
+
+
 def test_delete():
     c = repo.create_connection(**_mk())
     assert repo.delete_connection(c["id"]) is True

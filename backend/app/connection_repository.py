@@ -18,11 +18,8 @@ from app.evaluation.connection_abstraction import (
     SQLConnectionProfile,
     SQLConnectionEndpoint,
     SQLConnectionSecretRef,
-    SQLConnectionAuthMode,
     SQLConnectionAccessMode,
-    SQLConnectionEnvironment,
 )
-from app.evaluation.multi_database_execution import SQLDatabaseDialect
 
 
 class ConnectionRefConflict(Exception):
@@ -38,17 +35,19 @@ def build_profile(
     auth_mode, secret_provider, secret_key, max_rows, timeout_seconds,
 ) -> SQLConnectionProfile:
     """Construct (and thereby validate) the domain profile. access_mode is always
-    READ_ONLY. Raises SQLConnectionAbstractionContractError on invalid input."""
+    READ_ONLY. `dialect`/`environment`/`auth_mode` are passed as raw strings so
+    SQLConnectionProfile.__post_init__ does the enum conversion AND wraps any bad
+    value as SQLConnectionAbstractionContractError (not a bare ValueError)."""
     secret_ref = None
     if secret_provider is not None or secret_key is not None:
         secret_ref = SQLConnectionSecretRef(provider=secret_provider or "", key=secret_key or "")
     return SQLConnectionProfile(
         connection_ref=connection_ref,
-        dialect=SQLDatabaseDialect(dialect),
-        environment=SQLConnectionEnvironment(environment),
+        dialect=dialect,
+        environment=environment,
         endpoint=SQLConnectionEndpoint(host=host, port=port, database=database),
         access_mode=SQLConnectionAccessMode.READ_ONLY,
-        auth_mode=SQLConnectionAuthMode(auth_mode),
+        auth_mode=auth_mode,
         secret_ref=secret_ref,
         max_rows=max_rows,
         timeout_seconds=timeout_seconds,
@@ -84,7 +83,12 @@ def create_connection(
             )
             conn.commit()
     except sqlite3.IntegrityError as exc:
-        raise ConnectionRefConflict(connection_ref) from exc
+        # Only the UNIQUE(connection_ref) constraint maps to a 409 conflict; any
+        # other integrity violation is a genuine error and must surface, not be
+        # mislabeled as a duplicate.
+        if "connection_ref" in str(exc):
+            raise ConnectionRefConflict(connection_ref) from exc
+        raise
     return get_connection(cid)
 
 
@@ -130,7 +134,20 @@ def update_connection(connection_id: str, **fields: Any) -> Optional[dict]:
     row = get_connection(connection_id)
     if row is None:
         return None
-    merged = {**row, **{k: v for k, v in fields.items() if k in _UPDATABLE_CONNECTION_COLUMNS}}
+    # Effective writes: provided non-None fields, restricted to the whitelist.
+    writes = {
+        k: v for k, v in fields.items()
+        if k in _UPDATABLE_CONNECTION_COLUMNS and v is not None
+    }
+    # Transitioning auth_mode to NONE must clear the stored secret_ref, otherwise
+    # the domain invariant (NONE => secret_ref is None) makes the state
+    # unreachable by update. This is the one place a column is written to NULL.
+    if writes.get("auth_mode") == "none":
+        writes["secret_provider"] = None
+        writes["secret_key"] = None
+    if not writes:
+        return row
+    merged = {**row, **writes}
     # Re-validate the resulting profile (raises on invalid input).
     build_profile(
         connection_ref=merged["connection_ref"], dialect=merged["dialect"],
@@ -139,16 +156,10 @@ def update_connection(connection_id: str, **fields: Any) -> Optional[dict]:
         secret_provider=merged["secret_provider"], secret_key=merged["secret_key"],
         max_rows=merged["max_rows"], timeout_seconds=merged["timeout_seconds"],
     )
-    sets, values = [], []
-    for col in _UPDATABLE_CONNECTION_COLUMNS:
-        if col in fields and fields[col] is not None:
-            sets.append(f"{col} = ?")
-            values.append(fields[col])
-    if not sets:
-        return row
-    sets.append("updated_at = ?")
-    values.append(_now())
-    values.append(connection_id)
+    # `writes` keys are all from _UPDATABLE_CONNECTION_COLUMNS (whitelist) — safe.
+    cols = list(writes.keys())
+    sets = [f"{c} = ?" for c in cols] + ["updated_at = ?"]
+    values = [writes[c] for c in cols] + [_now(), connection_id]
     with get_db_connection() as conn:
         conn.execute(f"UPDATE connections SET {', '.join(sets)} WHERE id = ?", values)
         conn.commit()
