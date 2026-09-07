@@ -3025,15 +3025,15 @@
             "title": "Connection Id",
             "type": "string"
           },
-          "schema": {
+          "structure": {
             "additionalProperties": true,
-            "title": "Schema",
+            "title": "Structure",
             "type": "object"
           }
         },
         "required": [
           "connection_id",
-          "schema"
+          "structure"
         ],
         "title": "SchemaSyncCreate",
         "type": "object"

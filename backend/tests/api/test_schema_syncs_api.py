@@ -43,7 +43,7 @@ def _env(b):
 
 def test_create_201_first_sync_drifted():
     cid = _conn()
-    r = client.post("/api/v1/schema-syncs", json={"connection_id": cid, "schema": _schema("id")})
+    r = client.post("/api/v1/schema-syncs", json={"connection_id": cid, "structure": _schema("id")})
     assert r.status_code == 201
     b = _env(r.json())
     assert b["data"]["connection_id"] == cid
@@ -55,28 +55,28 @@ def test_create_201_first_sync_drifted():
 
 def test_second_changed_sync_reports_drift():
     cid = _conn()
-    client.post("/api/v1/schema-syncs", json={"connection_id": cid, "schema": _schema("id")})
-    r = client.post("/api/v1/schema-syncs", json={"connection_id": cid, "schema": _schema("id", "email")})
+    client.post("/api/v1/schema-syncs", json={"connection_id": cid, "structure": _schema("id")})
+    r = client.post("/api/v1/schema-syncs", json={"connection_id": cid, "structure": _schema("id", "email")})
     d = r.json()["data"]
     assert d["drifted"] is True
     assert {"table": "users", "column": "email"} in d["drift"]["added_columns"]
 
 
 def test_unknown_connection_400():
-    r = client.post("/api/v1/schema-syncs", json={"connection_id": "nope", "schema": _schema("id")})
+    r = client.post("/api/v1/schema-syncs", json={"connection_id": "nope", "structure": _schema("id")})
     assert r.status_code == 400 and r.json()["error"]["code"] == "BAD_REQUEST"
 
 
 def test_malformed_schema_422():
     cid = _conn()
-    r = client.post("/api/v1/schema-syncs", json={"connection_id": cid, "schema": {"x": 1}})
+    r = client.post("/api/v1/schema-syncs", json={"connection_id": cid, "structure": {"x": 1}})
     assert r.status_code == 422
 
 
 def test_list_filter_and_meta():
     cid = _conn()
     for _ in range(2):
-        client.post("/api/v1/schema-syncs", json={"connection_id": cid, "schema": _schema("id")})
+        client.post("/api/v1/schema-syncs", json={"connection_id": cid, "structure": _schema("id")})
     r = client.get("/api/v1/schema-syncs", params={"connection_id": cid, "limit": 1, "offset": 0})
     b = _env(r.json())
     assert len(b["data"]) == 1 and b["meta"]["pagination"] == {"limit": 1, "offset": 0, "count": 1}
@@ -84,7 +84,7 @@ def test_list_filter_and_meta():
 
 def test_get_and_delete_404():
     cid = _conn()
-    sid = client.post("/api/v1/schema-syncs", json={"connection_id": cid, "schema": _schema("id")}).json()["data"]["id"]
+    sid = client.post("/api/v1/schema-syncs", json={"connection_id": cid, "structure": _schema("id")}).json()["data"]["id"]
     assert client.get(f"/api/v1/schema-syncs/{sid}").status_code == 200
     assert client.delete(f"/api/v1/schema-syncs/{sid}").status_code == 200
     assert client.get(f"/api/v1/schema-syncs/{sid}").status_code == 404
