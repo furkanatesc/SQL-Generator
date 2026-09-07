@@ -944,6 +944,21 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   2844 passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §27): global-tablo
   scoping, connection/schema/history bağlama (30.2+), membership/rol (AuthN 30.8),
   slug mutasyonu/soft-delete, cursor pagination + `total`, delete cascade. (PR #170)
+- **Connection Registry API** (Sprint 30.2): persistent connection registry
+  (`/api/v1/connections` CRUD) — 30.0 sözleşmesindeki ikinci kaynak, workspace'e
+  bağlanan İLK kaynak. Phase 7 domain modelini (`connection_abstraction.py`)
+  validasyon için yeniden kullanır; **secret-by-reference** — yalnız `secret_ref`
+  `{provider,key}` pointer'ı saklanır/dönülür, ham parola/connection-string ASLA
+  (`SQLConnectionSecretRef` ham secret'i tarayıp reddeder). Yeni `connections`
+  tablosu (+`workspace_id` index, additive) + `connection_repository.py` (her
+  yazma `SQLConnectionProfile` ile doğrulanır) + `verify_api_key` korumalı router
+  (POST 201/list-paginated+`?workspace_id=` filtresi/get/patch/delete; bilinmeyen
+  workspace→400, duplicate connection_ref→409, domain-invalid→422). auth_mode→none
+  geçişi secret'i temizler. Standalone/inert (canlı bağlantı açmaz, secret çözmez).
+  Mevcut hiçbir tablo/endpoint/handler davranışı değişmedi (additive; domain modeli
+  import edilir, düzenlenmez). Full suite 2867 passed/37 skipped. **Bilinçli kapsam
+  dışı** (TECH-DEBT §28): canlı test/secret çözümü, pipeline wiring (30.4),
+  non-READ_ONLY, RBAC (30.8), workspace-delete cascade, cursor pagination. (PR #171)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
