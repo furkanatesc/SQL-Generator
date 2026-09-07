@@ -1360,6 +1360,27 @@ Bilinçli kapsam dışı (sessiz düşürme yok).
 5. **Legacy 28.7 global-şema drift yüzeyi (`/api/debug/schema/*`) ile uzlaştırma yok.**
    İki yüzey bir arada; 28.7 tek global şema, 30.3 per-connection. → ileri.
    *İlgili Dosya:* `backend/app/api/schema_sync_api.py`, `backend/app/api/schema_syncs.py`
-6. **Cursor pagination + sayfa-üstü `total` yok; monotonik seq yerine `created_at`+`id`
-   ORDER.** Aynı-mikrosaniye çok-insert'te sıra teorik olarak belirsiz (pratikte kararlı).
+6. **Cursor pagination + sayfa-üstü `total` yok.** Ordering sqlite `rowid` (monotonik
+   insertion) ile yapılır — coarse `created_at` tie'ları güvenli; ama sayfalar arası
+   `total` sayaç ve cursor tabanlı sayfalama yok. 30.0 offset-only `PageMeta`.
    *İlgili Dosya:* `backend/app/schema_sync_repository.py`
+
+## §30. Sprint 30.4 (Query Run API) devirleri — AÇIK
+
+30.4 inert bir query-run ledger'ı (`/api/v1/query-runs`) ekledi; SQL + opsiyonel
+sağlanan sonuç/hata kaydeder, **canlı DB'ye bağlanmaz, secret çözmez**. Bilinçli
+kapsam dışı (sessiz düşürme yok).
+
+1. **Canlı execution yok.** `secret_ref` çözme + read-only bağlantı + gerçek SELECT
+   (29.x adapter) — güvenlik-hassas, kullanıcı-onaylı adım; sonraki sprint. → 30.x.
+   *İlgili Dosya:* `backend/app/query_run_repository.py`, `backend/app/evaluation/*_execution_adapter.py`
+2. **NL→SQL üretimi yok.** 30.4 SQL run kaydeder, NL'den SQL üretmez (pipeline/`jobs`).
+   *İlgili Dosya:* `backend/app/api/query_runs.py`
+3. **Result pagination/streaming, büyük-sonuç boyut limiti, run iptali/retry yok.**
+   Sonuç JSON olarak tek parça saklanır.
+   *İlgili Dosya:* `backend/app/query_run_repository.py`
+4. **Workspace-scoping, connection-delete cascade yok** (dangling `connection_id`
+   mümkün; 30.2/30.3 ile tutarlı). → ileri.
+   *İlgili Dosya:* `backend/app/query_run_repository.py`, `backend/app/connection_repository.py`
+5. **Cursor pagination + sayfa-üstü `total`, run PATCH (mutasyon) yok** (append-only).
+   *İlgili Dosya:* `backend/app/api/query_runs.py`, `backend/app/api/contract.py`
