@@ -7,7 +7,7 @@ DB connection and resolves no secret. Protected by verify_api_key.
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.api.contract import API_V1_PREFIX, ApiResponse, PageMeta, ResponseMeta
 from app.auth import verify_api_key
@@ -33,6 +33,14 @@ class QueryRunCreate(BaseModel):
     sql: str = Field(min_length=1)
     result: Optional[QueryRunResult] = None
     execution_error: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _one_outcome(self):
+        # A run is recorded (neither), succeeded (result), or failed
+        # (execution_error) — never both, which would silently drop the result.
+        if self.result is not None and self.execution_error is not None:
+            raise ValueError("result ve execution_error aynı anda verilemez")
+        return self
 
 
 class QueryRunResponse(BaseModel):
@@ -60,7 +68,10 @@ def create_query_run(payload: QueryRunCreate) -> ApiResponse[QueryRunResponse]:
         result = payload.result.model_dump()
     else:
         result = None
-    row = repo.create_query_run(payload.connection_id, payload.sql, result=result)
+    try:
+        row = repo.create_query_run(payload.connection_id, payload.sql, result=result)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return _resp(row)
 
 
