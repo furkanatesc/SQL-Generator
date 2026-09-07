@@ -1312,3 +1312,30 @@ feedback/query_traces/sql_cache) retro-scope EDİLMEDİ. Bilinçli kapsam dış�
 6. **Delete cascade semantiği yok.** Henüz workspace'e referans veren alt-kaynak
    yok; delete basit satır silme. → alt-kaynaklar (30.2+) eklendiğinde ele alınır.
    *İlgili Dosya:* `backend/app/workspace_repository.py`
+
+## §28. Sprint 30.2 (Connection Registry API) devirleri — AÇIK
+
+30.2 persistent connection registry'yi (`/api/v1/connections` CRUD) ekledi; Phase 7
+domain modelini (`SQLConnectionProfile`) validasyon için yeniden kullanır,
+**secret-by-reference** (ham secret asla saklanmaz/dönülmez). Standalone/inert.
+Bilinçli kapsam dışı (sessiz düşürme yok).
+
+1. **Canlı connection testi / health-check / secret çözümü / rotation yok.**
+   Registry inert; bağlantı açma / `secret_ref` çözme 29.x resolver'lar / ileri
+   pipeline wiring'in işi. → 30.4 / ileri.
+   *İlgili Dosya:* `backend/app/connection_repository.py`, `backend/app/evaluation/*_connection_resolver.py`
+2. **Execution pipeline'a wiring yok.** Registry üretim sorgu yolunu beslemiyor.
+   → 30.4 Query Run.
+   *İlgili Dosya:* `backend/app/api/connections.py`
+3. **Non-READ_ONLY access mode yok** (domain yalnız READ_ONLY zorlar).
+   *İlgili Dosya:* `backend/app/evaluation/connection_abstraction.py`
+4. **Per-workspace RBAC / connection sahipliği / paylaşım yok** (AuthN 30.8).
+   *İlgili Dosya:* yok (30.8 bağımlılığı)
+5. **`connection_ref` mutasyonu, soft-delete, workspace-delete cascade yok.**
+   `workspace_id` nullable FK ama workspace silinince ona bağlı connection'ların
+   `workspace_id`'si **dangling** kalabilir (30.2 cascade/temizlik uygulamaz;
+   30.1 §27.6'nın somutlaştığı ilk yer). → ileri sprint.
+   *İlgili Dosya:* `backend/app/connection_repository.py`, `backend/app/workspace_repository.py`
+6. **IAM secret detayları, TLS/sertifika, connection pooling, cursor pagination
+   + sayfa-üstü `total` yok.** 30.0'ın offset-only `PageMeta`'sı devralındı.
+   *İlgili Dosya:* `backend/app/api/connections.py`, `backend/app/api/contract.py`
