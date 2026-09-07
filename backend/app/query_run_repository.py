@@ -20,14 +20,19 @@ def _now() -> str:
 
 
 def create_query_run(connection_id: str, sql: str, result: Optional[dict] = None) -> dict:
+    if not sql or not sql.strip():
+        # Enforce the non-empty-sql invariant at the persistence boundary, not only
+        # in the API's Pydantic model (direct callers must not persist empty SQL).
+        raise ValueError("sql cannot be empty")
     columns_json = rows_json = None
     truncated = row_count = duration_ms = execution_error = None
     if result is None:
         status = "recorded"
-    elif result.get("execution_error"):
+    elif result.get("execution_error") is not None:
+        # Key-presence (not truthiness): an empty-string error is still a failure,
+        # not a silently-dropped success.
         status = "failed"
         execution_error = result["execution_error"]
-        duration_ms = result.get("duration_ms")
     else:
         status = "succeeded"
         rows = result.get("rows", []) or []

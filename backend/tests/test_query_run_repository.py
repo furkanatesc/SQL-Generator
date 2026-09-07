@@ -38,6 +38,18 @@ def test_failed_run_with_error():
     assert resp["execution_error"] == "boom" and resp["result"] is None
 
 
+def test_empty_string_error_still_failed():
+    # empty-string error is a failure, not a silently-dropped success
+    r = repo.create_query_run("conn1", "SELECT x", result={"execution_error": ""})
+    assert r["status"] == "failed"
+    assert repo.row_to_response_dict(r)["execution_error"] == ""
+
+
+def test_empty_sql_rejected_at_repo():
+    with pytest.raises(ValueError):
+        repo.create_query_run("conn1", "   ")
+
+
 def test_list_filters_and_paginate():
     repo.create_query_run("conn1", "SELECT 1")
     repo.create_query_run("conn1", "SELECT 2", result={"columns": [], "rows": []})
