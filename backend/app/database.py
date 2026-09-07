@@ -157,6 +157,10 @@ def init_db():
                 updated_at      TEXT NOT NULL
             )
         """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_connections_workspace_id "
+            "ON connections (workspace_id)"
+        )
 
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
