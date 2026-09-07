@@ -1,4 +1,14 @@
 {
+  "ApiResponse_ConnectionResponse_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "ApiResponse_ContractDescriptor_": {
     "properties": [
       "data",
@@ -10,6 +20,16 @@
     ]
   },
   "ApiResponse_WorkspaceResponse_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_list_ConnectionResponse__": {
     "properties": [
       "data",
       "meta",
@@ -181,6 +201,78 @@
       "value"
     ]
   },
+  "ConnectionCreate": {
+    "properties": [
+      "auth_mode",
+      "connection_ref",
+      "database",
+      "dialect",
+      "environment",
+      "host",
+      "max_rows",
+      "name",
+      "port",
+      "secret_ref",
+      "timeout_seconds",
+      "workspace_id"
+    ],
+    "required": [
+      "auth_mode",
+      "connection_ref",
+      "database",
+      "dialect",
+      "environment",
+      "host",
+      "name",
+      "port"
+    ]
+  },
+  "ConnectionResponse": {
+    "properties": [
+      "access_mode",
+      "auth_mode",
+      "connection_ref",
+      "created_at",
+      "dialect",
+      "endpoint",
+      "environment",
+      "id",
+      "max_rows",
+      "name",
+      "secret_ref",
+      "timeout_seconds",
+      "updated_at",
+      "workspace_id"
+    ],
+    "required": [
+      "access_mode",
+      "auth_mode",
+      "connection_ref",
+      "created_at",
+      "dialect",
+      "endpoint",
+      "environment",
+      "id",
+      "max_rows",
+      "name",
+      "timeout_seconds",
+      "updated_at"
+    ]
+  },
+  "ConnectionUpdate": {
+    "properties": [
+      "auth_mode",
+      "database",
+      "environment",
+      "host",
+      "max_rows",
+      "name",
+      "port",
+      "secret_ref",
+      "timeout_seconds"
+    ],
+    "required": []
+  },
   "ContractDescriptor": {
     "properties": [
       "error_envelope",
@@ -264,6 +356,18 @@
     ],
     "required": [
       "relations"
+    ]
+  },
+  "EndpointModel": {
+    "properties": [
+      "database",
+      "host",
+      "port"
+    ],
+    "required": [
+      "database",
+      "host",
+      "port"
     ]
   },
   "ErrorBody": {
@@ -872,6 +976,18 @@
       "upload_dir_configured"
     ]
   },
+  "SQLConnectionAuthMode": {
+    "properties": [],
+    "required": []
+  },
+  "SQLConnectionEnvironment": {
+    "properties": [],
+    "required": []
+  },
+  "SQLDatabaseDialect": {
+    "properties": [],
+    "required": []
+  },
   "SQLHistoryIndexRequest": {
     "properties": [
       "history_id",
@@ -928,6 +1044,16 @@
       "drifted",
       "signature_version",
       "status"
+    ]
+  },
+  "SecretRefModel": {
+    "properties": [
+      "key",
+      "provider"
+    ],
+    "required": [
+      "key",
+      "provider"
     ]
   },
   "SortOrder": {

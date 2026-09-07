@@ -24,6 +24,7 @@ from app.api.schema_sync_api import router as schema_sync_router
 from app.api.cache_api import router as cache_router
 from app.api.v1_meta import router as v1_meta_router
 from app.api.workspaces import router as workspaces_router
+from app.api.connections import router as connections_router
 from fastapi.exceptions import RequestValidationError
 from app.settings import get_settings
 from app.api.errors import http_exception_handler, validation_exception_handler, unhandled_exception_handler
@@ -97,6 +98,7 @@ app.include_router(schema_sync_router)
 app.include_router(cache_router)
 app.include_router(v1_meta_router)
 app.include_router(workspaces_router)
+app.include_router(connections_router)
 
 # CORS
 app.add_middleware(

@@ -1,6 +1,34 @@
 {
   "components": {
     "schemas": {
+      "ApiResponse_ConnectionResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ConnectionResponse"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[ConnectionResponse]",
+        "type": "object"
+      },
       "ApiResponse_ContractDescriptor_": {
         "properties": {
           "data": {
@@ -55,6 +83,38 @@
           "data"
         ],
         "title": "ApiResponse[WorkspaceResponse]",
+        "type": "object"
+      },
+      "ApiResponse_list_ConnectionResponse__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectionResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[ConnectionResponse]]",
         "type": "object"
       },
       "ApiResponse_list_WorkspaceResponse__": {
@@ -533,6 +593,294 @@
         "title": "ConfigUpdateResponse",
         "type": "object"
       },
+      "ConnectionCreate": {
+        "properties": {
+          "auth_mode": {
+            "$ref": "#/components/schemas/SQLConnectionAuthMode"
+          },
+          "connection_ref": {
+            "maxLength": 200,
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "title": "Connection Ref",
+            "type": "string"
+          },
+          "database": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Database",
+            "type": "string"
+          },
+          "dialect": {
+            "$ref": "#/components/schemas/SQLDatabaseDialect"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/SQLConnectionEnvironment"
+          },
+          "host": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Host",
+            "type": "string"
+          },
+          "max_rows": {
+            "default": 1000,
+            "exclusiveMinimum": 0.0,
+            "title": "Max Rows",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "port": {
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "type": "integer"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SecretRefModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timeout_seconds": {
+            "default": 2.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout Seconds",
+            "type": "number"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          }
+        },
+        "required": [
+          "connection_ref",
+          "name",
+          "dialect",
+          "environment",
+          "host",
+          "port",
+          "database",
+          "auth_mode"
+        ],
+        "title": "ConnectionCreate",
+        "type": "object"
+      },
+      "ConnectionResponse": {
+        "properties": {
+          "access_mode": {
+            "title": "Access Mode",
+            "type": "string"
+          },
+          "auth_mode": {
+            "title": "Auth Mode",
+            "type": "string"
+          },
+          "connection_ref": {
+            "title": "Connection Ref",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "dialect": {
+            "title": "Dialect",
+            "type": "string"
+          },
+          "endpoint": {
+            "$ref": "#/components/schemas/EndpointModel"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "max_rows": {
+            "title": "Max Rows",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SecretRefModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timeout_seconds": {
+            "title": "Timeout Seconds",
+            "type": "number"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          }
+        },
+        "required": [
+          "id",
+          "connection_ref",
+          "name",
+          "dialect",
+          "environment",
+          "endpoint",
+          "access_mode",
+          "auth_mode",
+          "max_rows",
+          "timeout_seconds",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ConnectionResponse",
+        "type": "object"
+      },
+      "ConnectionUpdate": {
+        "properties": {
+          "auth_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SQLConnectionAuthMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "database": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SQLConnectionEnvironment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "host": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "max_rows": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Rows"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SecretRefModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          }
+        },
+        "title": "ConnectionUpdate",
+        "type": "object"
+      },
       "ContractDescriptor": {
         "properties": {
           "error_envelope": {
@@ -756,6 +1104,29 @@
           "relations"
         ],
         "title": "DisabledRelationsUpdate",
+        "type": "object"
+      },
+      "EndpointModel": {
+        "properties": {
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "port",
+          "database"
+        ],
+        "title": "EndpointModel",
         "type": "object"
       },
       "ErrorBody": {
@@ -2464,6 +2835,36 @@
         "title": "RuntimeConfigDiagnostics",
         "type": "object"
       },
+      "SQLConnectionAuthMode": {
+        "enum": [
+          "secret_ref",
+          "iam",
+          "none"
+        ],
+        "title": "SQLConnectionAuthMode",
+        "type": "string"
+      },
+      "SQLConnectionEnvironment": {
+        "enum": [
+          "local",
+          "dev",
+          "staging",
+          "prod"
+        ],
+        "title": "SQLConnectionEnvironment",
+        "type": "string"
+      },
+      "SQLDatabaseDialect": {
+        "enum": [
+          "sqlite",
+          "postgresql",
+          "oracle",
+          "mysql",
+          "sqlserver"
+        ],
+        "title": "SQLDatabaseDialect",
+        "type": "string"
+      },
       "SQLHistoryIndexRequest": {
         "properties": {
           "history_id": {
@@ -2609,6 +3010,28 @@
           "drift"
         ],
         "title": "SchemaSyncEnvelopeResponse",
+        "type": "object"
+      },
+      "SecretRefModel": {
+        "properties": {
+          "key": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "key"
+        ],
+        "title": "SecretRefModel",
         "type": "object"
       },
       "SortOrder": {
@@ -5097,6 +5520,289 @@
         "summary": "Get Api Contract",
         "tags": [
           "api-contract"
+        ]
+      }
+    },
+    "/api/v1/connections": {
+      "get": {
+        "operationId": "list_connections_api_v1_connections_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_ConnectionResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "List Connections",
+        "tags": [
+          "connections"
+        ]
+      },
+      "post": {
+        "operationId": "create_connection_api_v1_connections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ConnectionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Create Connection",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/v1/connections/{connection_id}": {
+      "delete": {
+        "operationId": "delete_connection_api_v1_connections__connection_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "title": "Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ConnectionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Delete Connection",
+        "tags": [
+          "connections"
+        ]
+      },
+      "get": {
+        "operationId": "get_connection_api_v1_connections__connection_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "title": "Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ConnectionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Connection",
+        "tags": [
+          "connections"
+        ]
+      },
+      "patch": {
+        "operationId": "update_connection_api_v1_connections__connection_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "title": "Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_ConnectionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Update Connection",
+        "tags": [
+          "connections"
         ]
       }
     },
