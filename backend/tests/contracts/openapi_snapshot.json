@@ -57,6 +57,34 @@
         "title": "ApiResponse[ContractDescriptor]",
         "type": "object"
       },
+      "ApiResponse_SchemaSyncResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SchemaSyncResponse"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[SchemaSyncResponse]",
+        "type": "object"
+      },
       "ApiResponse_WorkspaceResponse_": {
         "properties": {
           "data": {
@@ -115,6 +143,38 @@
           "data"
         ],
         "title": "ApiResponse[list[ConnectionResponse]]",
+        "type": "object"
+      },
+      "ApiResponse_list_SchemaSyncResponse__": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SchemaSyncResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[list[SchemaSyncResponse]]",
         "type": "object"
       },
       "ApiResponse_list_WorkspaceResponse__": {
@@ -2959,6 +3019,25 @@
         "title": "SchemaFilterUpdate",
         "type": "object"
       },
+      "SchemaSyncCreate": {
+        "properties": {
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          },
+          "schema": {
+            "additionalProperties": true,
+            "title": "Schema",
+            "type": "object"
+          }
+        },
+        "required": [
+          "connection_id",
+          "schema"
+        ],
+        "title": "SchemaSyncCreate",
+        "type": "object"
+      },
       "SchemaSyncEnvelopeResponse": {
         "properties": {
           "action": {
@@ -3010,6 +3089,62 @@
           "drift"
         ],
         "title": "SchemaSyncEnvelopeResponse",
+        "type": "object"
+      },
+      "SchemaSyncResponse": {
+        "properties": {
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "drift": {
+            "additionalProperties": true,
+            "title": "Drift",
+            "type": "object"
+          },
+          "drifted": {
+            "title": "Drifted",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "previous_signature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Signature"
+          },
+          "signature": {
+            "title": "Signature",
+            "type": "string"
+          },
+          "structure": {
+            "additionalProperties": true,
+            "title": "Structure",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "connection_id",
+          "signature",
+          "drifted",
+          "drift",
+          "structure",
+          "created_at"
+        ],
+        "title": "SchemaSyncResponse",
         "type": "object"
       },
       "SecretRefModel": {
@@ -5803,6 +5938,231 @@
         "summary": "Update Connection",
         "tags": [
           "connections"
+        ]
+      }
+    },
+    "/api/v1/schema-syncs": {
+      "get": {
+        "operationId": "list_schema_syncs_api_v1_schema_syncs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "connection_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Connection Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_SchemaSyncResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "List Schema Syncs",
+        "tags": [
+          "schema-syncs"
+        ]
+      },
+      "post": {
+        "operationId": "create_schema_sync_api_v1_schema_syncs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchemaSyncCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SchemaSyncResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Create Schema Sync",
+        "tags": [
+          "schema-syncs"
+        ]
+      }
+    },
+    "/api/v1/schema-syncs/{sync_id}": {
+      "delete": {
+        "operationId": "delete_schema_sync_api_v1_schema_syncs__sync_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sync_id",
+            "required": true,
+            "schema": {
+              "title": "Sync Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SchemaSyncResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Delete Schema Sync",
+        "tags": [
+          "schema-syncs"
+        ]
+      },
+      "get": {
+        "operationId": "get_schema_sync_api_v1_schema_syncs__sync_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sync_id",
+            "required": true,
+            "schema": {
+              "title": "Sync Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SchemaSyncResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Get Schema Sync",
+        "tags": [
+          "schema-syncs"
         ]
       }
     },

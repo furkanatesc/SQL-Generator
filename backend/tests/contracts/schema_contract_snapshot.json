@@ -19,6 +19,16 @@
       "data"
     ]
   },
+  "ApiResponse_SchemaSyncResponse_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "ApiResponse_WorkspaceResponse_": {
     "properties": [
       "data",
@@ -30,6 +40,16 @@
     ]
   },
   "ApiResponse_list_ConnectionResponse__": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_list_SchemaSyncResponse__": {
     "properties": [
       "data",
       "meta",
@@ -1027,6 +1047,16 @@
       "hidden_tables"
     ]
   },
+  "SchemaSyncCreate": {
+    "properties": [
+      "connection_id",
+      "schema"
+    ],
+    "required": [
+      "connection_id",
+      "schema"
+    ]
+  },
   "SchemaSyncEnvelopeResponse": {
     "properties": [
       "action",
@@ -1044,6 +1074,27 @@
       "drifted",
       "signature_version",
       "status"
+    ]
+  },
+  "SchemaSyncResponse": {
+    "properties": [
+      "connection_id",
+      "created_at",
+      "drift",
+      "drifted",
+      "id",
+      "previous_signature",
+      "signature",
+      "structure"
+    ],
+    "required": [
+      "connection_id",
+      "created_at",
+      "drift",
+      "drifted",
+      "id",
+      "signature",
+      "structure"
     ]
   },
   "SecretRefModel": {
