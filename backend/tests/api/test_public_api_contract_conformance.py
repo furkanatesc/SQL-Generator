@@ -29,6 +29,10 @@ EXPECTED_V1_ROUTES = {
     ("GET", "/api/v1/connections/{connection_id}"),
     ("PATCH", "/api/v1/connections/{connection_id}"),
     ("DELETE", "/api/v1/connections/{connection_id}"),
+    ("POST", "/api/v1/schema-syncs"),
+    ("GET", "/api/v1/schema-syncs"),
+    ("GET", "/api/v1/schema-syncs/{sync_id}"),
+    ("DELETE", "/api/v1/schema-syncs/{sync_id}"),
 }
 
 
