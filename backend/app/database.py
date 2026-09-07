@@ -162,6 +162,25 @@ def init_db():
             "ON connections (workspace_id)"
         )
 
+        # Sprint 30.3 — Schema Sync API. Per-connection schema snapshots + drift
+        # (schema provided in the request; inert, no live introspection). Append-only.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS schema_syncs (
+                id                 TEXT PRIMARY KEY,
+                connection_id      TEXT NOT NULL,
+                signature          TEXT NOT NULL,
+                previous_signature TEXT,
+                drifted            INTEGER NOT NULL,
+                structure_json     TEXT NOT NULL,
+                drift_json         TEXT NOT NULL,
+                created_at         TEXT NOT NULL
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_schema_syncs_connection_id "
+            "ON schema_syncs (connection_id)"
+        )
+
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")
