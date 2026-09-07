@@ -930,6 +930,20 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   (TECH-DEBT §26): legacy migrasyonu/deprecation, route-miss 404 kanonikleştirme,
   cursor pagination, `app/errors/`→HTTP code eşlemesi, AuthN (30.8)/rate-limit/
   OpenAPI publishing, somut `POST /api/v1/query`. **Phase 11 başladı.** (PR #169)
+- **Workspace API** (Sprint 30.1): standalone `workspaces` kaynağı
+  (`/api/v1/workspaces` CRUD) — 30.0 kanonik sözleşmesine (`ApiResponse` envelope
+  + offset `PageMeta`) uyan İLK gerçek route ailesi (conformance guard dogfood).
+  Yeni `workspaces` tablosu (additive) + `app/workspace_repository.py` (`slugify`,
+  CRUD, `WorkspaceSlugConflict`, column-whitelist UPDATE) + `verify_api_key`
+  korumalı `app/api/workspaces.py` (POST 201/list-paginated/get/patch/delete;
+  duplicate slug → 409). Additive `409 CONFLICT` hata kodu (STATUS_TO_CODE +
+  contract required-codes, drift-sync). Workspace = sonraki Phase 11 kaynaklarının
+  ait olacağı üst-düzey container; 30.1 onu standalone ekler, mevcut global
+  tabloları (jobs/feedback/traces/cache) **retro-scope ETMEZ**. Mevcut hiçbir
+  tablo/endpoint/handler davranışı değişmedi (tamamen additive). Full suite
+  2844 passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §27): global-tablo
+  scoping, connection/schema/history bağlama (30.2+), membership/rol (AuthN 30.8),
+  slug mutasyonu/soft-delete, cursor pagination + `total`, delete cascade. (PR #170)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
