@@ -25,6 +25,23 @@ def test_first_sync_is_drifted_no_previous():
     assert s["previous_signature"] is None
     assert s["drifted"] == 1
     assert s["signature"]
+    # baseline drift shows every table as added (flag/payload consistent)
+    resp = repo.row_to_response_dict(s)
+    assert "users" in resp["drift"]["added_tables"]
+
+
+def test_rapid_sequential_syncs_use_true_previous():
+    # ordering must follow insertion order (rowid), not the coarse created_at
+    # timestamp / random uuid — otherwise drift is computed against the wrong prior.
+    repo.create_schema_sync("conn1", _schema("a"))
+    repo.create_schema_sync("conn1", _schema("a", "b"))
+    s3 = repo.create_schema_sync("conn1", _schema("a", "b", "c"))
+    # s3's previous is s2 (a,b) -> only "c" added, not "b"
+    resp = repo.row_to_response_dict(s3)
+    added = {d["column"] for d in resp["drift"]["added_columns"]}
+    assert added == {"c"}
+    latest = repo.get_latest_for_connection("conn1")
+    assert latest["id"] == s3["id"]
 
 
 def test_identical_second_sync_not_drifted():
