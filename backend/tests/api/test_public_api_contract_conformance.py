@@ -24,6 +24,11 @@ EXPECTED_V1_ROUTES = {
     ("GET", "/api/v1/workspaces/{workspace_id}"),
     ("PATCH", "/api/v1/workspaces/{workspace_id}"),
     ("DELETE", "/api/v1/workspaces/{workspace_id}"),
+    ("POST", "/api/v1/connections"),
+    ("GET", "/api/v1/connections"),
+    ("GET", "/api/v1/connections/{connection_id}"),
+    ("PATCH", "/api/v1/connections/{connection_id}"),
+    ("DELETE", "/api/v1/connections/{connection_id}"),
 }
 
 
