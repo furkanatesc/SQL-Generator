@@ -1339,3 +1339,27 @@ Bilinçli kapsam dışı (sessiz düşürme yok).
 6. **IAM secret detayları, TLS/sertifika, connection pooling, cursor pagination
    + sayfa-üstü `total` yok.** 30.0'ın offset-only `PageMeta`'sı devralındı.
    *İlgili Dosya:* `backend/app/api/connections.py`, `backend/app/api/contract.py`
+
+## §29. Sprint 30.3 (Schema Sync API) devirleri — AÇIK
+
+30.3 per-connection schema-sync'i (`/api/v1/schema-syncs`) ekledi; **inert** — şema
+request'te sağlanır (`{connection_id, schema:{tables:...}}`), canlı introspection
+yok. Phase 9 drift engine'ini (`app/schema/schema_signature.py`) reuse eder.
+Bilinçli kapsam dışı (sessiz düşürme yok).
+
+1. **Canlı schema introspection yok.** Şema request'te sağlanır; canlı DB'ye
+   bağlanıp `secret_ref` çözerek introspect etme 30.4 / resolver wiring'e ait.
+   *İlgili Dosya:* `backend/app/schema_sync_repository.py`, `backend/app/evaluation/*_connection_resolver.py`
+2. **Registry'den tetikleme / zamanlama / auto-sync yok.** Sync elle POST ile.
+   *İlgili Dosya:* `backend/app/api/schema_syncs.py`
+3. **Workspace-scoping, retention/pruning, sync PATCH (mutasyon) yok** (append-only history).
+   *İlgili Dosya:* `backend/app/schema_sync_repository.py`
+4. **Connection-delete cascade yok.** Connection silinince sync kayıtları dangling
+   `connection_id` ile kalır (30.2 §28.5 cascade devriyle tutarlı). → ileri sprint.
+   *İlgili Dosya:* `backend/app/schema_sync_repository.py`, `backend/app/connection_repository.py`
+5. **Legacy 28.7 global-şema drift yüzeyi (`/api/debug/schema/*`) ile uzlaştırma yok.**
+   İki yüzey bir arada; 28.7 tek global şema, 30.3 per-connection. → ileri.
+   *İlgili Dosya:* `backend/app/api/schema_sync_api.py`, `backend/app/api/schema_syncs.py`
+6. **Cursor pagination + sayfa-üstü `total` yok; monotonik seq yerine `created_at`+`id`
+   ORDER.** Aynı-mikrosaniye çok-insert'te sıra teorik olarak belirsiz (pratikte kararlı).
+   *İlgili Dosya:* `backend/app/schema_sync_repository.py`
