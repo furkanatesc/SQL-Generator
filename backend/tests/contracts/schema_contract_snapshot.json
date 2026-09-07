@@ -19,6 +19,16 @@
       "data"
     ]
   },
+  "ApiResponse_QueryRunResponse_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "ApiResponse_SchemaSyncResponse_": {
     "properties": [
       "data",
@@ -40,6 +50,16 @@
     ]
   },
   "ApiResponse_list_ConnectionResponse__": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_list_QueryRunResponse__": {
     "properties": [
       "data",
       "meta",
@@ -755,6 +775,46 @@
       "request_count",
       "total_tokens"
     ]
+  },
+  "QueryRunCreate": {
+    "properties": [
+      "connection_id",
+      "execution_error",
+      "result",
+      "sql"
+    ],
+    "required": [
+      "connection_id",
+      "sql"
+    ]
+  },
+  "QueryRunResponse": {
+    "properties": [
+      "connection_id",
+      "created_at",
+      "execution_error",
+      "id",
+      "result",
+      "row_count",
+      "sql",
+      "status"
+    ],
+    "required": [
+      "connection_id",
+      "created_at",
+      "id",
+      "sql",
+      "status"
+    ]
+  },
+  "QueryRunResult": {
+    "properties": [
+      "columns",
+      "duration_ms",
+      "rows",
+      "truncated"
+    ],
+    "required": []
   },
   "RAGSearchRequest": {
     "properties": [
