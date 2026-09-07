@@ -959,6 +959,20 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   import edilir, düzenlenmez). Full suite 2867 passed/37 skipped. **Bilinçli kapsam
   dışı** (TECH-DEBT §28): canlı test/secret çözümü, pipeline wiring (30.4),
   non-READ_ONLY, RBAC (30.8), workspace-delete cascade, cursor pagination. (PR #171)
+- **Schema Sync API** (Sprint 30.3): per-connection `/api/v1/schema-syncs` kaynağı
+  (30.0 sözleşmesindeki üçüncü kaynak, connection'a bağlı) — bir connection'ın şema
+  yapısını zaman içinde kaydeder + ardışık sync'ler arası **yapısal drift** tespit
+  eder; Phase 9 drift engine'ini (`schema_signature.py`) reuse eder. **Inert:** şema
+  request'te `structure` alanıyla sağlanır (canlı introspection ertelendi → 30.4);
+  normalize→imza→önceki snapshot ile diff→append-only kayıt. Yeni `schema_syncs`
+  tablosu (+`connection_id` index; ORDER BY `rowid`) + `schema_sync_repository.py`
+  + `verify_api_key` korumalı router (POST 201/list-paginated+`?connection_id=`/get/
+  delete; bilinmeyen connection→400, bozuk structure→422; PATCH yok — immutable).
+  Legacy 28.7 global-şema drift yüzeyi dokunulmadı. Mevcut hiçbir tablo/endpoint/
+  handler değişmedi (additive; drift engine import edilir, düzenlenmez). Full suite
+  2883 passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §29): canlı
+  introspection, tetikleme/zamanlama, workspace-scoping, retention, cascade,
+  legacy 28.7 uzlaştırma, cursor pagination. (PR #172)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
