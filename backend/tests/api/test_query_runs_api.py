@@ -73,6 +73,19 @@ def test_empty_sql_422():
     assert r.status_code == 422
 
 
+def test_whitespace_sql_422():
+    cid = _conn()
+    r = client.post("/api/v1/query-runs", json={"connection_id": cid, "sql": "   "})
+    assert r.status_code == 422
+
+
+def test_both_result_and_error_422():
+    cid = _conn()
+    r = client.post("/api/v1/query-runs", json={"connection_id": cid, "sql": "SELECT 1",
+        "result": {"columns": ["id"], "rows": [[1]]}, "execution_error": "boom"})
+    assert r.status_code == 422
+
+
 def test_list_filter_and_meta():
     cid = _conn()
     client.post("/api/v1/query-runs", json={"connection_id": cid, "sql": "SELECT 1"})
