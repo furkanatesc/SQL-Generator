@@ -7,7 +7,7 @@ introspection). Protected by verify_api_key.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 
 from app.api.contract import API_V1_PREFIX, ApiResponse, PageMeta, ResponseMeta
 from app.auth import verify_api_key
@@ -22,11 +22,10 @@ router = APIRouter(
 
 
 class SchemaSyncCreate(BaseModel):
-    # The request key is "schema"; the Python attribute is "structure" to avoid
-    # shadowing BaseModel.schema (a reserved attribute in Pydantic).
-    model_config = ConfigDict(populate_by_name=True)
+    # `structure` (not `schema`): avoids shadowing BaseModel.schema, and mirrors
+    # SchemaSyncResponse.structure so the request/response field name is symmetric.
     connection_id: str
-    structure: dict = Field(alias="schema")
+    structure: dict
 
 
 class SchemaSyncResponse(BaseModel):

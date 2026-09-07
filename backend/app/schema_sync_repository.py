@@ -23,13 +23,6 @@ def _now() -> str:
     return datetime.datetime.utcnow().isoformat()
 
 
-def _empty_drift() -> dict:
-    return {
-        "added_tables": [], "removed_tables": [], "added_columns": [],
-        "removed_columns": [], "changed_columns": [], "added_fks": [], "removed_fks": [],
-    }
-
-
 def create_schema_sync(connection_id: str, schema) -> dict:
     if not isinstance(schema, dict) or not isinstance(schema.get("tables"), dict):
         raise ValueError("schema must be an object with a 'tables' mapping")
@@ -37,9 +30,12 @@ def create_schema_sync(connection_id: str, schema) -> dict:
     signature = compute_schema_signature(new_norm)
     prev = get_latest_for_connection(connection_id)
     if prev is None:
+        # Baseline sync: diff against an empty structure so drift shows every
+        # table/column as "added" — keeping `drifted=True` consistent with the
+        # drift payload (no flag/payload disagreement on the first snapshot).
         previous_signature = None
+        drift = diff_structures({}, new_norm).as_dict()
         drifted = True
-        drift = _empty_drift()
     else:
         previous_signature = prev["signature"]
         prev_norm = normalize_structure(json.loads(prev["structure_json"]))
@@ -69,9 +65,12 @@ def get_schema_sync(sync_id: str) -> Optional[dict]:
 
 def get_latest_for_connection(connection_id: str) -> Optional[dict]:
     with get_db_connection() as conn:
+        # Order by the monotonic insertion key (sqlite rowid), NOT created_at —
+        # coarse utcnow timestamps can tie and the uuid id is not time-ordered,
+        # which would pick the wrong "previous" snapshot for drift.
         row = conn.execute(
             "SELECT * FROM schema_syncs WHERE connection_id = ? "
-            "ORDER BY created_at DESC, id DESC LIMIT 1",
+            "ORDER BY rowid DESC LIMIT 1",
             (connection_id,),
         ).fetchone()
         return dict(row) if row else None
@@ -79,15 +78,17 @@ def get_latest_for_connection(connection_id: str) -> Optional[dict]:
 
 def list_schema_syncs(limit: int, offset: int, connection_id: Optional[str] = None) -> list[dict]:
     with get_db_connection() as conn:
+        # Order by the monotonic insertion key (sqlite rowid) so pagination is
+        # stable even when created_at values tie (see get_latest_for_connection).
         if connection_id is not None:
             rows = conn.execute(
                 "SELECT * FROM schema_syncs WHERE connection_id = ? "
-                "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                "ORDER BY rowid DESC LIMIT ? OFFSET ?",
                 (connection_id, limit, offset),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM schema_syncs ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                "SELECT * FROM schema_syncs ORDER BY rowid DESC LIMIT ? OFFSET ?",
                 (limit, offset),
             ).fetchall()
         return [dict(r) for r in rows]

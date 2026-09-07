@@ -1050,11 +1050,11 @@
   "SchemaSyncCreate": {
     "properties": [
       "connection_id",
-      "schema"
+      "structure"
     ],
     "required": [
       "connection_id",
-      "schema"
+      "structure"
     ]
   },
   "SchemaSyncEnvelopeResponse": {
