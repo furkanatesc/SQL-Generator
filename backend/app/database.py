@@ -181,6 +181,28 @@ def init_db():
             "ON schema_syncs (connection_id)"
         )
 
+        # Sprint 30.4 — Query Run API. Inert ledger of SQL runs against a connection
+        # (SQL + optional provided outcome). No live execution / secret resolution.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS query_runs (
+                id              TEXT PRIMARY KEY,
+                connection_id   TEXT NOT NULL,
+                sql             TEXT NOT NULL,
+                status          TEXT NOT NULL,
+                row_count       INTEGER,
+                columns_json    TEXT,
+                rows_json       TEXT,
+                truncated       INTEGER,
+                execution_error TEXT,
+                duration_ms     REAL,
+                created_at      TEXT NOT NULL
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_query_runs_connection_id "
+            "ON query_runs (connection_id)"
+        )
+
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")
