@@ -134,6 +134,30 @@ def init_db():
             )
         """)
 
+        # Sprint 30.2 — Connection Registry API. Persistent connection profiles
+        # (secret-by-reference; NEVER a raw secret column). Optional workspace link.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS connections (
+                id              TEXT PRIMARY KEY,
+                connection_ref  TEXT NOT NULL UNIQUE,
+                workspace_id    TEXT,
+                name            TEXT NOT NULL,
+                dialect         TEXT NOT NULL,
+                environment     TEXT NOT NULL,
+                host            TEXT NOT NULL,
+                port            INTEGER NOT NULL,
+                database        TEXT NOT NULL,
+                access_mode     TEXT NOT NULL,
+                auth_mode       TEXT NOT NULL,
+                secret_provider TEXT,
+                secret_key      TEXT,
+                max_rows        INTEGER NOT NULL,
+                timeout_seconds REAL NOT NULL,
+                created_at      TEXT NOT NULL,
+                updated_at      TEXT NOT NULL
+            )
+        """)
+
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")
