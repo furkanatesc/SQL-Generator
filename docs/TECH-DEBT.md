@@ -1413,3 +1413,25 @@ scope). Yeni tablo/yazma yok. Bilinçli kapsam dışı (sessiz düşürme yok):
    (inclusive `until` ancak eşit-veya-üstü hassasiyette çalışır). Full-ISO timestamp
    beklenir; tarih-granülerliğinde normalize/parse etme ertelendi. → ileri sprint.
    *İlgili Dosya:* `backend/app/query_history_repository.py`
+
+## §32. Sprint 30.6 (Feedback API) devirleri — AÇIK
+
+30.6 query-run-scoped bir `/api/v1/feedback` kaynağı ekledi (verdict + opsiyonel
+category/note/corrected_sql); 27.3 enum'larını (`FeedbackVerdict`/`FeedbackCategory`)
++ invariant'larını (correct⇒category/sql yok; other⇒note zorunlu) reuse eder.
+Legacy 27.3 job-scoped feedback (`feedback` tablosu + `app/feedback/` + `app/api/feedback.py`)
+DOKUNULMADI. Bilinçli kapsam dışı (sessiz düşürme yok):
+
+1. **27.3 job-scoped feedback ile uzlaştırma yok** — iki feedback yüzeyi bir arada
+   (legacy job-bazlı + v1 query-run-bazlı).
+   *İlgili Dosya:* `backend/app/api/feedback.py`, `backend/app/api/feedback_v1.py`
+2. **Feedback→rule-suggestion pipeline'ı (27.9) v1'e wire edilmedi.**
+   *İlgili Dosya:* `backend/app/rule_suggestions_service.py`
+3. **Aggregate feedback analytics yok** (verdict/category sayımları — ileride `/summary`).
+   *İlgili Dosya:* `backend/app/feedback_repository.py`
+4. **Feedback mutasyonu (PATCH), run başına tek-feedback uniqueness yok** (çoklu satır serbest).
+   *İlgili Dosya:* `backend/app/api/feedback_v1.py`
+5. **Query-run-delete cascade yok** (dangling `query_run_id` mümkün; önceki sprint'lerle tutarlı).
+   *İlgili Dosya:* `backend/app/feedback_repository.py`
+6. **Cursor pagination + sayfa-üstü `total` yok.**
+   *İlgili Dosya:* `backend/app/api/feedback_v1.py`
