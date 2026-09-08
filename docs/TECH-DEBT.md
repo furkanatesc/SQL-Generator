@@ -1435,3 +1435,22 @@ DOKUNULMADI. Bilinçli kapsam dışı (sessiz düşürme yok):
    *İlgili Dosya:* `backend/app/feedback_repository.py`
 6. **Cursor pagination + sayfa-üstü `total` yok.**
    *İlgili Dosya:* `backend/app/api/feedback_v1.py`
+
+## §33. Sprint 30.7 (Admin API) devirleri — AÇIK
+
+30.7 read-only bir `/api/v1/admin` yüzeyi (`/overview` + `/config`) ekledi; health
+diagnostics'i (`build_health_response().config`) + Phase 11 kaynak sayımlarını
+(`admin_repository.resource_counts()`) reuse eder. Yeni tablo/yazma yok. Bilinçli
+kapsam dışı (sessiz düşürme yok):
+
+1. **Admin operasyonları / yazma yok** — cache-clear, config mutasyonu, resource purge,
+   user/role yönetimi yok. → AuthN (30.8) + ileri.
+   *İlgili Dosya:* `backend/app/api/admin.py`
+2. **27.7 dashboard / 27.6 metrics / 27.8 LLM-usage `/api/v1/admin`'e sarılmadı**
+   (legacy `/api/*` yollarında kaldı; ağır trace_store bağımlılığı).
+   *İlgili Dosya:* `backend/app/api/dashboard_api.py`, `backend/app/api/admin.py`
+3. **Per-workspace count scope / time-series trend metrikleri yok** (yalnız global sayım).
+   *İlgili Dosya:* `backend/app/admin_repository.py`
+4. **RBAC / admin-only authz yok** — endpoint'ler `/api/v1`'in aynı `verify_api_key`'ini
+   kullanır; ayrı admin rolü AuthN (30.8) bekler.
+   *İlgili Dosya:* `backend/app/api/admin.py` (30.8 bağımlılığı)
