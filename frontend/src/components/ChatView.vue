@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { apiService } from '../services/api';
-import type { Job } from '../services/api';
 import PlanetDbSelector from './PlanetDbSelector.vue';
 
 interface ChatMessage {
@@ -57,9 +56,29 @@ const scrollToBottom = () => {
   });
 };
 
-const copyToClipboard = (sql: string) => {
-  navigator.clipboard.writeText(sql);
-  alert('SQL Panoya Kopyalandı!');
+// Per-message copy state — a chat holds many SQL blocks, so keep the "copied"
+// affordance keyed by message id. Inline + transient; no blocking alert().
+const copiedMessageId = ref<number | null>(null);
+const copyErrorMessageId = ref<number | null>(null);
+let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
+
+const copyToClipboard = async (sql: string | undefined, messageId: number) => {
+  if (!sql) return;
+  if (copyResetTimer) { clearTimeout(copyResetTimer); copyResetTimer = null; }
+  try {
+    await navigator.clipboard.writeText(sql);
+    copiedMessageId.value = messageId;
+    copyErrorMessageId.value = null;
+  } catch {
+    // clipboard can reject (permissions / insecure context) — surface it inline
+    copyErrorMessageId.value = messageId;
+    copiedMessageId.value = null;
+  }
+  copyResetTimer = setTimeout(() => {
+    copiedMessageId.value = null;
+    copyErrorMessageId.value = null;
+    copyResetTimer = null;
+  }, 1600);
 };
 
 const startGeneration = async () => {
@@ -241,6 +260,7 @@ onUnmounted(() => {
     eventSource.value.close();
     eventSource.value = null;
   }
+  if (copyResetTimer) clearTimeout(copyResetTimer);
 });
 </script>
 
@@ -317,11 +337,21 @@ onUnmounted(() => {
             <div v-if="msg.sql" class="relative group w-full bg-[#0d1117] border border-zinc-700/50 rounded-xl overflow-hidden shadow-xl">
               <div class="flex items-center justify-between px-4 py-2 bg-zinc-800/50 border-b border-zinc-700/50">
                 <span class="text-xs font-semibold text-zinc-400">SQL Sorgusu ({{ dialect }})</span>
-                <button @click="copyToClipboard(msg.sql)" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <button
+                  @click="copyToClipboard(msg.sql, msg.id)"
+                  class="text-xs flex items-center gap-1 transition-colors"
+                  :class="copyErrorMessageId === msg.id ? 'text-red-400 hover:text-red-300'
+                    : copiedMessageId === msg.id ? 'text-emerald-400'
+                    : 'text-indigo-400 hover:text-indigo-300'"
+                  :title="copiedMessageId === msg.id ? 'Panoya kopyalandı' : 'SQL\'i panoya kopyala'"
+                >
+                  <svg v-if="copiedMessageId === msg.id" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                   </svg>
-                  Kopyala
+                  <span aria-live="polite">{{ copiedMessageId === msg.id ? 'Kopyalandı' : copyErrorMessageId === msg.id ? 'Kopyalanamadı' : 'Kopyala' }}</span>
                 </button>
               </div>
               <pre class="p-4 overflow-x-auto text-sm text-indigo-200 font-mono leading-relaxed"><code>{{ msg.sql }}</code></pre>
