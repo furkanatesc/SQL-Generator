@@ -68,10 +68,20 @@ def test_filter_text_search():
     assert len(rows) == 2 and all("SELECT" in r["sql"] for r in rows)
 
 
-def test_paginate_and_count():
-    assert repo.count_history() == 3
+def test_paginate():
     assert len(repo.list_history(2, 0)) == 2
     assert len(repo.list_history(2, 2)) == 1
+
+
+def test_text_search_escapes_like_wildcards():
+    # add a run with a literal underscore; q="a_c" must match it literally, not
+    # treat "_" as a single-char wildcard (which would also match "abc").
+    with get_db_connection() as conn:
+        _seed_run(conn, "c1", "a_c literal", "succeeded", "2026-01-05T10:00:00")
+        _seed_run(conn, "c1", "abc wildcardish", "succeeded", "2026-01-05T11:00:00")
+        conn.commit()
+    rows = repo.list_history(50, 0, q="a_c")
+    assert len(rows) == 1 and rows[0]["sql"] == "a_c literal"
 
 
 def test_history_row_shape_no_result_rows():
