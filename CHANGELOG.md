@@ -973,6 +973,20 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   2883 passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §29): canlı
   introspection, tetikleme/zamanlama, workspace-scoping, retention, cascade,
   legacy 28.7 uzlaştırma, cursor pagination. (PR #172)
+- **Query Run API** (Sprint 30.4): **inert** per-connection `/api/v1/query-runs`
+  ledger'ı (30.0 sözleşmesindeki dördüncü kaynak, connection'a bağlı) — bir
+  connection'a karşı SQL run'larını kaydeder (SQL + opsiyonel sağlanan sonuç ya da
+  execution_error). **Kullanıcı-onaylı: inert/record-only** — hiçbir şey çalıştırmaz,
+  secret çözmez (canlı execution + secret resolution güvenlik-hassas, sonraki
+  sprint'e ertelendi). Yeni `query_runs` tablosu (+`connection_id` index; ORDER BY
+  `rowid`; status recorded/succeeded/failed) + `query_run_repository.py` +
+  `verify_api_key` korumalı router (POST 201/list-paginated+`?connection_id=`+
+  `?status=`/get/delete; bilinmeyen connection→400; boş sql→422; result+error
+  birlikte→422; PATCH yok). Result şekli 29.x `SQLDatabaseExecutionResult` ile
+  hizalı. Mevcut hiçbir tablo/endpoint/handler değişmedi (additive). Full suite
+  2900 passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §30): canlı execution
+  (secret resolution+SELECT), NL→SQL üretimi, result streaming/iptal, cascade,
+  cursor pagination. (PR #173)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
