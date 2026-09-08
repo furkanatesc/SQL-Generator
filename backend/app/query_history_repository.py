@@ -16,6 +16,12 @@ _STATUSES = ("recorded", "succeeded", "failed")
 _BASE = "FROM query_runs qr LEFT JOIN connections c ON qr.connection_id = c.id"
 
 
+def _escape_like(s: str) -> str:
+    """Escape LIKE metacharacters so a free-text query matches them literally
+    (used with `ESCAPE '\\'`). Order matters: escape the escape char first."""
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _where(connection_id, workspace_id, status, since, until, q) -> tuple[str, list]:
     clauses, params = [], []
     if connection_id is not None:
@@ -34,8 +40,8 @@ def _where(connection_id, workspace_id, status, since, until, q) -> tuple[str, l
         clauses.append("qr.created_at <= ?")
         params.append(until)
     if q is not None:
-        clauses.append("qr.sql LIKE ?")
-        params.append(f"%{q}%")
+        clauses.append("qr.sql LIKE ? ESCAPE '\\'")
+        params.append(f"%{_escape_like(q)}%")
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     return where, params
 
@@ -53,15 +59,6 @@ def list_history(limit: int, offset: int, connection_id: Optional[str] = None,
     with get_db_connection() as conn:
         rows = conn.execute(sql, [*params, limit, offset]).fetchall()
         return [dict(r) for r in rows]
-
-
-def count_history(connection_id: Optional[str] = None, workspace_id: Optional[str] = None,
-                  status: Optional[str] = None, since: Optional[str] = None,
-                  until: Optional[str] = None, q: Optional[str] = None) -> int:
-    where, params = _where(connection_id, workspace_id, status, since, until, q)
-    with get_db_connection() as conn:
-        row = conn.execute(f"SELECT COUNT(*) AS n {_BASE}{where}", params).fetchone()
-        return int(row["n"])
 
 
 def summary(connection_id: Optional[str] = None, workspace_id: Optional[str] = None,
