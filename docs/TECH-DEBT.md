@@ -1475,3 +1475,27 @@ kapsam dışı (sessiz düşürme yok):
    kullanır; gerçek rol modeli yok (§33 ile ortak). → AuthN genişletme.
 5. **Plaintext `configs.api_key` emekliye ayrılmadı.**
    *İlgili Dosya:* `backend/app/database.py`, `backend/app/auth.py`
+
+## §35. Sprint 31.0 (Query Composer UX) — frontend devirleri — AÇIK
+
+Phase 12'nin ilk (frontend) sprint'i. 31.0 query composer'da (`ChatView.vue`) bloklayıcı
+`alert()` kopya onayını inline/transient/erişilebilir per-message "Kopyalandı" durumuyla
+değiştirdi + `navigator.clipboard` reddini güvenli ele aldı + ChatView'in pre-existing
+`'Job'` unused-import TS hatasını düzeltti. Bilinçli kapsam dışı / bilinen durumlar
+(sessiz düşürme yok):
+
+1. **Frontend build `main`'de PRE-EXISTING KIRIK** — `SchemaManager.vue`'da `vue-tsc`
+   hataları (`validCustomRelations` unused + `meta is unknown` ×5). Frontend CI olmadığından
+   fark edilmemiş. 31.0 yalnız ChatView'i düzeltti; SchemaManager → **31.1 Schema Explorer UX**
+   kapsamında düzeltilecek (build tam yeşile o zaman döner).
+   *İlgili Dosya:* `frontend/src/components/SchemaManager.vue`
+2. **Frontend test altyapısı yok** — vitest/@testing-library/vue kurulu değil, test script yok,
+   hiç test yok. Vite 8 / vue-tsc 6 sıradışı toolchain → compat rabbit-hole riski; UX sprint'inde
+   ertelendi. Verify şimdilik `npm run build` error-set delta ile.
+   *İlgili Dosya:* `frontend/package.json`
+3. **Frontend CI job yok** — `.github/workflows` yalnız backend. Eklemek build yeşile
+   dönene (31.1) kadar bloke; ertelendi.
+   *İlgili Dosya:* `.github/workflows/`
+4. **Global toast/bildirim sistemi yok** — 31.0 per-buton inline state kullandı (daha düşük
+   riskli); cross-cutting bildirimler için toast ileri sprint.
+   *İlgili Dosya:* `frontend/src/components/ChatView.vue`
