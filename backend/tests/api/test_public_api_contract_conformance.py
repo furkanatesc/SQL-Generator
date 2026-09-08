@@ -37,6 +37,8 @@ EXPECTED_V1_ROUTES = {
     ("GET", "/api/v1/query-runs"),
     ("GET", "/api/v1/query-runs/{run_id}"),
     ("DELETE", "/api/v1/query-runs/{run_id}"),
+    ("GET", "/api/v1/query-history"),
+    ("GET", "/api/v1/query-history/summary"),
 }
 
 
