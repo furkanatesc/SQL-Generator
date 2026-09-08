@@ -43,6 +43,8 @@ EXPECTED_V1_ROUTES = {
     ("GET", "/api/v1/feedback"),
     ("GET", "/api/v1/feedback/{feedback_id}"),
     ("DELETE", "/api/v1/feedback/{feedback_id}"),
+    ("GET", "/api/v1/admin/overview"),
+    ("GET", "/api/v1/admin/config"),
 }
 
 

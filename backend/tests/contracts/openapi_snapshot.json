@@ -1,6 +1,61 @@
 {
   "components": {
     "schemas": {
+      "AdminOverview": {
+        "properties": {
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "debug_endpoints_enabled": {
+            "title": "Debug Endpoints Enabled",
+            "type": "boolean"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/ResourceCounts"
+          }
+        },
+        "required": [
+          "environment",
+          "debug_endpoints_enabled",
+          "app_version",
+          "resources"
+        ],
+        "title": "AdminOverview",
+        "type": "object"
+      },
+      "ApiResponse_AdminOverview_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AdminOverview"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[AdminOverview]",
+        "type": "object"
+      },
       "ApiResponse_ConnectionResponse_": {
         "properties": {
           "data": {
@@ -139,6 +194,34 @@
           "data"
         ],
         "title": "ApiResponse[QueryRunResponse]",
+        "type": "object"
+      },
+      "ApiResponse_RuntimeConfigDiagnostics_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RuntimeConfigDiagnostics"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[RuntimeConfigDiagnostics]",
         "type": "object"
       },
       "ApiResponse_SchemaSyncResponse_": {
@@ -3236,6 +3319,39 @@
         "title": "ReplayValidationDelta",
         "type": "object"
       },
+      "ResourceCounts": {
+        "properties": {
+          "connections": {
+            "title": "Connections",
+            "type": "integer"
+          },
+          "query_run_feedback": {
+            "title": "Query Run Feedback",
+            "type": "integer"
+          },
+          "query_runs": {
+            "title": "Query Runs",
+            "type": "integer"
+          },
+          "schema_syncs": {
+            "title": "Schema Syncs",
+            "type": "integer"
+          },
+          "workspaces": {
+            "title": "Workspaces",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "workspaces",
+          "connections",
+          "schema_syncs",
+          "query_runs",
+          "query_run_feedback"
+        ],
+        "title": "ResourceCounts",
+        "type": "object"
+      },
       "ResponseMeta": {
         "description": "Cross-cutting response metadata carried in the canonical envelope.",
         "properties": {
@@ -6167,6 +6283,64 @@
         "summary": "Get Api Contract",
         "tags": [
           "api-contract"
+        ]
+      }
+    },
+    "/api/v1/admin/config": {
+      "get": {
+        "operationId": "admin_config_api_v1_admin_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_RuntimeConfigDiagnostics_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Admin Config",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/overview": {
+      "get": {
+        "operationId": "admin_overview_api_v1_admin_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_AdminOverview_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Admin Overview",
+        "tags": [
+          "admin"
         ]
       }
     },
