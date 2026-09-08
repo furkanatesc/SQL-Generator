@@ -1,4 +1,28 @@
 {
+  "AdminOverview": {
+    "properties": [
+      "app_version",
+      "debug_endpoints_enabled",
+      "environment",
+      "resources"
+    ],
+    "required": [
+      "app_version",
+      "debug_endpoints_enabled",
+      "environment",
+      "resources"
+    ]
+  },
+  "ApiResponse_AdminOverview_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "ApiResponse_ConnectionResponse_": {
     "properties": [
       "data",
@@ -40,6 +64,16 @@
     ]
   },
   "ApiResponse_QueryRunResponse_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_RuntimeConfigDiagnostics_": {
     "properties": [
       "data",
       "meta",
@@ -1078,6 +1112,22 @@
       "baseline_issue_types",
       "changed",
       "observed_issue_types"
+    ]
+  },
+  "ResourceCounts": {
+    "properties": [
+      "connections",
+      "query_run_feedback",
+      "query_runs",
+      "schema_syncs",
+      "workspaces"
+    ],
+    "required": [
+      "connections",
+      "query_run_feedback",
+      "query_runs",
+      "schema_syncs",
+      "workspaces"
     ]
   },
   "ResponseMeta": {
