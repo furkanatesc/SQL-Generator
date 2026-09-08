@@ -1384,3 +1384,26 @@ kapsam dışı (sessiz düşürme yok).
    *İlgili Dosya:* `backend/app/query_run_repository.py`, `backend/app/connection_repository.py`
 5. **Cursor pagination + sayfa-üstü `total`, run PATCH (mutasyon) yok** (append-only).
    *İlgili Dosya:* `backend/app/api/query_runs.py`, `backend/app/api/contract.py`
+
+## §31. Sprint 30.5 (Query History API) devirleri — AÇIK
+
+30.5 read-only bir query-history/analytics yüzeyi (`/api/v1/query-history` + `/summary`)
+ekledi; 30.4 `query_runs` ledger'ı üzerinde okur (connections join ile workspace
+scope). Yeni tablo/yazma yok. Bilinçli kapsam dışı (sessiz düşürme yok):
+
+1. **Yazma yok.** History türetilmiş; run'lar 30.4 üzerinden oluşturulur.
+   *İlgili Dosya:* `backend/app/api/query_history.py`
+2. **Cursor pagination / list'te sayfa-üstü `total` yok** — `/summary` total verir;
+   list offset+sayfa-içi count. 30.0 offset-only `PageMeta`.
+   *İlgili Dosya:* `backend/app/api/query_history.py`, `backend/app/api/contract.py`
+3. **Full result satırları history'de yok** (→ `GET /api/v1/query-runs/{id}`).
+   *İlgili Dosya:* `backend/app/query_history_repository.py`
+4. **Zaman-kovalı / connection-bazlı gruplu analytics, latency percentile yok**
+   (yalnız total + by_status).
+   *İlgili Dosya:* `backend/app/query_history_repository.py`
+5. **Filtre-referans varlık doğrulaması yok** (bilinmeyen workspace/connection/status
+   → boş sayfa/sıfır sayım, bilinçli — 30.4 status-filtresiyle tutarlı).
+   *İlgili Dosya:* `backend/app/api/query_history.py`
+6. **Legacy `jobs`/`query_traces` NL2SQL geçmişiyle uzlaştırma yok** (yalnız 30.4
+   `query_runs`).
+   *İlgili Dosya:* `backend/app/api/query_history.py`
