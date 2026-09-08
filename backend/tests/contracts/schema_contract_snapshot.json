@@ -13,7 +13,71 @@
       "resources"
     ]
   },
+  "ApiKeyCreate": {
+    "properties": [
+      "name"
+    ],
+    "required": [
+      "name"
+    ]
+  },
+  "ApiKeyCreated": {
+    "properties": [
+      "active",
+      "api_key",
+      "created_at",
+      "id",
+      "key_prefix",
+      "name",
+      "revoked_at"
+    ],
+    "required": [
+      "active",
+      "api_key",
+      "created_at",
+      "id",
+      "key_prefix",
+      "name"
+    ]
+  },
+  "ApiKeyResponse": {
+    "properties": [
+      "active",
+      "created_at",
+      "id",
+      "key_prefix",
+      "name",
+      "revoked_at"
+    ],
+    "required": [
+      "active",
+      "created_at",
+      "id",
+      "key_prefix",
+      "name"
+    ]
+  },
   "ApiResponse_AdminOverview_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_ApiKeyCreated_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_ApiKeyResponse_": {
     "properties": [
       "data",
       "meta",
@@ -94,6 +158,16 @@
     ]
   },
   "ApiResponse_WorkspaceResponse_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_list_ApiKeyResponse__": {
     "properties": [
       "data",
       "meta",
