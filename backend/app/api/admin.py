@@ -12,7 +12,7 @@ from app.api.contract import API_V1_PREFIX, ApiResponse
 from app.api.schemas import RuntimeConfigDiagnostics
 from app.auth import verify_api_key
 from app.settings import get_settings
-from app.health import build_health_response
+from app.health import build_config_diagnostics
 from app import admin_repository as repo
 
 router = APIRouter(
@@ -52,4 +52,4 @@ def admin_overview() -> ApiResponse[AdminOverview]:
 
 @router.get("/config", response_model=ApiResponse[RuntimeConfigDiagnostics])
 def admin_config() -> ApiResponse[RuntimeConfigDiagnostics]:
-    return ApiResponse[RuntimeConfigDiagnostics](data=build_health_response().config)
+    return ApiResponse[RuntimeConfigDiagnostics](data=build_config_diagnostics())

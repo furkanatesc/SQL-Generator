@@ -5,9 +5,11 @@ from app.database import get_config, get_db_connection
 from app.api.schemas import HealthResponse, RuntimeConfigDiagnostics
 from app.startup_validation import validate_runtime_config
 
-def build_health_response() -> HealthResponse:
+def build_config_diagnostics() -> RuntimeConfigDiagnostics:
+    """Runtime config diagnostics, shared by the health response and the
+    /api/v1/admin/config endpoint (so admin need not build a full HealthResponse)."""
     settings = get_settings()
-    
+
     # Run startup validation to count warnings and extract flags
     try:
         validation_res = validate_runtime_config()
@@ -20,24 +22,25 @@ def build_health_response() -> HealthResponse:
         critical_warnings_count = 1
         api_key_configured = False
         upload_dir_configured = False
-        
-    cors_origins_count = len(settings.cors_allow_origins)
-    
-    config_diagnostics = RuntimeConfigDiagnostics(
+
+    return RuntimeConfigDiagnostics(
         environment=settings.environment,
         debug_endpoints_enabled=settings.debug_endpoints_enabled,
-        cors_origins_count=cors_origins_count,
+        cors_origins_count=len(settings.cors_allow_origins),
         upload_dir_configured=upload_dir_configured,
         api_key_configured=api_key_configured,
         startup_warnings_count=warnings_count,
         startup_critical_warnings_count=critical_warnings_count,
     )
-    
+
+
+def build_health_response() -> HealthResponse:
+    settings = get_settings()
     return HealthResponse(
         status="ok",
         version=settings.app_version,
         database="SQLite ready",
-        config=config_diagnostics,
+        config=build_config_diagnostics(),
     )
 
 def check_readiness() -> dict:
