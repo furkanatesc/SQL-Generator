@@ -56,17 +56,17 @@ def list_api_keys(limit: int, offset: int) -> list[dict]:
 
 
 def revoke_api_key(key_id: str) -> Optional[dict]:
-    row = get_api_key(key_id)
-    if row is None:
+    if get_api_key(key_id) is None:
         return None
-    if row["revoked_at"] is None:
-        with get_db_connection() as conn:
-            conn.execute(
-                "UPDATE api_keys SET revoked_at = ? WHERE id = ?", (_now(), key_id)
-            )
-            conn.commit()
-        row = get_api_key(key_id)
-    return row
+    # Atomic conditional update: sets revoked_at only when still active, so it is
+    # idempotent AND race-safe (concurrent revokes cannot double-write the timestamp).
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+            (_now(), key_id),
+        )
+        conn.commit()
+    return get_api_key(key_id)
 
 
 def verify_key(raw: str) -> Optional[dict]:
