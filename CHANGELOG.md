@@ -1017,6 +1017,20 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   davranış-koruyan extraction). Full suite 2935 passed/37 skipped. **Bilinçli kapsam
   dışı** (TECH-DEBT §33): admin-ops/yazma, dashboard sarma, per-workspace scope,
   RBAC/admin-only authz (30.8). (PR #176)
+- **Authentication — API Key Management** (Sprint 30.8, **Phase 11 SON sprint'i**):
+  hash'lenmiş çoklu API-key yönetimi `/api/v1/api-keys` (create/list/get/revoke).
+  Kullanıcı-onaylı kapsam: yalnız API-key (login/session/SSO YOK), inert posture.
+  **Güvenlik:** yalnız `sha256(raw)` hash + prefix saklanır, ham key yalnız create
+  yanıtında bir kez döner; list/detail/revoke metadata-only. Yeni `api_keys` tablosu
+  + `api_key_repository.py` (raw-once, soft revoke [atomik], inert `verify_key`) +
+  `verify_api_key` korumalı router. Mevcut `verify_api_key` + `configs.api_key` ve
+  tüm route'lar DEĞİŞMEDİ (canlı enforcement ertelendi). Full suite 2946 passed/37
+  skipped. **Bilinçli kapsam dışı** (TECH-DEBT §34): canlı enforcement, user/session/
+  SSO, per-key scope/expiry, RBAC, plaintext config-key emekliye ayırma.
+  **Bununla Phase 11 (API/Backend Productization) KAPANDI** — 8 `/api/v1` kaynağı
+  (workspaces/connections/schema-syncs/query-runs/query-history/feedback/admin/
+  api-keys) tek kanonik sözleşme + conformance guard üzerine; sıradaki Phase 12
+  (UI/UX, 31.x). (PR #177)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
