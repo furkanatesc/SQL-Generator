@@ -202,6 +202,11 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_query_runs_connection_id "
             "ON query_runs (connection_id)"
         )
+        # Sprint 30.5 — query-history date-range/summary filters scan by created_at.
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_query_runs_created_at "
+            "ON query_runs (created_at)"
+        )
 
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")

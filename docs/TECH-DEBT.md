@@ -1407,3 +1407,9 @@ scope). Yeni tablo/yazma yok. Bilinçli kapsam dışı (sessiz düşürme yok):
 6. **Legacy `jobs`/`query_traces` NL2SQL geçmişiyle uzlaştırma yok** (yalnız 30.4
    `query_runs`).
    *İlgili Dosya:* `backend/app/api/query_history.py`
+7. **`since`/`until` lexicographic ISO string karşılaştırmasıdır.** `created_at`
+   mikrosaniye-hassasiyetli ISO (`...T10:00:00.123456`) saklandığından, kısa-hassasiyetli
+   bir `until` (ör. yalnız tarih `2026-09-08`) o günün satırlarını **kapsam-dışı bırakır**
+   (inclusive `until` ancak eşit-veya-üstü hassasiyette çalışır). Full-ISO timestamp
+   beklenir; tarih-granülerliğinde normalize/parse etme ertelendi. → ileri sprint.
+   *İlgili Dosya:* `backend/app/query_history_repository.py`
