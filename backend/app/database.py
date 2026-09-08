@@ -208,6 +208,24 @@ def init_db():
             "ON query_runs (created_at)"
         )
 
+        # Sprint 30.6 — Feedback API. Query-run-scoped feedback (verdict + optional
+        # category/note/corrected_sql). Distinct from the legacy 27.3 job feedback.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS query_run_feedback (
+                id            TEXT PRIMARY KEY,
+                query_run_id  TEXT NOT NULL,
+                verdict       TEXT NOT NULL,
+                category      TEXT,
+                note          TEXT,
+                corrected_sql TEXT,
+                created_at    TEXT NOT NULL
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_query_run_feedback_query_run_id "
+            "ON query_run_feedback (query_run_id)"
+        )
+
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")
