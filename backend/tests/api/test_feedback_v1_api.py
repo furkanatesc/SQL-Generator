@@ -91,6 +91,12 @@ def test_get_and_delete_404():
     assert client.delete(f"/api/v1/feedback/{fid}").status_code == 404
 
 
+def test_invalid_verdict_filter_422():
+    # enum-typed filter: an invalid/mis-cased verdict is 422, not a silent empty page
+    r = client.get("/api/v1/feedback", params={"verdict": "Correct"})
+    assert r.status_code == 422
+
+
 def test_requires_api_key():
     app.dependency_overrides.clear()
     assert client.get("/api/v1/feedback").status_code == 403

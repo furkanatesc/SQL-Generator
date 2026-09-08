@@ -6480,7 +6480,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "$ref": "#/components/schemas/FeedbackVerdict"
                 },
                 {
                   "type": "null"
