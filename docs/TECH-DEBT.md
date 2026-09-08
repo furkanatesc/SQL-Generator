@@ -1454,3 +1454,24 @@ kapsam dışı (sessiz düşürme yok):
 4. **RBAC / admin-only authz yok** — endpoint'ler `/api/v1`'in aynı `verify_api_key`'ini
    kullanır; ayrı admin rolü AuthN (30.8) bekler.
    *İlgili Dosya:* `backend/app/api/admin.py` (30.8 bağımlılığı)
+
+## §34. Sprint 30.8 (AuthN — API Key Management) devirleri — AÇIK
+
+30.8 hashed multi-API-key yönetimi (`/api/v1/api-keys`) ekledi; sha256 hash-only,
+raw key bir kez döner (yalnız POST create), soft revoke, inert `verify_key` contract'ı.
+Legacy tek `configs.api_key` + `app/auth.py::verify_api_key` DOKUNULMADI. Bilinçli
+kapsam dışı (sessiz düşürme yok):
+
+1. **Canlı enforcement yok** — `verify_api_key` ve tüm route'lar hâlâ tek
+   `configs.api_key`'i kullanır; yeni key'ler henüz hiçbir şeyi authenticate ETMEZ.
+   `verify_key` contract'ı `verify_api_key`'e bağlanmadı (kırıcı, kullanıcı-onaylı
+   migrasyon; mevcut istemciler tek key kullanıyor). → ileri.
+   *İlgili Dosya:* `backend/app/auth.py`, `backend/app/api_key_repository.py`
+2. **Kullanıcı/parola/login/session/JWT/SSO yok** — bu sprint yalnız API-key
+   yönetimi (kullanıcı onaylı kapsam).
+3. **Per-key scope/permission/expiry/rotation, key-usage audit / last-used timestamp yok.**
+   *İlgili Dosya:* `backend/app/api_key_repository.py`
+4. **Admin-role gating (RBAC) yok** — key yönetimi `/api/v1`'in aynı `verify_api_key`'ini
+   kullanır; gerçek rol modeli yok (§33 ile ortak). → AuthN genişletme.
+5. **Plaintext `configs.api_key` emekliye ayrılmadı.**
+   *İlgili Dosya:* `backend/app/database.py`, `backend/app/auth.py`
