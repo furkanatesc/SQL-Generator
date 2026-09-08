@@ -28,6 +28,7 @@ from app.api.connections import router as connections_router
 from app.api.schema_syncs import router as schema_syncs_router
 from app.api.query_runs import router as query_runs_router
 from app.api.query_history import router as query_history_router
+from app.api.feedback_v1 import router as feedback_v1_router
 from fastapi.exceptions import RequestValidationError
 from app.settings import get_settings
 from app.api.errors import http_exception_handler, validation_exception_handler, unhandled_exception_handler
@@ -105,6 +106,7 @@ app.include_router(connections_router)
 app.include_router(schema_syncs_router)
 app.include_router(query_runs_router)
 app.include_router(query_history_router)
+app.include_router(feedback_v1_router)
 
 # CORS
 app.add_middleware(

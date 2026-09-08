@@ -19,6 +19,16 @@
       "data"
     ]
   },
+  "ApiResponse_FeedbackResponse_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "ApiResponse_QueryHistorySummary_": {
     "properties": [
       "data",
@@ -60,6 +70,16 @@
     ]
   },
   "ApiResponse_list_ConnectionResponse__": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_list_FeedbackResponse__": {
     "properties": [
       "data",
       "meta",
@@ -453,6 +473,19 @@
     "properties": [],
     "required": []
   },
+  "FeedbackCreate": {
+    "properties": [
+      "category",
+      "corrected_sql",
+      "note",
+      "query_run_id",
+      "verdict"
+    ],
+    "required": [
+      "query_run_id",
+      "verdict"
+    ]
+  },
   "FeedbackDetailResponse": {
     "properties": [
       "category",
@@ -478,6 +511,23 @@
     "required": [
       "feedback",
       "status"
+    ]
+  },
+  "FeedbackResponse": {
+    "properties": [
+      "category",
+      "corrected_sql",
+      "created_at",
+      "id",
+      "note",
+      "query_run_id",
+      "verdict"
+    ],
+    "required": [
+      "created_at",
+      "id",
+      "query_run_id",
+      "verdict"
     ]
   },
   "FeedbackSubmitRequest": {
