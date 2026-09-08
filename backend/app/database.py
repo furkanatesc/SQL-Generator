@@ -226,6 +226,19 @@ def init_db():
             "ON query_run_feedback (query_run_id)"
         )
 
+        # Sprint 30.8 — AuthN. Managed hashed API keys (store hash + prefix only,
+        # NEVER the raw key). Inert: does not yet govern verify_api_key.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                key_prefix  TEXT NOT NULL,
+                key_hash    TEXT NOT NULL UNIQUE,
+                created_at  TEXT NOT NULL,
+                revoked_at  TEXT
+            )
+        """)
+
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")
