@@ -72,11 +72,16 @@ def create_feedback(payload: FeedbackCreate) -> ApiResponse[FeedbackResponse]:
 @router.get("", response_model=ApiResponse[list[FeedbackResponse]])
 def list_feedback(
     query_run_id: Optional[str] = Query(default=None),
-    verdict: Optional[str] = Query(default=None),
+    verdict: Optional[FeedbackVerdict] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> ApiResponse[list[FeedbackResponse]]:
-    rows = repo.list_feedback(limit=limit, offset=offset, query_run_id=query_run_id, verdict=verdict)
+    # verdict is enum-typed so an invalid value returns 422 (consistent with POST),
+    # not a silently-empty page.
+    rows = repo.list_feedback(
+        limit=limit, offset=offset, query_run_id=query_run_id,
+        verdict=verdict.value if verdict is not None else None,
+    )
     data = [FeedbackResponse(**repo.row_to_response_dict(r)) for r in rows]
     meta = ResponseMeta(pagination=PageMeta(limit=limit, offset=offset, count=len(data)))
     return ApiResponse[list[FeedbackResponse]](data=data, meta=meta)
