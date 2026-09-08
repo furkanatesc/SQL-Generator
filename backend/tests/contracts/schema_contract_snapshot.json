@@ -19,6 +19,16 @@
       "data"
     ]
   },
+  "ApiResponse_QueryHistorySummary_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "ApiResponse_QueryRunResponse_": {
     "properties": [
       "data",
@@ -50,6 +60,16 @@
     ]
   },
   "ApiResponse_list_ConnectionResponse__": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_list_QueryHistoryEntry__": {
     "properties": [
       "data",
       "meta",
@@ -774,6 +794,34 @@
       "provider_id",
       "request_count",
       "total_tokens"
+    ]
+  },
+  "QueryHistoryEntry": {
+    "properties": [
+      "connection_id",
+      "created_at",
+      "id",
+      "row_count",
+      "sql",
+      "status",
+      "workspace_id"
+    ],
+    "required": [
+      "connection_id",
+      "created_at",
+      "id",
+      "sql",
+      "status"
+    ]
+  },
+  "QueryHistorySummary": {
+    "properties": [
+      "by_status",
+      "total"
+    ],
+    "required": [
+      "by_status",
+      "total"
     ]
   },
   "QueryRunCreate": {
