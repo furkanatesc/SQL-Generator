@@ -987,6 +987,16 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   2900 passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §30): canlı execution
   (secret resolution+SELECT), NL→SQL üretimi, result streaming/iptal, cascade,
   cursor pagination. (PR #173)
+- **Query History API** (Sprint 30.5): **read-only** history/analytics yüzeyi
+  (`/api/v1/query-history` + `/summary`) — 30.4 `query_runs` ledger'ı üzerinde okur
+  (connections join ile workspace scope). Yeni tablo/yazma YOK. `query_history_repository.py`
+  (saf okuma, parameterized `_where`; `list_history`/`summary`; `q` LIKE-escape'li) +
+  `verify_api_key` korumalı router: `GET /query-history` (connection/workspace/status/
+  tarih-aralığı/SQL-metin filtreleri + `PageMeta`), `GET /query-history/summary`
+  (`{total, by_status}`). Bilinmeyen filtre → boş/sıfır (400 yok). `idx_query_runs_created_at`
+  eklendi. Mevcut hiçbir tablo/endpoint/handler değişmedi (additive). Full suite
+  2917 passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §31): yazma, cursor
+  pagination + list `total`, full result satırları, gruplu analytics, legacy uzlaştırma. (PR #174)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
