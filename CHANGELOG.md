@@ -997,6 +997,16 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   eklendi. Mevcut hiçbir tablo/endpoint/handler değişmedi (additive). Full suite
   2917 passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §31): yazma, cursor
   pagination + list `total`, full result satırları, gruplu analytics, legacy uzlaştırma. (PR #174)
+- **Feedback API** (Sprint 30.6): query-run-scoped `/api/v1/feedback` kaynağı
+  (verdict + opsiyonel category/note/corrected_sql) — 27.3 feedback enum'larını
+  (`FeedbackVerdict`/`FeedbackCategory`) + invariant'larını reuse eder. Legacy 27.3
+  job-scoped feedback dokunulmadı. Yeni `query_run_feedback` tablosu (+index) +
+  `feedback_repository.py` (append-only) + `verify_api_key` korumalı `app/api/feedback_v1.py`
+  router (POST 201/list-paginated+query_run_id/enum-verdict filtreleri/get/delete;
+  bilinmeyen query_run→400; invariant ihlali→422; PATCH yok). Mevcut hiçbir tablo/
+  endpoint/handler değişmedi (additive; yalnız enum'lar import). Full suite 2930
+  passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §32): 27.3 uzlaştırma,
+  rule-suggestion wiring, aggregate analytics, cascade, cursor pagination. (PR #175)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
