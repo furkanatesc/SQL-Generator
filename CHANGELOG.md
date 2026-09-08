@@ -1007,6 +1007,16 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   endpoint/handler değişmedi (additive; yalnız enum'lar import). Full suite 2930
   passed/37 skipped. **Bilinçli kapsam dışı** (TECH-DEBT §32): 27.3 uzlaştırma,
   rule-suggestion wiring, aggregate analytics, cascade, cursor pagination. (PR #175)
+- **Admin API** (Sprint 30.7): **read-only** operatör yüzeyi `/api/v1/admin`
+  (`/overview` + `/config`) — runtime overview (environment + version + Phase 11
+  kaynak sayımları) + config diagnostics. Yeni tablo/yazma/tehlikeli-ops YOK.
+  `admin_repository.py` (`resource_counts()` — Phase 11 tablolarında COUNT) +
+  `verify_api_key` korumalı `app/api/admin.py`; config diagnostics `health.py`'den
+  yeni `build_config_diagnostics()` helper'ıyla reuse. Ağır 27.7 dashboard legacy
+  yolunda kaldı. Mevcut hiçbir tablo/endpoint/handler değişmedi (additive; health.py
+  davranış-koruyan extraction). Full suite 2935 passed/37 skipped. **Bilinçli kapsam
+  dışı** (TECH-DEBT §33): admin-ops/yazma, dashboard sarma, per-workspace scope,
+  RBAC/admin-only authz (30.8). (PR #176)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
