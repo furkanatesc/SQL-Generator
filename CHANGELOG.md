@@ -1031,6 +1031,19 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   (workspaces/connections/schema-syncs/query-runs/query-history/feedback/admin/
   api-keys) tek kanonik sözleşme + conformance guard üzerine; sıradaki Phase 12
   (UI/UX, 31.x). (PR #177)
+- **Query Composer UX** (Sprint 31.0, **Phase 12 — UI/UX Production Layer — İLK
+  frontend sprint'i**): query composer'ın SQL kopyalama onayı bloke eden `alert()`'ten
+  **inline, geçici (1.6s), erişilebilir per-message "Kopyalandı" durumuna** taşındı
+  (`frontend/src/components/ChatView.vue`). Kopya durumu `msg.id`'ye keyed (sohbet çok
+  SQL bloğu içerir), async clipboard `try/catch` ile sertleştirildi (izin/insecure-context
+  reddi inline `Kopyalanamadı`, unhandled promise değil), durum-güdümlü buton
+  (default/copied-check/error) + `aria-live="polite"`; `onUnmounted`'ta timer temizlenir;
+  kullanılmayan `import type { Job }` (pre-existing `TS6133`) düştü. **Frontend domain —
+  pytest/CI yok:** verify `cd frontend && npm run build` error-set delta temiz (`ChatView`
+  `'Job'` hatası gitti, yeni hata yok; kalan hatalar yalnız pre-existing `SchemaManager.vue`).
+  **Bilinçli kapsam dışı** (TECH-DEBT §35): `SchemaManager.vue` build hataları (→ 31.1),
+  frontend test altyapısı, frontend CI, toast/bildirim sistemi. **Bununla Phase 12 başladı.**
+  (PR #178)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
