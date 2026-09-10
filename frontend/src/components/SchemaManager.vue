@@ -41,6 +41,7 @@ interface LinkItem extends d3.SimulationLinkDatum<NodeItem> {
 
 const schema = ref<DbSchema | null>(null);
 const loading = ref(false);
+const schemaError = ref<string | null>(null);
 const expandedTable = ref<string | null>(null);
 const targetDbType = ref('sqlite');
 const targetDbName = ref('');
@@ -364,6 +365,7 @@ const deleteCustomRelation = async (rel: any) => {
 
 const loadSchema = async (force = false) => {
   loading.value = true;
+  schemaError.value = null;
   try {
     const typeRes = await apiService.getConfig('target_db_type');
     targetDbType.value = typeRes.value || 'sqlite';
@@ -384,6 +386,7 @@ const loadSchema = async (force = false) => {
     schema.value = res.schema || null;
   } catch (e: any) {
     console.error('Schema load failed', e);
+    schemaError.value = e?.message || 'Şema yüklenemedi. Bağlantı ayarlarını kontrol edin.';
   } finally {
     loading.value = false;
   }
@@ -1240,11 +1243,37 @@ onUnmounted(() => {
             <p class="text-[10px] text-zinc-500">{{ targetDbType === 'postgres' ? 'PostgreSQL' : targetDbType === 'oracle' ? 'Oracle' : 'SQLite' }} Tabloları Listeleniyor...</p>
           </div>
 
-          <div v-else-if="!schema || Object.keys(schema.tables || {}).length === 0" class="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <!-- Hata durumu: şema import/refresh başarısız -->
+          <div v-else-if="schemaError" class="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-400/80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <p class="text-xs text-zinc-500 font-medium">Veritabanından şema bilgisi çekilemedi. Bağlantı ayarlarınızı doğrulayın.</p>
+            <div class="space-y-1">
+              <p class="text-xs font-semibold text-red-300">Şema içe aktarılamadı</p>
+              <p class="text-[11px] text-zinc-500 max-w-[260px] break-words">{{ schemaError }}</p>
+              <p class="text-[10px] text-zinc-600">Ayarlar'dan bağlantı (backend URL / API anahtarı / hedef DB) bilgilerini kontrol edin.</p>
+            </div>
+            <button
+              @click="loadSchema(true)"
+              :disabled="loading"
+              class="mt-1 h-8 px-3 bg-zinc-900 hover:bg-zinc-850 border border-red-500/30 hover:border-red-500/50 text-red-300 font-semibold text-xs rounded-xl transition-all disabled:opacity-50"
+            >Tekrar dene</button>
+          </div>
+
+          <!-- Boş durum: bağlandı ama tablo yok / şema henüz içe aktarılmadı -->
+          <div v-else-if="!schema || Object.keys(schema.tables || {}).length === 0" class="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            <div class="space-y-1">
+              <p class="text-xs font-semibold text-zinc-300">Tablo bulunamadı</p>
+              <p class="text-[11px] text-zinc-500 max-w-[260px]">Bağlantı kuruldu ancak hiç tablo yok ya da şema henüz içe aktarılmadı.</p>
+            </div>
+            <button
+              @click="loadSchema(true)"
+              :disabled="loading"
+              class="mt-1 h-8 px-3 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white font-semibold text-xs rounded-xl transition-all disabled:opacity-50"
+            >Şemayı içe aktar / Yenile</button>
           </div>
 
           <!-- Table Tree list -->
