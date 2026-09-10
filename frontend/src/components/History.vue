@@ -1,12 +1,31 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { apiService } from '../services/api';
 import type { Job } from '../services/api';
+import { describeError } from '../utils/errorInfo';
 
 const jobs = ref<Job[]>([]);
 const loading = ref(false);
 const selectedJob = ref<Job | null>(null);
 const copySuccess = ref(false);
+
+// Client-side arama + status filtresi (yüklenmiş joblar üzerinde; yeni API çağrısı yok)
+const searchText = ref('');
+const statusFilter = ref<'all' | Job['status']>('all');
+
+const filteredJobs = computed(() => {
+  const q = searchText.value.trim().toLowerCase();
+  return jobs.value.filter((job) => {
+    if (statusFilter.value !== 'all' && job.status !== statusFilter.value) return false;
+    if (!q) return true;
+    const haystack = `${job.natural_query ?? ''} ${job.result_sql ?? ''}`.toLowerCase();
+    return haystack.includes(q);
+  });
+});
+
+const clearSearch = () => {
+  searchText.value = '';
+};
 
 const loadHistory = async () => {
   loading.value = true;
@@ -91,6 +110,43 @@ onMounted(() => {
       </button>
     </div>
 
+    <!-- Filtre barı: arama + status -->
+    <div v-if="jobs.length > 0" class="flex flex-wrap items-center gap-3">
+      <div class="relative flex-1 min-w-[220px]">
+        <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          v-model="searchText"
+          type="text"
+          placeholder="Sorgu veya SQL'de ara…"
+          class="w-full h-9 pl-9 pr-8 bg-zinc-900 border border-zinc-800 focus:border-indigo-500/60 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 outline-none transition-colors"
+        />
+        <button
+          v-if="searchText"
+          @click="clearSearch"
+          class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-zinc-200"
+          title="Aramayı temizle"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <select
+        v-model="statusFilter"
+        class="h-9 px-3 bg-zinc-900 border border-zinc-800 focus:border-indigo-500/60 rounded-xl text-xs text-zinc-300 outline-none cursor-pointer transition-colors"
+      >
+        <option value="all">Tüm durumlar</option>
+        <option value="completed">Başarılı</option>
+        <option value="failed">Hatalı</option>
+        <option value="processing">İşleniyor</option>
+        <option value="cancelled">İptal Edildi</option>
+        <option value="pending">Beklemede</option>
+      </select>
+      <span class="text-[11px] text-zinc-500 font-medium tabular-nums">{{ filteredJobs.length }} / {{ jobs.length }} sorgu</span>
+    </div>
+
     <!-- History Table/List -->
     <div class="bg-black/10 backdrop-blur-[1px] rounded-2xl border border-white/10 shadow-lg shadow-black/30 overflow-hidden">
       <div v-if="loading && jobs.length === 0" class="p-12 flex flex-col items-center justify-center space-y-3">
@@ -113,6 +169,19 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- Filtreyle eşleşen yok -->
+      <div v-else-if="filteredJobs.length === 0" class="p-16 flex flex-col items-center justify-center text-center space-y-4">
+        <div class="w-14 h-14 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+        <div class="space-y-1">
+          <h3 class="text-sm font-semibold text-zinc-300">Eşleşen sorgu yok</h3>
+          <p class="text-xs text-zinc-500 max-w-[280px] mx-auto">Arama veya durum filtresini değiştirin ya da temizleyin.</p>
+        </div>
+      </div>
+
       <div v-else class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
           <thead>
@@ -125,8 +194,8 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody class="divide-y divide-zinc-800/60 text-xs text-zinc-300">
-            <tr 
-              v-for="job in jobs" 
+            <tr
+              v-for="job in filteredJobs"
               :key="job.id"
               class="hover:bg-zinc-800/10 transition-colors group"
             >
@@ -293,7 +362,25 @@ onMounted(() => {
 
           <div v-else-if="selectedJob.status === 'failed'" class="space-y-2">
             <h4 class="text-xs font-bold text-red-400 uppercase tracking-wider">Hata Detayı:</h4>
-            <div class="bg-red-500/5 border border-red-500/25 p-4 rounded-xl text-red-200 text-xs font-mono break-all whitespace-pre-wrap">
+            <!-- 31.5 taksonomi reuse: kategori + etiket + ipucu -->
+            <div
+              class="rounded-xl p-3 border flex flex-col gap-1"
+              :class="describeError(selectedJob.error_code, selectedJob.error_message).tone === 'warning'
+                ? 'bg-amber-500/5 border-amber-500/25 text-amber-100'
+                : 'bg-red-500/5 border-red-500/25 text-red-200'"
+            >
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-semibold">{{ describeError(selectedJob.error_code, selectedJob.error_message).label }}</span>
+                <span
+                  class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border"
+                  :class="describeError(selectedJob.error_code, selectedJob.error_message).tone === 'warning'
+                    ? 'border-amber-500/30 text-amber-300'
+                    : 'border-red-500/30 text-red-300'"
+                >{{ describeError(selectedJob.error_code, selectedJob.error_message).categoryLabel }}</span>
+              </div>
+              <span v-if="describeError(selectedJob.error_code, selectedJob.error_message).hint" class="text-[11px] opacity-75">💡 {{ describeError(selectedJob.error_code, selectedJob.error_message).hint }}</span>
+            </div>
+            <div v-if="selectedJob.error_message" class="bg-red-500/5 border border-red-500/25 p-4 rounded-xl text-red-200 text-xs font-mono break-all whitespace-pre-wrap">
               {{ selectedJob.error_message }}
             </div>
           </div>
