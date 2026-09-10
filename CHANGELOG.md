@@ -1056,6 +1056,16 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   "custom" gösterilmez). Görsel/davranış yeniden tasarımı yok. **Bilinçli kapsam dışı**
   (TECH-DEBT §35 — kısmen çözüldü, build ✓): görsel yeniden tasarım, frontend test
   altyapısı, frontend CI (artık trivial), toast sistemi. (PR #179)
+- **Relationship Graph UX** (Sprint 31.2, Phase 12): `SchemaManager.vue` D3 ilişki
+  graph'ı ile sol tablo listesi arasındaki seçim bağını **çift-yönlü** yaptı + **kalıcı
+  seçili-node ring'i** ekledi. Önce tek yönlüydü (graph node→kart açma/zoom vardı; sol
+  kart→graph node odaklama yoktu; hover vurgusu geçiciydi → seçim graph'ta görünmezdi).
+  `zoomToGraphNode(tableName)` (izole/limit-dışı tabloda nazik no-op), `focusNode`
+  sadeleşti, `paintSelectedRing()` (seçili node'a kalıcı indigo ring+glow, `mouseout`'ta
+  yeniden uygulanır), `watch(expandedTable)` her iki yönü birleştirir. Force/physics/layout
+  DEĞİŞMEDİ; hover paleti reuse; yeni bağımlılık yok. Verify `npm run build` 0 hata/exit 0.
+  **Bilinçli kapsam dışı** (TECH-DEBT §35 açık): frontend test infra/CI/toast, graph
+  arama/mini-map, seçimde edge koreografisi, layout yeniden tasarımı. (PR #180)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
