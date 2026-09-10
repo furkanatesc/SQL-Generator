@@ -1096,6 +1096,13 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   ipucu. Backend değişmedi. Verify `npm run build` 0 hata/exit 0. **Bilinçli kapsam
   dışı** (sessiz düşürme yok): backend error_code tamlığı, retry/auto-fix, i18n,
   frontend test infra/CI/toast (§35). (PR #183)
+- **Query History UX** (Sprint 31.6, Phase 12): `History.vue`'ye client-side metin
+  araması + status filtresi ekledi (yüklenmiş joblar üzerinde, yeni API çağrısı yok;
+  "N / M sorgu" sayacı, temizlenebilir arama), filtreli-boş durumu (hiç geçmiş yok ≠
+  eşleşme yok), ve failed detay modalında 31.5 `describeError` reuse (kategori/etiket/
+  ipucu/ton). Backend değişmedi, yeni bağımlılık yok. Verify `npm run build` 0 hata/exit 0.
+  **Bilinçli kapsam dışı** (sessiz düşürme yok): 30.5 `/query-history` server-side geçiş,
+  tarih aralığı, sütun sıralama, frontend test infra/CI/toast (§35). (PR #184)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
