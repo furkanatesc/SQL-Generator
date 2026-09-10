@@ -34,6 +34,24 @@ export interface QueryResult {
   duration_ms?: number | null;
 }
 
+// Feedback sözleşmesi — backend Sprint 27.3 (`app/feedback/categories.py`) enum'larıyla birebir
+export type FeedbackVerdict = 'correct' | 'incorrect';
+export type FeedbackCategory =
+  | 'wrong_table'
+  | 'wrong_column'
+  | 'wrong_filter'
+  | 'wrong_join'
+  | 'wrong_aggregation'
+  | 'wrong_order_limit'
+  | 'other';
+
+export interface FeedbackPayload {
+  verdict: FeedbackVerdict;
+  category?: FeedbackCategory;
+  note?: string;
+  corrected_sql?: string;
+}
+
 class ApiService {
   private getBackendUrl(): string {
     return localStorage.getItem('sqlgen_backend_url') || DEFAULT_BACKEND_URL;
@@ -130,6 +148,17 @@ class ApiService {
       headers: this.getHeaders(),
     });
     if (!res.ok) throw new Error(`Failed to cancel job ${jobId}`);
+    return res.json();
+  }
+
+  // Üretilen SQL için kullanıcı geri bildirimi (Sprint 27.3 legacy job-scoped endpoint)
+  async submitFeedback(jobId: string, payload: FeedbackPayload): Promise<{ status: string; feedback: unknown }> {
+    const res = await fetch(`${this.getBackendUrl()}/api/jobs/${jobId}/feedback`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`Feedback submission failed (${res.status})`);
     return res.json();
   }
 
