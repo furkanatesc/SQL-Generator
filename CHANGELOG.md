@@ -1044,6 +1044,18 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   **Bilinçli kapsam dışı** (TECH-DEBT §35): `SchemaManager.vue` build hataları (→ 31.1),
   frontend test altyapısı, frontend CI, toast/bildirim sistemi. **Bununla Phase 12 başladı.**
   (PR #178)
+- **Schema Explorer UX** (Sprint 31.1, Phase 12): Schema Explorer'ı
+  (`frontend/src/components/SchemaManager.vue`) **tip-güvenli** hale getirdi →
+  **frontend build TAM YEŞİL (0 hata, exit 0)**; TECH-DEBT §35'in tüm `SchemaManager.vue`
+  build hataları çözüldü (31.0'ın "error-set delta" verify'ından kesin iyileşme; kırık
+  build tüm sonraki frontend verify'ını bloke ediyordu). Kök neden `schema = ref<any>` idi
+  (→ template'te `meta` unknown ×5 + ölü `validCustomRelations`). Eklenen
+  `SchemaColumn`/`SchemaForeignKey`/`SchemaTable`/`DbSchema` arayüzleriyle `schema` tiplendi
+  (`GraphEdgeInput` `utils/graphSelection`'dan reuse); ölü `validCustomRelations`
+  **canlı guard'a** çevrildi (düşmüş tabloya bayat referans veren özel ilişki artık
+  "custom" gösterilmez). Görsel/davranış yeniden tasarımı yok. **Bilinçli kapsam dışı**
+  (TECH-DEBT §35 — kısmen çözüldü, build ✓): görsel yeniden tasarım, frontend test
+  altyapısı, frontend CI (artık trivial), toast sistemi. (PR #179)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
