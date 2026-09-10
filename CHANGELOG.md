@@ -1103,6 +1103,17 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   ipucu/ton). Backend değişmedi, yeni bağımlılık yok. Verify `npm run build` 0 hata/exit 0.
   **Bilinçli kapsam dışı** (sessiz düşürme yok): 30.5 `/query-history` server-side geçiş,
   tarih aralığı, sütun sıralama, frontend test infra/CI/toast (§35). (PR #184)
+- **Feedback UX** (Sprint 31.7, Phase 12): query composer'da üretilen SQL'e
+  👍 Doğru / 👎 Hatalı geri bildirim + 👎'de kategori/not mini-formu; frontend'i
+  backend'in mevcut feedback yakalamasına (27.3 job-scoped) bağladı. `api.ts`'e
+  `FeedbackVerdict`/`FeedbackCategory`/`FeedbackPayload` + `submitFeedback(jobId,
+  payload)` (→ `POST /api/jobs/{id}/feedback`); ChatView tamamlanmış SQL'de 👍→
+  `verdict=correct` anında, 👎→kategori+not→`verdict=incorrect`. Backend invariant'ları
+  client-side (correct→category/note yok; other→note zorunlu); per-message
+  sending/submitted/error + aria-live. Backend değişmedi, yeni bağımlılık yok.
+  Verify `npm run build` 0 hata/exit 0. **Bilinçli kapsam dışı** (sessiz düşürme yok):
+  30.6 query-run-scoped geçiş, corrected_sql girişi, feedback düzenleme/geçmiş,
+  frontend test infra/CI/toast (§35). (PR #185)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
