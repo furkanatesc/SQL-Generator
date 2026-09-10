@@ -91,6 +91,8 @@ const toggleGraphExpand = () => {
 const svgRef = ref<SVGSVGElement | null>(null);
 let simulation: d3.Simulation<NodeItem, LinkItem> | null = null;
 let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
+// initGraph dışından (expandedTable watcher) seçili node ring'ini yeniden boyamak için closure tutucu
+let repaintGraphSelection: (() => void) | null = null;
 
 // Özel ve devre dışı bırakılmış ilişkilerin reaktif durumları
 const customRelations = ref<any[]>([]);
@@ -865,6 +867,19 @@ const initGraph = () => {
     .attr('stroke-width', 0.8)
     .style('pointer-events', 'none');
 
+  // Seçili (açık) tablonun node'una kalıcı ring/glow uygula — hover geçiciyken bu
+  // kalıcıdır, o an hangi tablonun seçili olduğunu graph'ta görünür tutar.
+  const paintSelectedRing = () => {
+    nodeCircles
+      .attr('stroke', (n: NodeItem) => (n.id === expandedTable.value ? '#818cf8' : '#3f3f46'))
+      .attr('stroke-width', (n: NodeItem) => (n.id === expandedTable.value ? 3 : 2))
+      .style('filter', (n: NodeItem) =>
+        n.id === expandedTable.value ? 'url(#glow)' : 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45))'
+      );
+  };
+  repaintGraphSelection = paintSelectedRing;
+  paintSelectedRing();
+
   // Fizik Güncelleme Adımları (Tick Listener)
   simulation.on('tick', () => {
     // Dynamic Black Hole Keplerian & Accretion Vortex Physics
@@ -984,6 +999,9 @@ const initGraph = () => {
       .attr('stroke-width', (l: any) => l.type === 'implicit' ? 1.5 : 2);
 
     linkLabels.style('opacity', 0);
+
+    // Fare ayrılınca düz neutral'a değil, seçili node ring'i korunacak şekilde dön
+    paintSelectedRing();
   });
 
   // Tıklanınca Odaklan ve Sol Listeden Seç
@@ -1013,23 +1031,17 @@ function dragended(event: any, d: NodeItem) {
   }
 }
 
-// Bir Düğüme ve Sol Listeye Odaklanma
-const focusNode = (node: NodeItem) => {
-  if (!svgRef.value || !zoomBehavior || !node) return;
-
-  expandedTable.value = node.id;
-  
-  nextTick(() => {
-    const el = document.getElementById(`table-card-${node.id}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  });
+// Graph'taki bir tablo düğümüne kamerayı ortala. Düğüm çizilmemişse (izole tablo ya
+// da maxNodesLimit dışı) nazikçe no-op — kart yine açılır. Hem node tıklaması hem sol
+// kart tıklaması bu yolu expandedTable watcher'ı üzerinden paylaşır.
+const zoomToGraphNode = (tableName: string) => {
+  if (!svgRef.value || !zoomBehavior || !simulation) return;
+  const node = simulation.nodes().find((n) => n.id === tableName);
+  if (!node) return;
 
   const width = svgRef.value.clientWidth || 500;
   const height = svgRef.value.clientHeight || 400;
 
-  // Kamera açısını yumuşak bir transition ile düğüme ortala
   const transform = d3.zoomIdentity
     .translate(width / 2 - (node.x || 0) * 1.2, height / 2 - (node.y || 0) * 1.2)
     .scale(1.2);
@@ -1038,6 +1050,21 @@ const focusNode = (node: NodeItem) => {
     .transition()
     .duration(750)
     .call(zoomBehavior.transform, transform);
+};
+
+// Graph node tıklaması → sol listede ilgili kartı aç + ona kaydır (zoom + ring
+// expandedTable watcher'ından gelir; kart↔graph çift yönü tek yerde birleşir)
+const focusNode = (node: NodeItem) => {
+  if (!node) return;
+
+  expandedTable.value = node.id;
+
+  nextTick(() => {
+    const el = document.getElementById(`table-card-${node.id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  });
 };
 
 // Kamera Görünümünü Sıfırlama
@@ -1075,6 +1102,14 @@ watch(schema, () => {
   nextTick(() => {
     initGraph();
   });
+});
+
+// Seçili tablo değişince (sol kart tıklaması veya graph node tıklaması) graph'ı
+// senkronla: kalıcı ring'i yeniden boya + varsa node'a kamerayı ortala. Kart↔graph
+// çift yönü buradan birleşir; collapse (null) → ring temizlenir, zoom yok.
+watch(expandedTable, (id) => {
+  repaintGraphSelection?.();
+  if (id) zoomToGraphNode(id);
 });
 
 // Window resize olduğunda grafiği yeniden yapılandır
