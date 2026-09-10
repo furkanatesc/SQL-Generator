@@ -1114,6 +1114,15 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   Verify `npm run build` 0 hata/exit 0. **Bilinçli kapsam dışı** (sessiz düşürme yok):
   30.6 query-run-scoped geçiş, corrected_sql girişi, feedback düzenleme/geçmiş,
   frontend test infra/CI/toast (§35). (PR #185)
+- **Connection / Schema Import UX** (Sprint 31.8, Phase 12 SON): `SchemaManager.vue`'de
+  şema import/refresh hatalarını görünür kıldı. `loadSchema` hatayı yalnız `console.error`'a
+  yutuyordu → `schemaError` ref'ine yakalandı; tek fallback **hata durumu** (kırmızı kart +
+  mesaj + "Tekrar dene" retry) ile **boş durumu** (bağlandı ama 0 tablo + "Şemayı içe aktar")
+  olarak ayrıldı. Backend değişmedi, yeni bağımlılık yok. Verify `npm run build` 0 hata/exit 0.
+  **Bilinçli kapsam dışı** (sessiz düşürme yok): 30.2 connection CRUD onboarding + secret akışı
+  (§28), canlı bağlantı testi (§28/§30), çoklu-connection, frontend test infra/CI/toast (§35).
+  **Bununla Phase 12 (UI/UX Production Layer) KAPANDI** — 9 frontend sprint (31.0–31.8);
+  sıradaki Phase 13 (Deployment/Cloud/Ops, 32.x). (PR #186)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
