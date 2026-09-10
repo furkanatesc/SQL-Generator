@@ -1086,6 +1086,16 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   üretilir, çalıştırılmaz"), fake tablo yok. Backend değişmedi, yeni bağımlılık yok.
   Verify `npm run build` 0 hata/exit 0. **Bilinçli kapsam dışı** (sessiz düşürme yok):
   canlı execution (§30), sıralama/filtre/CSV export, frontend test infra/CI/toast (§35). (PR #182)
+- **Error / Warning UX** (Sprint 31.5, Phase 12): backend hata taksonomisini
+  (`Job.error_code`, Sprint 27.2 — taşınıyordu ama UI'da gösterilmiyordu)
+  kullanıcı-okur gösterime çıkardı. Yeni saf util `errorInfo.ts` (backend
+  `_CATEGORY_BY_CODE` aynası: 25 kod/7 kategori); `describeError` → kategori +
+  Türkçe etiket + ipucu + ton (EXECUTION→amber uyarı, diğerleri→kırmızı hata),
+  bilinmeyen/null→fallback. `ChatView` artık `job.error_code`'u yakalıyor; hata
+  kutusu `role="alert"`, ton-bazlı renk + kategori rozeti + etiket + ham mesaj +
+  ipucu. Backend değişmedi. Verify `npm run build` 0 hata/exit 0. **Bilinçli kapsam
+  dışı** (sessiz düşürme yok): backend error_code tamlığı, retry/auto-fix, i18n,
+  frontend test infra/CI/toast (§35). (PR #183)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
