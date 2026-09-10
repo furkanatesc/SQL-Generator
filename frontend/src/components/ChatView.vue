@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { apiService } from '../services/api';
+import { explainSql } from '../utils/sqlExplain';
 import PlanetDbSelector from './PlanetDbSelector.vue';
 
 interface ChatMessage {
@@ -30,6 +31,12 @@ const selectedFile = ref<File | null>(null);
 const loading = ref(false);
 const eventSource = ref<EventSource | null>(null);
 const activeMessageId = ref<number | null>(null);
+
+// Sorgu Açıklaması paneli — aynı anda tek mesajın paneli açık (msg.id'ye keyed)
+const expandedExplanationId = ref<number | null>(null);
+const toggleExplanation = (messageId: number) => {
+  expandedExplanationId.value = expandedExplanationId.value === messageId ? null : messageId;
+};
 
 const triggerFileInput = () => {
   fileInput.value?.click();
@@ -355,6 +362,43 @@ onUnmounted(() => {
                 </button>
               </div>
               <pre class="p-4 overflow-x-auto text-sm text-indigo-200 font-mono leading-relaxed"><code>{{ msg.sql }}</code></pre>
+
+              <!-- Sorgu Açıklaması (deterministik, client-side clause dökümü) -->
+              <div class="border-t border-zinc-700/50">
+                <button
+                  @click="toggleExplanation(msg.id)"
+                  class="w-full px-4 py-2 flex items-center justify-between text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                  :aria-expanded="expandedExplanationId === msg.id"
+                >
+                  <span class="flex items-center gap-1.5 font-semibold">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Sorgu Açıklaması
+                  </span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-3.5 w-3.5 transition-transform duration-200"
+                    :class="expandedExplanationId === msg.id ? 'rotate-180' : ''"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div v-if="expandedExplanationId === msg.id" class="px-4 pb-3 space-y-1.5">
+                  <template v-if="explainSql(msg.sql).length > 0">
+                    <div
+                      v-for="(clause, ci) in explainSql(msg.sql)"
+                      :key="ci"
+                      class="text-xs flex flex-col gap-0.5 bg-zinc-900/40 border border-zinc-800 rounded-lg p-2"
+                    >
+                      <span class="font-semibold text-indigo-300">{{ clause.label }}</span>
+                      <code class="text-zinc-300 font-mono break-all whitespace-pre-wrap">{{ clause.body || '—' }}</code>
+                    </div>
+                  </template>
+                  <p v-else class="text-xs text-zinc-500 italic">Açıklama üretilemedi.</p>
+                </div>
+              </div>
             </div>
 
             <!-- Error -->
