@@ -1076,6 +1076,16 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   additive; backend değişmedi, yeni bağımlılık yok. Verify `npm run build` 0 hata/exit 0.
   **Bilinçli kapsam dışı** (TECH-DEBT §35 açık): LLM/doğal-dil açıklama, tam AST, frontend
   test infra/CI/toast, syntax highlighting. (PR #181)
+- **Execution Result Viewer** (Sprint 31.4, Phase 12): sorgu sonuç görünümünün
+  **sunum yarısını** ekledi (fake veri yok). Backend'de canlı execution HİÇ
+  yapılmadığı (§30 — query-runs inert, canlı SELECT güvenlik-hassas/kullanıcı-onaylı)
+  ve frontend'e sonuç akmadığı (`Job` yalnız `result_sql`) için: yeni `api.ts::QueryResult`
+  tipi (30.4 `QueryRunResult` kontratıyla birebir), yeni salt-okunur `ResultTable.vue`
+  (sticky başlık, NULL hücre, truncated rozeti, süre, boş durum), `ChatView`'e opsiyonel
+  `ChatMessage.result` entegrasyon noktası; `result` yoksa **dürüst not** ("sorgu yalnız
+  üretilir, çalıştırılmaz"), fake tablo yok. Backend değişmedi, yeni bağımlılık yok.
+  Verify `npm run build` 0 hata/exit 0. **Bilinçli kapsam dışı** (sessiz düşürme yok):
+  canlı execution (§30), sıralama/filtre/CSV export, frontend test infra/CI/toast (§35). (PR #182)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
