@@ -1066,6 +1066,16 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   DEĞİŞMEDİ; hover paleti reuse; yeni bağımlılık yok. Verify `npm run build` 0 hata/exit 0.
   **Bilinçli kapsam dışı** (TECH-DEBT §35 açık): frontend test infra/CI/toast, graph
   arama/mini-map, seçimde edge koreografisi, layout yeniden tasarımı. (PR #180)
+- **SQL Explanation Panel** (Sprint 31.3, Phase 12): query composer'a (`ChatView.vue`)
+  üretilen SQL bloğunun altında katlanabilir **"Sorgu Açıklaması"** paneli ekledi; SQL'i
+  üst-düzey clause'lara (SELECT/FROM/JOIN/WHERE/GROUP BY/HAVING/ORDER BY/LIMIT/UNION…)
+  ayırıp Türkçe etiketlerle gösterir. Backend yalnız ham SQL döndürdüğü (prose reddedilir,
+  `Job`'da explanation yok) için açıklama **deterministik client-side** üretilir: yeni saf
+  util `sqlExplain.ts` — paren derinliği + tırnak durumu izleyen tek-geçişli tarayıcı
+  (string literal/alt-sorgu içindeki anahtarlar bölmez). Per-message toggle; salt-okunur,
+  additive; backend değişmedi, yeni bağımlılık yok. Verify `npm run build` 0 hata/exit 0.
+  **Bilinçli kapsam dışı** (TECH-DEBT §35 açık): LLM/doğal-dil açıklama, tam AST, frontend
+  test infra/CI/toast, syntax highlighting. (PR #181)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
