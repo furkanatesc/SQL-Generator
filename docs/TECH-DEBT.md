@@ -1476,7 +1476,7 @@ kapsam dışı (sessiz düşürme yok):
 5. **Plaintext `configs.api_key` emekliye ayrılmadı.**
    *İlgili Dosya:* `backend/app/database.py`, `backend/app/auth.py`
 
-## §35. Sprint 31.0 (Query Composer UX) — frontend devirleri — AÇIK
+## §35. Sprint 31.0 (Query Composer UX) — frontend devirleri — KISMEN ÇÖZÜLDÜ (build ✓, test/CI/toast açık)
 
 Phase 12'nin ilk (frontend) sprint'i. 31.0 query composer'da (`ChatView.vue`) bloklayıcı
 `alert()` kopya onayını inline/transient/erişilebilir per-message "Kopyalandı" durumuyla
@@ -1484,17 +1484,18 @@ değiştirdi + `navigator.clipboard` reddini güvenli ele aldı + ChatView'in pr
 `'Job'` unused-import TS hatasını düzeltti. Bilinçli kapsam dışı / bilinen durumlar
 (sessiz düşürme yok):
 
-1. **Frontend build `main`'de PRE-EXISTING KIRIK** — `SchemaManager.vue`'da `vue-tsc`
-   hataları (`validCustomRelations` unused + `meta is unknown` ×5). Frontend CI olmadığından
-   fark edilmemiş. 31.0 yalnız ChatView'i düzeltti; SchemaManager → **31.1 Schema Explorer UX**
-   kapsamında düzeltilecek (build tam yeşile o zaman döner).
+1. **Frontend build `SchemaManager.vue` hataları — ÇÖZÜLDÜ (Sprint 31.1, PR #N).** Kök neden
+   `schema = ref<any>` idi → `visibleTables` `Record<string,unknown>` üretiyor, template'te `meta`
+   `unknown` (`meta is unknown` ×5) + `validCustomRelations` ölü kod. 31.1 şema tip arayüzlerini
+   (`SchemaColumn`/`SchemaForeignKey`/`SchemaTable`/`DbSchema`) ekleyip `schema`'yı tipledi ve ölü
+   computed'ı canlı guard'a çevirdi. **`npm run build` artık 0 hata / exit 0** (tam yeşil).
    *İlgili Dosya:* `frontend/src/components/SchemaManager.vue`
 2. **Frontend test altyapısı yok** — vitest/@testing-library/vue kurulu değil, test script yok,
-   hiç test yok. Vite 8 / vue-tsc 6 sıradışı toolchain → compat rabbit-hole riski; UX sprint'inde
-   ertelendi. Verify şimdilik `npm run build` error-set delta ile.
+   hiç test yok. Vite 8 / vue-tsc 6 sıradışı toolchain → compat rabbit-hole riski; UX sprint'lerinde
+   ertelendi. Verify şimdilik `npm run build` (artık tam yeşil) ile. **HÂLÂ AÇIK.**
    *İlgili Dosya:* `frontend/package.json`
-3. **Frontend CI job yok** — `.github/workflows` yalnız backend. Eklemek build yeşile
-   dönene (31.1) kadar bloke; ertelendi.
+3. **Frontend CI job yok** — `.github/workflows` yalnız backend. Build 31.1'den beri tam yeşil
+   olduğundan eklemek artık TRIVIAL (bloklayıcı yok); bu sprint eklemedi. **HÂLÂ AÇIK.**
    *İlgili Dosya:* `.github/workflows/`
 4. **Global toast/bildirim sistemi yok** — 31.0 per-buton inline state kullandı (daha düşük
    riskli); cross-cutting bildirimler için toast ileri sprint.
