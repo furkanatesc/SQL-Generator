@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { apiService } from '../services/api';
 import type { QueryResult } from '../services/api';
 import { explainSql } from '../utils/sqlExplain';
+import { describeError } from '../utils/errorInfo';
 import PlanetDbSelector from './PlanetDbSelector.vue';
 import ResultTable from './ResultTable.vue';
 
@@ -14,6 +15,9 @@ interface ChatMessage {
   logs?: Array<{ message: string; step: number; timestamp: string }>;
   status?: 'loading' | 'completed' | 'failed' | 'cancelled';
   error?: string;
+  /** Backend hata taksonomisi kodu (Job.error_code, Sprint 27.2) — kategori/ipucu
+   *  gösterimi için yakalanır (31.5). */
+  errorCode?: string;
   jobId?: string;
   /** Sorgu çalıştırma sonucu. Canlı execution henüz bağlı değil (TECH-DEBT §30);
    *  execution sprint'i bu alanı doldurunca ResultTable otomatik görünür. */
@@ -184,6 +188,7 @@ const checkJobCompletion = async (jobId: string, msgId: number) => {
         activeMsg.sql = job.result_sql || '';
       } else if (job.status === 'failed') {
         activeMsg.error = job.error_message || 'Bilinmeyen hata';
+        activeMsg.errorCode = job.error_code ?? undefined;
       }
       
       if (eventSource.value) {
@@ -418,12 +423,33 @@ onUnmounted(() => {
               <span>Bu sürümde sorgu yalnız üretilir, çalıştırılmaz — sonuç görüntüleme henüz bağlı değil.</span>
             </div>
 
-            <!-- Error -->
-            <div v-if="msg.error" class="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex gap-3 text-red-200 text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-400 flex-none" viewBox="0 0 20 20" fill="currentColor">
+            <!-- Error / Warning (kategori + ipucu ile zenginleştirilmiş) -->
+            <div
+              v-if="msg.error"
+              role="alert"
+              class="rounded-xl p-4 flex gap-3 text-sm border"
+              :class="describeError(msg.errorCode, msg.error).tone === 'warning'
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-100'
+                : 'bg-red-500/10 border-red-500/30 text-red-200'"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-none"
+                :class="describeError(msg.errorCode, msg.error).tone === 'warning' ? 'text-amber-400' : 'text-red-400'"
+                viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
               </svg>
-              <span>{{ msg.error }}</span>
+              <div class="flex flex-col gap-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-semibold">{{ describeError(msg.errorCode, msg.error).label }}</span>
+                  <span
+                    class="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-md border"
+                    :class="describeError(msg.errorCode, msg.error).tone === 'warning'
+                      ? 'border-amber-500/30 text-amber-300'
+                      : 'border-red-500/30 text-red-300'"
+                  >{{ describeError(msg.errorCode, msg.error).categoryLabel }}</span>
+                </div>
+                <span v-if="msg.error && msg.error !== describeError(msg.errorCode, msg.error).label" class="text-xs opacity-90 break-words">{{ msg.error }}</span>
+                <span v-if="describeError(msg.errorCode, msg.error).hint" class="text-xs opacity-75">💡 {{ describeError(msg.errorCode, msg.error).hint }}</span>
+              </div>
             </div>
             
           </div>
