@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { apiService } from '../services/api';
-import type { QueryResult } from '../services/api';
+import type { QueryResult, FeedbackCategory } from '../services/api';
 import { explainSql } from '../utils/sqlExplain';
 import { describeError } from '../utils/errorInfo';
 import PlanetDbSelector from './PlanetDbSelector.vue';
@@ -45,6 +45,82 @@ const activeMessageId = ref<number | null>(null);
 const expandedExplanationId = ref<number | null>(null);
 const toggleExplanation = (messageId: number) => {
   expandedExplanationId.value = expandedExplanationId.value === messageId ? null : messageId;
+};
+
+// Geri bildirim (feedback) UI durumu — msg.id'ye keyed
+interface FeedbackUiState {
+  open?: boolean;        // 👎 mini-formu açık mı
+  sending?: boolean;
+  submitted?: boolean;
+  error?: string;
+  category?: FeedbackCategory | '';
+  note?: string;
+}
+const feedbackUi = ref<Record<number, FeedbackUiState>>({});
+
+const feedbackCategories: Array<{ value: FeedbackCategory; label: string }> = [
+  { value: 'wrong_table', label: 'Yanlış tablo' },
+  { value: 'wrong_column', label: 'Yanlış sütun' },
+  { value: 'wrong_filter', label: 'Yanlış filtre' },
+  { value: 'wrong_join', label: 'Yanlış join' },
+  { value: 'wrong_aggregation', label: 'Yanlış toplama (aggregation)' },
+  { value: 'wrong_order_limit', label: 'Yanlış sıralama/limit' },
+  { value: 'other', label: 'Diğer' },
+];
+
+const ensureFeedback = (id: number): FeedbackUiState => {
+  if (!feedbackUi.value[id]) feedbackUi.value[id] = { category: '', note: '' };
+  return feedbackUi.value[id];
+};
+
+const giveThumbsUp = async (msg: ChatMessage) => {
+  if (!msg.jobId) return;
+  const state = ensureFeedback(msg.id);
+  if (state.sending || state.submitted) return;
+  state.open = false;
+  state.sending = true;
+  state.error = undefined;
+  try {
+    await apiService.submitFeedback(msg.jobId, { verdict: 'correct' });
+    state.submitted = true;
+  } catch (e: any) {
+    state.error = e?.message || 'Geri bildirim gönderilemedi.';
+  } finally {
+    state.sending = false;
+  }
+};
+
+const openThumbsDown = (msg: ChatMessage) => {
+  const state = ensureFeedback(msg.id);
+  if (state.submitted) return;
+  state.open = true;
+  state.error = undefined;
+};
+
+const submitThumbsDown = async (msg: ChatMessage) => {
+  if (!msg.jobId) return;
+  const state = ensureFeedback(msg.id);
+  if (state.sending) return;
+  const note = (state.note || '').trim();
+  if (state.category === 'other' && !note) {
+    state.error = '"Diğer" kategorisi için lütfen bir not girin.';
+    return;
+  }
+  state.sending = true;
+  state.error = undefined;
+  try {
+    await apiService.submitFeedback(msg.jobId, {
+      verdict: 'incorrect',
+      category: state.category ? state.category : undefined,
+      note: note || undefined,
+    });
+    state.submitted = true;
+    state.open = false;
+  } catch (e: any) {
+    state.error = e?.message || 'Geri bildirim gönderilemedi.';
+  } finally {
+    state.sending = false;
+  }
 };
 
 const triggerFileInput = () => {
@@ -421,6 +497,67 @@ onUnmounted(() => {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Bu sürümde sorgu yalnız üretilir, çalıştırılmaz — sonuç görüntüleme henüz bağlı değil.</span>
+            </div>
+
+            <!-- Geri Bildirim (Feedback) — yalnız tamamlanmış SQL için -->
+            <div
+              v-if="msg.role === 'assistant' && msg.status === 'completed' && msg.sql && msg.jobId"
+              class="flex flex-col gap-2 text-xs"
+            >
+              <div v-if="feedbackUi[msg.id]?.submitted" class="flex items-center gap-1.5 text-emerald-400" aria-live="polite">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                Geri bildiriminiz için teşekkürler.
+              </div>
+              <template v-else>
+                <div class="flex items-center gap-2 text-zinc-400">
+                  <span>Bu sorgu doğru mu?</span>
+                  <button
+                    @click="giveThumbsUp(msg)"
+                    :disabled="feedbackUi[msg.id]?.sending"
+                    class="px-2 py-1 rounded-lg border border-zinc-800 hover:border-emerald-500/40 hover:text-emerald-400 transition-colors flex items-center gap-1 disabled:opacity-50"
+                    title="Doğru"
+                  >👍 Doğru</button>
+                  <button
+                    @click="openThumbsDown(msg)"
+                    :disabled="feedbackUi[msg.id]?.sending"
+                    class="px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 disabled:opacity-50"
+                    :class="feedbackUi[msg.id]?.open ? 'border-red-500/40 text-red-400' : 'border-zinc-800 hover:border-red-500/40 hover:text-red-400'"
+                    title="Hatalı"
+                  >👎 Hatalı</button>
+                </div>
+
+                <!-- 👎 mini-form -->
+                <div v-if="feedbackUi[msg.id]?.open" class="flex flex-col gap-2 bg-zinc-900/40 border border-zinc-800 rounded-lg p-3 max-w-md">
+                  <select
+                    v-model="feedbackUi[msg.id].category"
+                    class="h-8 px-2 bg-zinc-950 border border-zinc-800 focus:border-red-500/50 rounded-lg text-xs text-zinc-300 outline-none"
+                  >
+                    <option value="">Kategori (opsiyonel)</option>
+                    <option v-for="c in feedbackCategories" :key="c.value" :value="c.value">{{ c.label }}</option>
+                  </select>
+                  <textarea
+                    v-model="feedbackUi[msg.id].note"
+                    rows="2"
+                    placeholder="Ne yanlıştı? (isteğe bağlı; 'Diğer' için zorunlu)"
+                    class="w-full px-2 py-1.5 bg-zinc-950 border border-zinc-800 focus:border-red-500/50 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 outline-none resize-none"
+                  ></textarea>
+                  <div class="flex items-center gap-2">
+                    <button
+                      @click="submitThumbsDown(msg)"
+                      :disabled="feedbackUi[msg.id]?.sending"
+                      class="px-3 py-1 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition-colors disabled:opacity-50"
+                    >{{ feedbackUi[msg.id]?.sending ? 'Gönderiliyor…' : 'Gönder' }}</button>
+                    <button
+                      @click="feedbackUi[msg.id].open = false"
+                      class="px-3 py-1 rounded-lg border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                    >Vazgeç</button>
+                  </div>
+                </div>
+
+                <p v-if="feedbackUi[msg.id]?.error" class="text-red-400" aria-live="polite">{{ feedbackUi[msg.id]?.error }}</p>
+              </template>
             </div>
 
             <!-- Error / Warning (kategori + ipucu ile zenginleştirilmiş) -->
