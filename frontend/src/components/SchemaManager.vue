@@ -3,7 +3,29 @@ import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue';
 import { apiService } from '../services/api';
 import * as d3 from 'd3';
 import PlanetDbSelector from './PlanetDbSelector.vue';
-import { selectGraphData } from '../utils/graphSelection';
+import { selectGraphData, type GraphEdgeInput } from '../utils/graphSelection';
+
+interface SchemaColumn {
+  name: string;
+  type: string;
+  primary_key?: boolean;
+}
+
+interface SchemaForeignKey {
+  column: string;
+  referenced_table: string;
+  referenced_column: string;
+}
+
+interface SchemaTable {
+  columns: SchemaColumn[];
+  foreign_keys?: SchemaForeignKey[];
+}
+
+interface DbSchema {
+  tables: Record<string, SchemaTable>;
+  graph?: { nodes: string[]; edges: GraphEdgeInput[] };
+}
 
 interface NodeItem extends d3.SimulationNodeDatum {
   id: string;
@@ -17,7 +39,7 @@ interface LinkItem extends d3.SimulationLinkDatum<NodeItem> {
   type?: string;
 }
 
-const schema = ref<any>(null);
+const schema = ref<DbSchema | null>(null);
 const loading = ref(false);
 const expandedTable = ref<string | null>(null);
 const targetDbType = ref('sqlite');
@@ -74,9 +96,18 @@ let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
 const customRelations = ref<any[]>([]);
 const disabledRelations = ref<any[]>([]);
 
+// Şemada hâlâ var olan tablolara işaret eden özel ilişkiler (düşmüş tabloya bayat
+// referans veren custom kayıtlar keşif yüzeyinde "custom" olarak gösterilmez)
+const validCustomRelations = computed(() => {
+  const tables = schema.value?.tables;
+  if (!tables) return [];
+  return customRelations.value.filter(cr => tables[cr.source] && tables[cr.target]);
+});
+
 // Tüm ilişkileri birleştiren computed property (Açık, Örtük, Özel ve Pasifler) - Optimize edilmiş O(N) lookup
 const allRelations = computed(() => {
   if (!schema.value) return [];
+  const tables = schema.value.tables;
   const list: any[] = [];
   
   // 1. Aktif ilişkileri ekle (şemadaki edges)
@@ -101,7 +132,7 @@ const allRelations = computed(() => {
   
   // 2. Devre dışı bırakılmış ilişkileri ekle
   const customKeys = new Set<string>();
-  customRelations.value.forEach((cr: any) => {
+  validCustomRelations.value.forEach((cr: any) => {
     const key1 = `${cr.source}:${cr.source_col}->${cr.target}:${cr.target_col}`;
     const key2 = `${cr.target}:${cr.target_col}->${cr.source}:${cr.source_col}`;
     customKeys.add(key1);
@@ -109,7 +140,7 @@ const allRelations = computed(() => {
   });
 
   disabledRelations.value.forEach((dr: any) => {
-    if (!schema.value.tables[dr.source] || !schema.value.tables[dr.target]) return;
+    if (!tables[dr.source] || !tables[dr.target]) return;
     
     const key1 = `${dr.source}:${dr.source_col}->${dr.target}:${dr.target_col}`;
     const key2 = `${dr.target}:${dr.target_col}->${dr.source}:${dr.source_col}`;
@@ -139,7 +170,7 @@ const incomingRelationsMap = computed(() => {
   if (!schema.value || !schema.value.tables) return map;
   
   for (const [sourceTable, meta] of Object.entries(schema.value.tables)) {
-    const fks = (meta as any).foreign_keys || [];
+    const fks = meta.foreign_keys ?? [];
     for (const fk of fks) {
       const refTbl = fk.referenced_table;
       if (!map[refTbl]) {
@@ -177,13 +208,6 @@ const visibleRelations = computed(() => {
 const loadMoreRelations = () => {
   visibleRelationsLimit.value += 50;
 };
-
-const validCustomRelations = computed(() => {
-  if (!schema.value || !schema.value.tables) return [];
-  return customRelations.value.filter(cr => 
-    schema.value.tables[cr.source] && schema.value.tables[cr.target]
-  );
-});
 
 // Form kontrol durumları
 const newSourceTable = ref('');
