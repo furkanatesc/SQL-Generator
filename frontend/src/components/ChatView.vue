@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { apiService } from '../services/api';
+import type { QueryResult } from '../services/api';
 import { explainSql } from '../utils/sqlExplain';
 import PlanetDbSelector from './PlanetDbSelector.vue';
+import ResultTable from './ResultTable.vue';
 
 interface ChatMessage {
   id: number;
@@ -13,6 +15,9 @@ interface ChatMessage {
   status?: 'loading' | 'completed' | 'failed' | 'cancelled';
   error?: string;
   jobId?: string;
+  /** Sorgu çalıştırma sonucu. Canlı execution henüz bağlı değil (TECH-DEBT §30);
+   *  execution sprint'i bu alanı doldurunca ResultTable otomatik görünür. */
+  result?: QueryResult;
 }
 
 const dialect = ref('postgres');
@@ -399,6 +404,18 @@ onUnmounted(() => {
                   <p v-else class="text-xs text-zinc-500 italic">Açıklama üretilemedi.</p>
                 </div>
               </div>
+            </div>
+
+            <!-- Sonuç (Execution Result) -->
+            <ResultTable v-if="msg.result" :result="msg.result" />
+            <div
+              v-else-if="msg.sql"
+              class="flex items-center gap-2 text-xs text-zinc-500 bg-zinc-900/30 border border-zinc-800 rounded-lg px-3 py-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 flex-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Bu sürümde sorgu yalnız üretilir, çalıştırılmaz — sonuç görüntüleme henüz bağlı değil.</span>
             </div>
 
             <!-- Error -->

@@ -23,6 +23,17 @@ export interface Config {
   value: string;
 }
 
+/** Sorgu çalıştırma sonucu — backend 30.4 `QueryRunResult` kontratıyla birebir
+ *  (columns/rows/truncated/duration_ms). Canlı execution henüz bağlı değil
+ *  (TECH-DEBT §30); bu tip, execution sprint'i bağlandığında doldurulacak
+ *  sunum sözleşmesidir. */
+export interface QueryResult {
+  columns: string[];
+  rows: unknown[][];
+  truncated?: boolean;
+  duration_ms?: number | null;
+}
+
 class ApiService {
   private getBackendUrl(): string {
     return localStorage.getItem('sqlgen_backend_url') || DEFAULT_BACKEND_URL;
