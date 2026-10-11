@@ -19,6 +19,11 @@ The application resolves the active API Key in the following order of precedence
 
 If no API key is resolved by either method, a critical validation warning is generated.
 
+**Development default (Sprint 32.0):** outside production-like environments a fresh database is seeded
+with a public development key, which therefore shadows `NL2SQL_API_KEY`. Production-like environments
+do **not** seed it, so `NL2SQL_API_KEY` is the active key; if the active key is still the development
+default in production, the critical warning `API_KEY_INSECURE_DEFAULT` is raised (`/ready` returns 503).
+
 ---
 
 ## Optional Variables
