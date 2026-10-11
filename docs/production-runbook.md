@@ -7,18 +7,83 @@ This document details the deployment, configuration verification, and diagnostic
 ## Supported Deployment Model
 
 The current supported model for deploying the SQLGen backend is:
+- **Docker Compose (recommended, Sprint 32.0)**: `docker-compose.prod.yml` runs the backend and the
+  frontend images with persistent named volumes and healthchecks. See
+  [Docker Compose (Production)](#docker-compose-production).
 - **Docker container**: A standalone container image built using the official Dockerfile.
-- **Single backend instance**: The application runs as a single process inside a single container.
+- **Single backend instance**: The application runs as a single process inside a single container
+  (the embedded Qdrant store and SQLite are single-process; do not scale `backend` replicas).
 - **Manual environment configuration**: Configured entirely via system environment variables.
 
 ### Not Supported Yet
 The following deployment methods and technologies are **not supported**:
-- Docker Compose orchestration
 - Kubernetes orchestration (including custom Pods/Services)
 - Helm chart deployments
 - Amazon ECS or EKS
 - Azure Container Apps or App Services
 - Automated Docker registry publishing workflow (e.g. pushing to Docker Hub or ECR via CI)
+
+---
+
+## Docker Compose (Production)
+
+`docker-compose.prod.yml` (repo root) is the production orchestration. It is **separate** from
+`docker-compose.yml`, which only provides local/CI test databases with fixed test passwords.
+
+| Service | Image | Port (host) | Notes |
+| :--- | :--- | :--- | :--- |
+| `backend` | `sqlgen-backend:${SQLGEN_IMAGE_TAG}` (built from `backend/`) | `${SQLGEN_BACKEND_PORT:-8000}` | non-root, `HEALTHCHECK` on `/health` |
+| `frontend` | `sqlgen-frontend:${SQLGEN_IMAGE_TAG}` (built from `frontend/`) | `${SQLGEN_FRONTEND_PORT:-8080}` | non-root nginx serving the Vue SPA; starts after `backend` is healthy |
+
+The compose file **pins** production-safe settings (`NL2SQL_ENVIRONMENT=production`,
+`NL2SQL_DEBUG_ENDPOINTS_ENABLED=false`, `NL2SQL_UPLOAD_DIR=/app/uploads`) and **refuses to start**
+when `NL2SQL_API_KEY` or `NL2SQL_CORS_ALLOW_ORIGINS` is missing.
+
+```bash
+# 1. Configure (the .env file is gitignored — never commit it)
+cp .env.prod.example .env
+#    edit .env: NL2SQL_API_KEY, NL2SQL_CORS_ALLOW_ORIGINS (JSON array, no "*"), optional NVIDIA_API_KEY
+
+# 2. Build and start; --wait blocks until both services report healthy
+docker compose -f docker-compose.prod.yml up -d --build --wait
+
+# 3. Smoke test
+curl -fsS http://localhost:8000/health
+curl -fsS http://localhost:8000/ready     # 200 only with production-safe config
+curl -fsS http://localhost:8080/          # the SPA
+
+# Logs / stop (keeps data) / upgrade
+docker compose -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.prod.yml down
+git pull && docker compose -f docker-compose.prod.yml up -d --build --wait
+```
+
+### Persistent state
+| Named volume | Mounted at | Contents |
+| :--- | :--- | :--- |
+| `sqlgen_data` | `/app/data` | SQLite app DB (`SQLGEN_DB_PATH=/app/data/sqlgen.db`) and trace DB (`NL2SQL_TRACE_DB_PATH`) |
+| `sqlgen_uploads` | `/app/uploads` | uploaded files |
+| `sqlgen_qdrant` | `/app/qdrant_data` | embedded Qdrant vector store |
+
+`docker compose down` keeps the volumes; **`down -v` deletes all data**. Backup/restore is planned
+for Sprint 32.8; until then, stop the stack and copy the volumes. Compose prefixes volume names
+with the project name (by default the checkout directory, e.g. `sqlgen_sqlgen_data`; check with
+`docker volume ls`): `docker run --rm -v sqlgen_sqlgen_data:/data -v "$PWD":/backup alpine tar czf
+/backup/sqlgen_data.tgz -C /data .`
+
+### Frontend → backend
+The SPA calls the backend at `http://<browser host>:8000` by default. If `SQLGEN_BACKEND_PORT` is not
+`8000`, or the backend is on another host, set the backend URL and API key in the UI settings. Add the
+frontend's origin (e.g. `http://sqlgen.example.com:8080`) to `NL2SQL_CORS_ALLOW_ORIGINS`.
+
+### Known limitations (Sprint 32.0)
+No TLS termination or single-origin reverse proxy, secrets are passed as environment variables
+(Docker secrets → Sprint 32.2), images are built locally (registry publishing → Sprint 32.11), and
+the schema cache file (`/app/schema_cache.json`) is not persisted (it is rebuilt on demand). See
+`docs/TECH-DEBT.md` §36.
+
+The CI job `prod-compose-smoke` (`.github/workflows/backend-ci.yml`) boots this stack on every PR and
+checks `/health`, `/ready`, the SPA, and that data survives recreating the backend container.
 
 ---
 
@@ -106,12 +171,12 @@ Startup configuration validation checks are executed during application boot to 
   - *Action*: Ensure a valid API key is set in the environment or database.
 
 - **`CORS_WILDCARD_IN_PRODUCTION`**
-  - *Severity*: `warning`
+  - *Severity*: `critical`
   - *Trigger*: Allowed CORS origins includes wildcard (`*`) while running in a production-like environment (e.g. environment starts with `prod` or `production`).
   - *Action*: Configure specific domains in the allowed CORS origins settings to secure the API.
 
 - **`DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION`**
-  - *Severity*: `warning`
+  - *Severity*: `critical`
   - *Trigger*: Debug endpoints are enabled (`NL2SQL_DEBUG_ENDPOINTS_ENABLED=true`) while running in a production-like environment.
   - *Action*: Disable debug endpoints in production environments.
 
