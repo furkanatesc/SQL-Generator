@@ -2,6 +2,8 @@ import sqlite3
 import os
 from typing import Optional, Dict, Any, List
 
+from app.settings import DEV_DEFAULT_API_KEY, get_settings, is_production_like_environment
+
 def get_db_path():
     return os.getenv(
         "SQLGEN_DB_PATH",
@@ -240,7 +242,13 @@ def init_db():
         """)
 
         # Varsayılan bazı ayarları yerleştirelim (eğer yoksa)
-        cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', 'sqlgen_secret_dev_key')")
+        # Sprint 32.0: the public dev key is never seeded in production-like environments
+        # (it would shadow NL2SQL_API_KEY, since verify_api_key prefers the DB key).
+        if not is_production_like_environment(get_settings().environment):
+            cursor.execute(
+                "INSERT OR IGNORE INTO configs (key, value) VALUES ('api_key', ?)",
+                (DEV_DEFAULT_API_KEY,),
+            )
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('llm_model', 'llama-3.3-nemotron-super-49b-v1.5')")
         cursor.execute("INSERT OR IGNORE INTO configs (key, value) VALUES ('vector_db', 'qdrant')")
         

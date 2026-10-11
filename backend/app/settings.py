@@ -2,6 +2,20 @@ from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Publicly known local-development key (also the frontend default). Seeded into the
+# config DB only outside production-like environments (Sprint 32.0).
+DEV_DEFAULT_API_KEY = "sqlgen_secret_dev_key"
+
+
+def is_production_like_environment(environment: str) -> bool:
+    normalized = environment.strip().lower()
+    return (
+        normalized == "production"
+        or normalized == "prod"
+        or normalized.startswith("production-")
+        or normalized.startswith("prod-")
+    )
+
 class Settings(BaseSettings):
     app_name: str = "SQLGen API"
     app_version: str = "0.1.0"
