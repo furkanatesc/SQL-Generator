@@ -1500,3 +1500,28 @@ değiştirdi + `navigator.clipboard` reddini güvenli ele aldı + ChatView'in pr
 4. **Global toast/bildirim sistemi yok** — 31.0 per-buton inline state kullandı (daha düşük
    riskli); cross-cutting bildirimler için toast ileri sprint.
    *İlgili Dosya:* `frontend/src/components/ChatView.vue`
+
+## §36. Sprint 32.0 (Production Docker Compose) devirleri — AÇIK
+
+Phase 13'ün ilk sprint'i `docker-compose.prod.yml` + frontend prod imajı + kalıcı volume'lar +
+CI boot smoke'u ekledi ve smoke'un yakaladığı dev-key seed açığını kapattı. Bilinçli kapsam dışı
+(sessiz düşürme yok):
+
+1. **Reverse proxy / tek origin yok** — SPA backend'e `http://<host>:8000` ile gidiyor (`api.ts`
+   varsayılanı); farklı port/host'ta kullanıcı UI'dan URL girmeli, CORS ayrı origin'e izin vermeli.
+   Tek-origin (`/api` proxy) frontend API base config'i + CORS modelini değiştirir.
+   *İlgili Dosya:* `frontend/src/services/api.ts`, `frontend/nginx.conf`
+2. **TLS sonlandırma yok** (domain/sertifika operatörün önündeki proxy'de). *→ 32.11/ops*
+3. **Secret'lar env değişkeni** (`NL2SQL_API_KEY`, `NVIDIA_API_KEY`); Docker secrets / dosya-tabanlı
+   secret yok; DB > env key önceliği değişmedi. *→ 32.2 Secrets Management*
+4. **Mevcut prod DB'deki dev key otomatik rotate edilmiyor** — yalnız `API_KEY_INSECURE_DEFAULT`
+   (critical, `/ready` 503) ile görünür; operatör `POST /api/configs/api_key` ile değiştirir.
+5. **Gömülü Qdrant + SQLite tek-process** — `backend` replika ölçeklenemez; harici Qdrant/DB
+   servisleştirme + migration *→ 32.3*. Backup/restore yalnız runbook'ta elle tar *→ 32.8*.
+6. **İmajlar yerelde build ediliyor** — registry publish / sürüm tag'i yok *→ 32.11*.
+7. **`schema_cache.json` `/app` kökünde, kalıcı değil** (yeniden üretilebilir cache; yol
+   env'leştirmesi kod değişikliği ister). Bu yüzden **read-only root FS** de uygulanmadı.
+   *İlgili Dosya:* `backend/app/schema_manager.py` (`CACHE_PATH`)
+8. **Frontend `DEFAULT_API_KEY` hâlâ dev key** — prodüksiyonda artık geçersiz (seed yok); kullanıcı
+   key'i UI ayarlarından girmeli. Varsayılanı kaldırmak frontend UX işi (§35 ile birlikte).
+   *İlgili Dosya:* `frontend/src/services/api.ts`

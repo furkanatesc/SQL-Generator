@@ -1123,9 +1123,23 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   (§28), canlı bağlantı testi (§28/§30), çoklu-connection, frontend test infra/CI/toast (§35).
   **Bununla Phase 12 (UI/UX Production Layer) KAPANDI** — 9 frontend sprint (31.0–31.8);
   sıradaki Phase 13 (Deployment/Cloud/Ops, 32.x). (PR #186)
+- **Production Docker Compose** (Sprint 32.0, Phase 13 İLK): ayrı `docker-compose.prod.yml`
+  (backend + yeni non-root nginx frontend imajı, healthcheck'ler, prod-güvenli sabit ayarlar,
+  zorunlu `NL2SQL_API_KEY`/`NL2SQL_CORS_ALLOW_ORIGINS`, SQLite/trace DB + uploads + Qdrant için
+  named volume'lar) + `.env.prod.example` + kontrat guard'ı + CI `prod-compose-smoke` (gerçek boot,
+  `/ready`, SPA, container yeniden yaratımında veri kalıcılığı). Runbook'a Compose bölümü. (PR #187)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
+
+### Security
+
+- **Prodüksiyonda public dev API key'i artık seed edilmiyor** (Sprint 32.0): `init_db` dev key'i
+  koşulsuz `configs.api_key`'e yazıyor ve `verify_api_key` DB key'ini `NL2SQL_API_KEY`'e tercih
+  ediyordu → production'da operatör key'i yok sayılıp herkesin bildiği dev key kimlik doğruluyordu.
+  Production-like ortamda seed yok; efektif key dev default ise yeni critical
+  `API_KEY_INSECURE_DEFAULT` uyarısı (`/ready` 503). Eski bir prod DB'si key'i taşıyorsa operatör
+  `POST /api/configs/api_key` ile değiştirmeli. (PR #187)
 
 ### Changed
 - **KIRICI:** v1 hata string'lerinin bir kısmı yeniden adlandırıldı:
