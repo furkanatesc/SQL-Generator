@@ -1,0 +1,64 @@
+# Sprint 32.0 — Production Docker Compose.
+# Separate from docker-compose.yml, which only provides local/CI test databases.
+#
+# Usage:
+#   cp .env.prod.example .env      # fill in real values; .env is gitignored
+#   docker compose -f docker-compose.prod.yml up -d --build --wait
+#
+# Contract guard: backend/tests/test_prod_compose_contract.py
+# Runbook:        docs/production-runbook.md ("Docker Compose (Production)")
+
+services:
+  backend:
+    build: ./backend
+    image: sqlgen-backend:${SQLGEN_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${SQLGEN_BACKEND_PORT:-8000}:8000"
+    environment:
+      # Production-safe settings are pinned, not left to the operator.
+      NL2SQL_ENVIRONMENT: production
+      NL2SQL_DEBUG_ENDPOINTS_ENABLED: "false"
+      NL2SQL_UPLOAD_DIR: /app/uploads
+      SQLGEN_DB_PATH: /app/data/sqlgen.db
+      NL2SQL_TRACE_DB_PATH: /app/data/nl2sql_traces.db
+      # Required: compose refuses to start without them.
+      NL2SQL_API_KEY: ${NL2SQL_API_KEY:?set NL2SQL_API_KEY in .env}
+      NL2SQL_CORS_ALLOW_ORIGINS: ${NL2SQL_CORS_ALLOW_ORIGINS:?set NL2SQL_CORS_ALLOW_ORIGINS (JSON array) in .env}
+      # Optional: LLM provider key (can also be configured at runtime via the config API).
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+    volumes:
+      - sqlgen_data:/app/data
+      - sqlgen_uploads:/app/uploads
+      - sqlgen_qdrant:/app/qdrant_data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  frontend:
+    build: ./frontend
+    image: sqlgen-frontend:${SQLGEN_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${SQLGEN_FRONTEND_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  sqlgen_data:
+  sqlgen_uploads:
+  sqlgen_qdrant:
