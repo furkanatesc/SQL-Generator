@@ -170,6 +170,14 @@ Startup configuration validation checks are executed during application boot to 
   - *Trigger*: No LLM API Key is found in the database settings or in the `NL2SQL_API_KEY` environment variable.
   - *Action*: Ensure a valid API key is set in the environment or database.
 
+- **`API_KEY_INSECURE_DEFAULT`** (Sprint 32.0)
+  - *Severity*: `critical`
+  - *Trigger*: In a production-like environment, the active API key (the DB config key, which takes
+    precedence, otherwise `NL2SQL_API_KEY`) is the public local-development default. Production-like
+    environments no longer seed that default into a fresh database; an older database may still hold it.
+  - *Action*: Set a strong `NL2SQL_API_KEY`; if the DB still holds the dev default, replace it via
+    `POST /api/configs/api_key`.
+
 - **`CORS_WILDCARD_IN_PRODUCTION`**
   - *Severity*: `critical`
   - *Trigger*: Allowed CORS origins includes wildcard (`*`) while running in a production-like environment (e.g. environment starts with `prod` or `production`).

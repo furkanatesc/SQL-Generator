@@ -1,7 +1,7 @@
 import os
 from pydantic import BaseModel
 from typing import Literal
-from app.settings import get_settings
+from app.settings import DEV_DEFAULT_API_KEY, get_settings, is_production_like_environment
 from app.database import get_config
 
 class StartupValidationWarning(BaseModel):
@@ -12,15 +12,6 @@ class StartupValidationWarning(BaseModel):
 class StartupValidationResult(BaseModel):
     ok: bool
     warnings: list[StartupValidationWarning]
-
-def is_production_like_environment(environment: str) -> bool:
-    normalized = environment.strip().lower()
-    return (
-        normalized == "production"
-        or normalized == "prod"
-        or normalized.startswith("production-")
-        or normalized.startswith("prod-")
-    )
 
 def validate_runtime_config() -> StartupValidationResult:
     import uuid
@@ -40,8 +31,17 @@ def validate_runtime_config() -> StartupValidationResult:
             message="API key is not configured via database config or environment fallback."
         ))
         
-    # 2. CORS wildcard in production check
     is_prod = is_production_like_environment(settings.environment)
+
+    # 1b. Effective key (DB wins over env, as in verify_api_key) is the public dev default
+    if is_prod and (db_api_key or env_api_key) == DEV_DEFAULT_API_KEY:
+        warnings.append(StartupValidationWarning(
+            code="API_KEY_INSECURE_DEFAULT",
+            severity="critical",
+            message="The active API key is the public development default in a production environment."
+        ))
+
+    # 2. CORS wildcard in production check
     if is_prod and "*" in settings.cors_allow_origins:
         warnings.append(StartupValidationWarning(
             code="CORS_WILDCARD_IN_PRODUCTION",
