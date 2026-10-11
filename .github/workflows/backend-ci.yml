@@ -276,3 +276,49 @@ jobs:
           MSSQL_TEST_PASSWORD: "Sqlgen_Ro0!Pass"
         run: |
           pytest -m sqlserver -q
+
+  # Sprint 32.0 — boot the production compose stack (backend + frontend images) and
+  # smoke it: liveness, production readiness and the SPA. Static shape is guarded by
+  # backend/tests/test_prod_compose_contract.py.
+  prod-compose-smoke:
+    name: Production compose smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_FILE: docker-compose.prod.yml
+      NL2SQL_API_KEY: ci-prod-compose-smoke-key
+      NL2SQL_CORS_ALLOW_ORIGINS: '["http://localhost:8080"]'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate compose file
+        run: docker compose config -q
+
+      - name: Build and start the stack
+        run: docker compose up -d --build --wait --wait-timeout 180
+
+      - name: Smoke test backend and frontend
+        run: |
+          curl -fsS http://localhost:8000/health
+          # /ready is 200 only with production-safe config, an API key, a reachable DB
+          # and a writable upload dir (i.e. the volumes are owned by the non-root user).
+          curl -fsS http://localhost:8000/ready
+          curl -fsS http://localhost:8080/ | grep -qi "<div id=\"app\""
+
+      - name: Persistence survives container recreation
+        run: |
+          curl -fsS -X POST http://localhost:8000/api/v1/workspaces \
+            -H "X-API-Key: $NL2SQL_API_KEY" -H "Content-Type: application/json" \
+            -d '{"name":"Smoke","slug":"smoke"}'
+          docker compose up -d --force-recreate --wait --wait-timeout 180 backend
+          curl -fsS http://localhost:8000/api/v1/workspaces -H "X-API-Key: $NL2SQL_API_KEY" \
+            | grep -q '"slug":"smoke"'
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

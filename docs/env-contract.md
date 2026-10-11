@@ -29,6 +29,19 @@ If no API key is resolved by either method, a critical validation warning is gen
 | **`NL2SQL_UPLOAD_DIR`** | String | *None* | Absolute path to the custom directory used for storing uploaded files. |
 | **`NL2SQL_CORS_ALLOW_ORIGINS`** | JSON Array | `["*"]` | List of allowed CORS origins to inject into the CORS middleware. |
 | **`NL2SQL_DEBUG_ENDPOINTS_ENABLED`** | Boolean | `true` | Expose developer-only API endpoints for direct debugging/tracing. |
+| **`SQLGEN_DB_PATH`** | String | `<backend>/sqlgen.db` | Path of the SQLite application database (no `NL2SQL_` prefix; read directly by `app/database.py`). |
+| **`NL2SQL_TRACE_DB_PATH`** | String | `data/nl2sql_traces.db` | Path of the SQLite trace database (relative paths resolve against the working directory). |
+| **`NVIDIA_API_KEY`** | String | *None* | LLM / embedding provider key fallback (can also be set at runtime via the config API). |
+
+### Production Docker Compose (Sprint 32.0)
+
+`docker-compose.prod.yml` pins `NL2SQL_ENVIRONMENT=production`, `NL2SQL_DEBUG_ENDPOINTS_ENABLED=false`,
+`NL2SQL_UPLOAD_DIR=/app/uploads`, `SQLGEN_DB_PATH=/app/data/sqlgen.db` and
+`NL2SQL_TRACE_DB_PATH=/app/data/nl2sql_traces.db` (all on named volumes), and **requires**
+`NL2SQL_API_KEY` and `NL2SQL_CORS_ALLOW_ORIGINS` (compose refuses to start without them). Compose-only
+variables: `SQLGEN_BACKEND_PORT` (default `8000`), `SQLGEN_FRONTEND_PORT` (default `8080`),
+`SQLGEN_IMAGE_TAG` (default `latest`). Every variable it references is documented in
+`.env.prod.example` (enforced by `backend/tests/test_prod_compose_contract.py`).
 
 ---
 
@@ -47,15 +60,15 @@ The following configurations will generate startup warnings:
 
 ### 1. Wildcard CORS in Production
 - **Condition**: Running in a production-like environment with `NL2SQL_CORS_ALLOW_ORIGINS` containing the wildcard `*` (default value).
-- **Warning Code**: `CORS_WILDCARD_IN_PRODUCTION` (Severity: `warning`)
+- **Warning Code**: `CORS_WILDCARD_IN_PRODUCTION` (Severity: `critical` — `/ready` returns 503)
 - **Remediation**: Set `NL2SQL_CORS_ALLOW_ORIGINS` to a JSON array of specific trusted domains, e.g., `["https://sqlgen.mycompany.com"]`.
 
 ### 2. Debug Endpoints Enabled in Production
 - **Condition**: Running in a production-like environment with `NL2SQL_DEBUG_ENDPOINTS_ENABLED` set to `true` (default value).
-- **Warning Code**: `DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION` (Severity: `warning`)
+- **Warning Code**: `DEBUG_ENDPOINTS_ENABLED_IN_PRODUCTION` (Severity: `critical` — `/ready` returns 503)
 - **Remediation**: Set `NL2SQL_DEBUG_ENDPOINTS_ENABLED=false` in the production environment variables.
 
 ---
 
 ## Startup Warn-Only Behavior
-All configuration warnings are non-fatal. The application server will always complete its startup successfully to allow read-only or diagnostic operations even under misconfigurations.
+All configuration warnings are non-fatal. The application server will always complete its startup successfully to allow read-only or diagnostic operations even under misconfigurations. `critical` warnings do, however, make the readiness probe (`/ready`) return `503`.
