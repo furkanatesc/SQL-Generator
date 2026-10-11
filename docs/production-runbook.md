@@ -178,6 +178,13 @@ Startup configuration validation checks are executed during application boot to 
   - *Action*: Set a strong `NL2SQL_API_KEY`; if the DB still holds the dev default, replace it via
     `POST /api/configs/api_key`.
 
+- **`UNKNOWN_CONFIG_ENV_VAR`** (Sprint 32.1)
+  - *Severity*: `warning` (does not fail `/ready`)
+  - *Trigger*: The process environment contains an `NL2SQL_*` variable that is not in the
+    environment contract (`backend/app/config_contract.py`) — usually a typo that the application
+    would otherwise ignore silently.
+  - *Action*: Fix the variable name (see `docs/env-contract.md`); the message lists the names only.
+
 - **`CORS_WILDCARD_IN_PRODUCTION`**
   - *Severity*: `critical`
   - *Trigger*: Allowed CORS origins includes wildcard (`*`) while running in a production-like environment (e.g. environment starts with `prod` or `production`).

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Literal
 from app.settings import DEV_DEFAULT_API_KEY, get_settings, is_production_like_environment
 from app.database import get_config
+from app.config_contract import find_unknown_prefixed_env
 
 class StartupValidationWarning(BaseModel):
     code: str
@@ -89,6 +90,19 @@ def validate_runtime_config() -> StartupValidationResult:
                 message="Upload directory does not exist or is not a directory."
             ))
             
+    # 5. Unknown NL2SQL_* variables (Sprint 32.1): Settings ignores extras, so a typo
+    # would otherwise be silently dropped. Names only, never values.
+    unknown_env = find_unknown_prefixed_env(os.environ)
+    if unknown_env:
+        warnings.append(StartupValidationWarning(
+            code="UNKNOWN_CONFIG_ENV_VAR",
+            severity="warning",
+            message=(
+                "Unrecognized configuration environment variables (possible typo): "
+                + ", ".join(unknown_env)
+            )
+        ))
+
     ok = not any(w.severity == "critical" for w in warnings)
     
     return StartupValidationResult(ok=ok, warnings=warnings)
