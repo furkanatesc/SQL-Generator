@@ -1128,6 +1128,11 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   zorunlu `NL2SQL_API_KEY`/`NL2SQL_CORS_ALLOW_ORIGINS`, SQLite/trace DB + uploads + Qdrant için
   named volume'lar) + `.env.prod.example` + kontrat guard'ı + CI `prod-compose-smoke` (gerçek boot,
   `/ready`, SPA, container yeniden yaratımında veri kalıcılığı). Runbook'a Compose bölümü. (PR #187)
+- **Environment Config Contract** (Sprint 32.1): tek-kaynak env envanteri
+  `backend/app/config_contract.py` (14 değişken; secret / production-zorunlu işaretli) + kod ↔
+  sözleşme ↔ `docs/env-contract.md` ↔ `docker-compose.prod.yml` drift guard'ı + yazım hatalı
+  `NL2SQL_*` değişkenleri için yeni `UNKNOWN_CONFIG_ENV_VAR` startup uyarısı (yalnız isim,
+  `/ready`'yi düşürmez). (PR #188)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.

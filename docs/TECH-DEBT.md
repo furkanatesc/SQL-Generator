@@ -1525,3 +1525,19 @@ CI boot smoke'u ekledi ve smoke'un yakaladığı dev-key seed açığını kapat
 8. **Frontend `DEFAULT_API_KEY` hâlâ dev key** — prodüksiyonda artık geçersiz (seed yok); kullanıcı
    key'i UI ayarlarından girmeli. Varsayılanı kaldırmak frontend UX işi (§35 ile birlikte).
    *İlgili Dosya:* `frontend/src/services/api.ts`
+
+## §37. Sprint 32.1 (Environment Config Contract) devirleri — AÇIK
+
+32.1 tek-kaynak env sözleşmesini (`backend/app/config_contract.py`) + drift guard'ı + bilinmeyen
+`NL2SQL_*` uyarısını ekledi; okuma noktaları bilinçli olarak değiştirilmedi. Kapsam dışı:
+
+1. **Direct `os.getenv` okumaları `Settings`'e taşınmadı** (`NL2SQL_API_KEY`, `NVIDIA_API_KEY`,
+   `SQLGEN_DB_PATH`, `NL2SQL_TRACE_DB_PATH`) — secret çözümleme yeniden tasarlanırken. *→ 32.2*
+2. **`.env` dosyasındaki bilinmeyen anahtarlar uyarılmıyor** — yalnız process env'i taranıyor.
+   *İlgili Dosya:* `backend/app/config_contract.py::find_unknown_prefixed_env`
+3. **Sözleşme API'de yayınlanmıyor** (ör. `/api/v1/admin/config`'te değişken envanteri). Gerekirse
+   admin yüzeyine additive alan.
+4. **Değer/tip doğrulaması sözleşmede yok** — ör. `NL2SQL_CORS_ALLOW_ORIGINS` JSON hatası pydantic'e
+   bırakıldı (startup'ta exception); `default` alanı yalnız insan-okur metin.
+5. **`SQLGEN_*`/`NVIDIA_*` prefix'li bilinmeyen değişkenler uyarılmıyor** — yalnız `NL2SQL_*`
+   (Settings prefix'i) kontrol ediliyor.
