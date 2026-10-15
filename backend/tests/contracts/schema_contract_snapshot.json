@@ -379,6 +379,15 @@
       "status"
     ]
   },
+  "ComponentCheck": {
+    "properties": [
+      "reason",
+      "status"
+    ],
+    "required": [
+      "status"
+    ]
+  },
   "ConfigResponse": {
     "properties": [
       "key",
@@ -1078,6 +1087,7 @@
   "ReadinessResponse": {
     "properties": [
       "api_key_configured",
+      "checks",
       "critical_warnings_count",
       "database_reachable",
       "status",

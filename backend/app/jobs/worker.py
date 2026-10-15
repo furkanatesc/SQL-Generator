@@ -137,10 +137,23 @@ class JobWorker:
 
 
 def healthcheck(path: str = DEFAULT_LIVENESS_PATH, max_age_seconds: float = HEALTHCHECK_MAX_AGE_SECONDS) -> bool:
+    """Healthy = the worker loop ran recently and (Sprint 32.7) the app database is reachable."""
     try:
-        return (time.time() - os.path.getmtime(path)) <= max_age_seconds
+        if (time.time() - os.path.getmtime(path)) > max_age_seconds:
+            return False
     except OSError:
         return False
+    try:
+        from app import database
+
+        conn = database.get_db_connection()
+        try:
+            conn.execute("SELECT 1")
+        finally:
+            conn.close()
+    except Exception:
+        return False
+    return True
 
 
 def main(argv=None) -> int:
