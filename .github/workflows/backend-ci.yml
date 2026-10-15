@@ -312,6 +312,8 @@ jobs:
           # /ready is 200 only with production-safe config, an API key, a reachable DB
           # and a writable upload dir (i.e. the volumes are owned by the non-root user).
           curl -fsS http://localhost:8000/ready
+          # Sprint 32.7: component checks; nothing fails in a healthy production stack.
+          curl -fsS http://localhost:8000/ready | python3 -c "import json,sys; c=json.load(sys.stdin)['checks']; sys.exit(0 if c['database']['status']=='ok' and c['migrations']['status']=='ok' and c['disk']['status']!='fail' and all(v['status']!='fail' for v in c.values()) else 1)"
           curl -fsS http://localhost:8080/ | grep -qi "<div id=\"app\""
           # Sprint 32.6: production rate limits are active (header on a normal response).
           curl -fsS -D - -o /dev/null http://localhost:8000/api/jobs -H "X-API-Key: $NL2SQL_API_KEY" \

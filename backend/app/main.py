@@ -176,19 +176,16 @@ def health():
 def readiness(response: Response):
     diagnostics = check_readiness()
     
-    is_ready = (
-        diagnostics["database_reachable"]
-        and diagnostics["api_key_configured"]
-        and diagnostics["upload_dir_writable"]
-        and (diagnostics["critical_warnings_count"] == 0)
-    )
-    
+    # Sprint 32.7: also not ready when any component check fails (e.g. low disk space).
+    is_ready = diagnostics["ready"]
+
     content = {
         "status": "ok" if is_ready else "unhealthy",
         "database_reachable": diagnostics["database_reachable"],
         "api_key_configured": diagnostics["api_key_configured"],
         "upload_dir_writable": diagnostics["upload_dir_writable"],
-        "critical_warnings_count": diagnostics["critical_warnings_count"]
+        "critical_warnings_count": diagnostics["critical_warnings_count"],
+        "checks": diagnostics["checks"],
     }
     
     if not is_ready:
