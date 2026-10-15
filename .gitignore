@@ -35,3 +35,6 @@ sqlgen.db
 
 # Graphify
 graphify-out/
+
+# Docker secret files for docker-compose.prod.yml (Sprint 32.2)
+/secrets/

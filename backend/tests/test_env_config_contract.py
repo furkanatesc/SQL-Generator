@@ -150,6 +150,12 @@ def test_production_required_vars_are_pinned_or_required_in_prod_compose():
     for v in ENV_CONTRACT:
         if not v.required_in_production:
             continue
+        file_var = v.name + "_FILE"
+        if v.secret and file_var in env:
+            # Sprint 32.2: a secret may be satisfied by a Docker secret mounted via <NAME>_FILE.
+            secret_name = str(env[file_var]).removeprefix("/run/secrets/")
+            assert secret_name in compose.get("secrets", {}), f"{file_var} points at an undeclared secret"
+            continue
         assert v.name in env, f"{v.name} missing from docker-compose.prod.yml backend env"
         value = str(env[v.name])
         if value.startswith("${"):

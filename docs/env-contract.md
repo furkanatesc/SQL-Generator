@@ -16,12 +16,12 @@ Most configuration variables are prefixed with `NL2SQL_` and are loaded via `pyd
 ## Required in Production
 
 These have no safe default for production and must be set explicitly (the production compose
-file pins or requires all four):
+file pins or requires all four; the API key is supplied as a Docker secret via `NL2SQL_API_KEY_FILE`):
 
 | Variable | Production value |
 | :--- | :--- |
 | **`NL2SQL_ENVIRONMENT`** | `production` (or another production-like value) |
-| **`NL2SQL_API_KEY`** | a strong random key (*direct*, secret) |
+| **`NL2SQL_API_KEY`** | a strong random key (*direct*, secret) — in production via `NL2SQL_API_KEY_FILE` |
 | **`NL2SQL_CORS_ALLOW_ORIGINS`** | JSON array of trusted origins, no `*` |
 | **`NL2SQL_DEBUG_ENDPOINTS_ENABLED`** | `false` |
 
@@ -34,14 +34,40 @@ file pins or requires all four):
 ### API Key Resolution Priority
 The application resolves the active API Key in the following order of precedence:
 1. **Database Configuration**: Checked first. If a key exists in the database settings table (`config.api_key`), it is used.
-2. **Environment Fallback**: Checked second. If no key is configured in the database, the system falls back to the `NL2SQL_API_KEY` environment variable.
+2. **Secret file / environment fallback**: Checked second. If no key is configured in the database, the
+   secret resolver (see *Secrets* below) reads `NL2SQL_API_KEY_FILE`, else `NL2SQL_API_KEY`.
 
-If no API key is resolved by either method, a critical validation warning is generated.
+If no API key is resolved by either method, a critical validation warning is generated. If both a
+database key and an env/file key exist and differ, `API_KEY_ENV_SHADOWED` (severity `warning`) reports
+that rotating the env/file secret has no effect until the database key is changed or removed.
 
 **Development default (Sprint 32.0):** outside production-like environments a fresh database is seeded
 with a public development key, which therefore shadows `NL2SQL_API_KEY`. Production-like environments
 do **not** seed it, so `NL2SQL_API_KEY` is the active key; if the active key is still the development
 default in production, the critical warning `API_KEY_INSECURE_DEFAULT` is raised (`/ready` returns 503).
+
+---
+
+## Secrets (Sprint 32.2)
+
+Every contract secret (`NL2SQL_API_KEY`, `NVIDIA_API_KEY`) is read through one resolver,
+`backend/app/secret_resolver.py`, and can be supplied in two ways:
+
+| Variable | Description |
+| :--- | :--- |
+| **`NL2SQL_API_KEY_FILE`** | Path of a file holding `NL2SQL_API_KEY` (Docker secrets convention, e.g. `/run/secrets/nl2sql_api_key`). |
+| **`NVIDIA_API_KEY_FILE`** | Path of a file holding `NVIDIA_API_KEY`. |
+
+Rules:
+- `<NAME>_FILE` wins over `<NAME>`. Surrounding whitespace / the trailing newline is stripped; files
+  larger than 64 KiB are rejected.
+- If `<NAME>_FILE` is set but the file is missing, unreadable, empty or too large, the secret is
+  treated as **not configured** — there is no silent fallback to `<NAME>` — and the critical warning
+  `SECRET_FILE_UNREADABLE` is raised (`/ready` returns 503).
+- If both `<NAME>` and `<NAME>_FILE` are set, `SECRET_SOURCE_CONFLICT` (severity `warning`) is raised.
+- The file is re-read on every use, so a rotated secret takes effect without a restart.
+- Warnings name the variable only, never the value or the file path. File-based values are also added
+  to the trace/result redaction set.
 
 ---
 
@@ -82,9 +108,12 @@ deliberately excluded from the contract and are never needed in production.
 `docker-compose.prod.yml` pins `NL2SQL_ENVIRONMENT=production`, `NL2SQL_DEBUG_ENDPOINTS_ENABLED=false`,
 `NL2SQL_UPLOAD_DIR=/app/uploads`, `SQLGEN_DB_PATH=/app/data/sqlgen.db` and
 `NL2SQL_TRACE_DB_PATH=/app/data/nl2sql_traces.db` (all on named volumes), and **requires**
-`NL2SQL_API_KEY` and `NL2SQL_CORS_ALLOW_ORIGINS` (compose refuses to start without them). Compose-only
-variables: `SQLGEN_BACKEND_PORT` (default `8000`), `SQLGEN_FRONTEND_PORT` (default `8080`),
-`SQLGEN_IMAGE_TAG` (default `latest`). Every variable it references is documented in
+`NL2SQL_CORS_ALLOW_ORIGINS` (compose refuses to start without it). Since Sprint 32.2 the API key is a
+Docker secret: compose pins `NL2SQL_API_KEY_FILE=/run/secrets/nl2sql_api_key` and **requires**
+`SQLGEN_API_KEY_SECRET_FILE` (host path of the key file, readable by the container's non-root user,
+e.g. mode `0444`); `NL2SQL_API_KEY` is no longer passed as an env value. Compose-only
+variables: `SQLGEN_API_KEY_SECRET_FILE`, `SQLGEN_BACKEND_PORT` (default `8000`), `SQLGEN_FRONTEND_PORT`
+(default `8080`), `SQLGEN_IMAGE_TAG` (default `latest`). Every variable it references is documented in
 `.env.prod.example` (enforced by `backend/tests/test_prod_compose_contract.py`).
 
 ---

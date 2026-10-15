@@ -2,7 +2,7 @@
 
 Single machine-readable inventory of every runtime environment variable the backend
 reads, whether through `Settings` (pydantic-settings, `NL2SQL_` prefix) or directly via
-`os.getenv`. `docs/env-contract.md` is the operator-facing view of this module;
+`os.getenv` / `app/secret_resolver.py`. `docs/env-contract.md` is the operator-facing view of this module;
 `tests/test_env_config_contract.py` keeps both in lock-step with the code and with
 `docker-compose.prod.yml`.
 """
@@ -46,12 +46,18 @@ ENV_CONTRACT: tuple[EnvVar, ...] = (
     # --- Direct os.getenv reads ----------------------------------------------------
     EnvVar("NL2SQL_API_KEY", "direct", True, True, "(none)",
            "API key fallback when no key is stored in the DB config (app/auth.py)."),
+    EnvVar("NL2SQL_API_KEY_FILE", "direct", False, False, "(none)",
+           "Path of a file holding NL2SQL_API_KEY (Docker secret); wins over NL2SQL_API_KEY "
+           "(app/secret_resolver.py)."),
     EnvVar("NL2SQL_TRACE_DB_PATH", "direct", False, False, "data/nl2sql_traces.db",
            "SQLite trace database path (app/trace/dependencies.py)."),
     EnvVar("SQLGEN_DB_PATH", "direct", False, False, "<backend>/sqlgen.db",
            "SQLite application database path (app/database.py)."),
     EnvVar("NVIDIA_API_KEY", "direct", True, False, "(none)",
            "LLM / embedding provider key fallback (app/llm_client.py, app/sql_pipeline.py)."),
+    EnvVar("NVIDIA_API_KEY_FILE", "direct", False, False, "(none)",
+           "Path of a file holding NVIDIA_API_KEY (Docker secret); wins over NVIDIA_API_KEY "
+           "(app/secret_resolver.py)."),
 )
 
 
