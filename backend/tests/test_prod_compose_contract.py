@@ -98,6 +98,12 @@ def worker(compose):
     return compose["services"]["worker"]
 
 
+def test_backend_and_worker_log_json(backend, worker):
+    # Sprint 32.9: structured logs in production.
+    assert _env(backend)["NL2SQL_LOG_FORMAT"] == "json"
+    assert _env(worker)["NL2SQL_LOG_FORMAT"] == "json"
+
+
 def test_backend_enables_rate_limits(backend):
     # Sprint 32.6: limits are off by default (dev/test) and pinned on in production.
     env = _env(backend)
