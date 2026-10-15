@@ -1588,7 +1588,8 @@ ekledi. Kapsam dışı:
 `job_logs`'u ve prod compose `worker` servisini ekledi. Kapsam dışı:
 
 1. **Retry/backoff, öncelik, dead-letter, eşzamanlılık limiti, harici broker yok** — stale job `failed` olur,
-   yeniden denenmez. *→ 32.5 Queue System*
+   yeniden denenmez. *→ 32.5 Queue System* **32.5 (PR #192): retry/backoff/dead-letter/öncelik/eşzamanlılık
+   ÇÖZÜLDÜ;** harici broker bilinçli olarak yok (§41).
 2. **`job_logs` retention/temizleme yok** — tablo sınırsız büyür. *İlgili Dosya:* `backend/app/jobs/repository.py`
 3. **Terk edilmiş job için taksonomi `error_code` yok** (ör. `JOB_ABANDONED`) — yalnız `error_message`;
    frontend `errorInfo.ts` aynası gerektirir.
@@ -1598,3 +1599,18 @@ ekledi. Kapsam dışı:
 6. **Çok-host worker yok** — SQLite yerel volume'da; worker'lar aynı host'ta olmalı.
 7. **Inline modunda SSE canlı akışı hâlâ process-içi** (`job_logs_cache`/`job_queues`); kalıcı loglar yazılıyor
    ama inline SSE onları okumuyor (restart sonrası inline job zaten `failed`).
+
+## §41. Sprint 32.5 (Queue System) devirleri — AÇIK
+
+32.5 `jobs` tablosu kuyruğuna retry/backoff, dead-letter, öncelik, global eşzamanlılık limiti ve admin kuyruk
+uç noktalarını ekledi. Kapsam dışı:
+
+1. **Harici broker (Redis/RabbitMQ) / çok-host kuyruk yok** — SQLite tek host; kuyruk mantığı
+   `backend/app/jobs/queue_policy.py` + `repository.py`'de toplandı (geçiş sınırı).
+2. **Upload (Form) endpoint'inde `priority` yok** — yalnız `POST /api/jobs/without-file`.
+3. **Job yanıtlarında `priority`/`attempts`/`dead_lettered_at` yok** — yalnız admin kuyruk uç noktası ve DB.
+4. **Kota / kiracı başına fairness / zamanlanmış (cron) job yok.**
+5. **Frontend'de kuyruk / dead-letter görünümü yok.**
+6. **Dead-letter retention/otomatik temizleme yok.**
+7. **Geçici hata sınıflandırması kaba** — yalnız "tüm denemeler `llm_api_error`"; HTTP 429/5xx ayrımı
+   yapılmıyor (pipeline exception metnini sınıflandırmıyor).

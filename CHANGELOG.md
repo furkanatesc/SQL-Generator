@@ -1148,6 +1148,9 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   heartbeat, stale job kurtarma, zarif kapanış, healthcheck); `NL2SQL_JOB_EXECUTION_MODE=inline|worker`;
   kalıcı `job_logs` (worker modunda SSE buradan); inline modunda yetim job'lar açılışta `failed`;
   migration app v2; prod compose'ta `worker` servisi; `JOB_QUEUE_STALLED` uyarısı. (PR #191)
+- **Queue System** (Sprint 32.5): worker modunda geçici hatalar için üstel backoff'lu retry, tükenince
+  dead-letter (`dead_lettered_at`), öncelik (`priority` -10..10), global eşzamanlılık limiti; admin
+  `GET /api/v1/admin/queue` + `POST /api/v1/admin/jobs/{id}/requeue`; migration app v3. (PR #192)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
