@@ -332,6 +332,13 @@ jobs:
           curl -fsS http://localhost:8000/api/v1/workspaces -H "X-API-Key: $NL2SQL_API_KEY" \
             | grep -q '"slug":"smoke"'
 
+      - name: Database migrations are recorded and up to date
+        run: |
+          # Sprint 32.3: both databases report no pending migrations after a restart.
+          docker compose exec -T backend python -m app.migrations status | tee status.json
+          python3 -c "import json,sys; r=json.load(open('status.json')); sys.exit(0 if all(d['exists'] and not d['pending'] and not d['ahead'] for d in r) else 1)"
+          docker compose exec -T backend python -m app.migrations upgrade
+
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs

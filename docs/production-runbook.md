@@ -87,6 +87,19 @@ with the project name (by default the checkout directory, e.g. `sqlgen_sqlgen_da
 - A configured but unreadable/empty secret file raises the critical `SECRET_FILE_UNREADABLE`
   (`/ready` 503) and is **not** silently replaced by the env value.
 
+### Database migrations (Sprint 32.3)
+The backend applies pending schema migrations to the app and trace databases on every start and records
+them in `schema_migrations`. Check them with:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend python -m app.migrations status
+```
+
+**Upgrading:** back up the `sqlgen_data` volume first (see *Persistent state*), then `up -d --build`.
+**Rolling back to an older image** after an upgrade that added migrations gives `DB_SCHEMA_AHEAD`
+(`/ready` 503). Restore the pre-upgrade backup or run the newer image again. Details:
+`docs/database-migrations.md`.
+
 ### Frontend → backend
 The SPA calls the backend at `http://<browser host>:8000` by default. If `SQLGEN_BACKEND_PORT` is not
 `8000`, or the backend is on another host, set the backend URL and API key in the UI settings. Add the
@@ -218,6 +231,19 @@ Startup configuration validation checks are executed during application boot to 
   - *Trigger*: The database config holds an API key that differs from the env/file key; the database key
     wins (`verify_api_key`), so rotating the env/file secret has no effect.
   - *Action*: Change or remove the database key via the config API.
+
+- **`DB_MIGRATIONS_PENDING`** (Sprint 32.3)
+  - *Severity*: `critical`
+  - *Trigger*: The app or trace database still has pending migrations after start-up, which means a
+    migration failed and was rolled back. The database stays at its last good version.
+  - *Action*: Check the backend logs for the failing migration, fix the cause, then restart or run
+    `python -m app.migrations upgrade`.
+
+- **`DB_SCHEMA_AHEAD`** (Sprint 32.3)
+  - *Severity*: `critical`
+  - *Trigger*: The database schema version is newer than the running release supports, usually after
+    rolling back to an older image. No migrations are applied.
+  - *Action*: Run the newer image, or restore the backup taken before the upgrade.
 
 - **`UNKNOWN_CONFIG_ENV_VAR`** (Sprint 32.1)
   - *Severity*: `warning` (does not fail `/ready`)
