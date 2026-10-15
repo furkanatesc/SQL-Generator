@@ -262,7 +262,7 @@ def start_job_without_file(
         
     job_id = str(uuid.uuid4())
     dialect = get_config("target_db_type") or "postgres"
-    job = create_job(job_id=job_id, natural_query=request.natural_query, previous_sql=request.previous_sql, dialect=dialect)
+    job = create_job(job_id=job_id, natural_query=request.natural_query, previous_sql=request.previous_sql, dialect=dialect, priority=request.priority)
     _enqueue_job(background_tasks, job_id, getattr(http_request.state, "request_id", None))
     return {
         "status": "success",

@@ -34,6 +34,7 @@ The runner (`backend/app/migrations/runner.py`) is forward-only. Applied version
 | :--- | :--- | :--- | :--- | :--- |
 | app | 1 | `baseline` | 32.3 | The pre-32.3 schema (12 tables, 6 indexes) |
 | app | 2 | `job_worker` | 32.4 | Adds `jobs.worker_id`, `claimed_at` and `heartbeat_at`; adds the `job_logs` table and two indexes |
+| app | 3 | `queue` | 32.5 | Adds `jobs.priority`, `attempts`, `next_attempt_at` and `dead_lettered_at`; adds the `idx_jobs_queue` index |
 | trace | 1 | `baseline` | 32.3 | The pre-32.3 trace schema |
 
 The runner opens each migration with `BEGIN IMMEDIATE` and checks the version again inside the

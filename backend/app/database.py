@@ -94,17 +94,17 @@ def set_config(key: str, value: str):
         conn.commit()
 
 # Job Helper Fonksiyonları
-def create_job(job_id: str, file_path: Optional[str] = None, natural_query: Optional[str] = None, previous_sql: Optional[str] = None, dialect: str = "postgres") -> Dict[str, Any]:
+def create_job(job_id: str, file_path: Optional[str] = None, natural_query: Optional[str] = None, previous_sql: Optional[str] = None, dialect: str = "postgres", priority: int = 0) -> Dict[str, Any]:
     import datetime
     now = datetime.datetime.utcnow().isoformat()
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO jobs (id, status, file_path, natural_query, previous_sql, dialect, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO jobs (id, status, file_path, natural_query, previous_sql, dialect, priority, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (job_id, "pending", file_path, natural_query, previous_sql, dialect, now, now)
+            (job_id, "pending", file_path, natural_query, previous_sql, dialect, priority, now, now)
         )
         conn.commit()
     return get_job(job_id)

@@ -62,7 +62,9 @@ def test_app_migration_v2_adds_worker_columns_and_job_logs(fresh_db):
         "id", "job_id", "step", "message", "created_at"
     }
     versions = [r[0] for r in conn.execute("SELECT version FROM schema_migrations ORDER BY version")]
-    assert versions == [1, 2]
+    from app.migrations import APP_MIGRATIONS
+
+    assert versions == [m.version for m in APP_MIGRATIONS]
 
 
 def test_v1_database_is_upgraded_to_v2(tmp_path):
@@ -73,7 +75,7 @@ def test_v1_database_is_upgraded_to_v2(tmp_path):
     conn.execute("INSERT INTO jobs (id, status, created_at, updated_at) VALUES ('j', 'completed', 't', 't')")
     conn.commit()
     s = migrate(conn, APP_MIGRATIONS)
-    assert s.applied == [2] and s.error is None
+    assert s.applied == [m.version for m in APP_MIGRATIONS[1:]] and s.error is None
     assert conn.execute("SELECT status FROM jobs WHERE id = 'j'").fetchone()[0] == "completed"
 
 
@@ -292,7 +294,8 @@ def test_worker_fails_stale_processing_jobs(fresh_db):
         "UPDATE jobs SET status='processing', worker_id='gone', heartbeat_at=? WHERE id='dead'", (_old(900),)
     )
     conn.commit()
-    assert _worker(stale_seconds=300).run_once() is False
+    # Sprint 32.5: with no attempts left a stale job is dead-lettered (otherwise requeued).
+    assert _worker(stale_seconds=300, max_attempts=1).run_once() is False
     job = get_job("dead")
     assert job["status"] == "failed" and "worker" in job["error_message"].lower()
 

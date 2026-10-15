@@ -361,6 +361,9 @@ jobs:
           # The log line written by the worker process is streamed by the API from job_logs.
           curl -fsS --max-time 15 "http://localhost:8000/api/jobs/$job_id/stream" \
             -H "X-API-Key: $NL2SQL_API_KEY" | grep -q "NVIDIA API"
+          # Sprint 32.5: a missing LLM key is deterministic, so no retry and no dead letter.
+          curl -fsS http://localhost:8000/api/v1/admin/queue -H "X-API-Key: $NL2SQL_API_KEY" \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['data']; sys.exit(0 if d['execution_mode']=='worker' and d['counts']['failed']>=1 and d['dead_lettered']==0 and d['retry_scheduled']==0 else 1)"
 
       - name: Dump logs on failure
         if: failure()

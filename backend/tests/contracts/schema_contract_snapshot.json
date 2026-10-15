@@ -137,6 +137,26 @@
       "data"
     ]
   },
+  "ApiResponse_QueueStats_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_RequeuedJob_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "ApiResponse_RuntimeConfigDiagnostics_": {
     "properties": [
       "data",
@@ -710,7 +730,8 @@
   "JobCreateRequest": {
     "properties": [
       "natural_query",
-      "previous_sql"
+      "previous_sql",
+      "priority"
     ],
     "required": [
       "natural_query"
@@ -1022,6 +1043,27 @@
     ],
     "required": []
   },
+  "QueueStats": {
+    "properties": [
+      "counts",
+      "dead_lettered",
+      "execution_mode",
+      "max_attempts",
+      "max_concurrent",
+      "oldest_pending_age_seconds",
+      "retry_backoff_seconds",
+      "retry_scheduled"
+    ],
+    "required": [
+      "counts",
+      "dead_lettered",
+      "execution_mode",
+      "max_attempts",
+      "max_concurrent",
+      "retry_backoff_seconds",
+      "retry_scheduled"
+    ]
+  },
   "RAGSearchRequest": {
     "properties": [
       "collection",
@@ -1186,6 +1228,20 @@
       "baseline_issue_types",
       "changed",
       "observed_issue_types"
+    ]
+  },
+  "RequeuedJob": {
+    "properties": [
+      "attempts",
+      "id",
+      "priority",
+      "status"
+    ],
+    "required": [
+      "attempts",
+      "id",
+      "priority",
+      "status"
     ]
   },
   "ResourceCounts": {

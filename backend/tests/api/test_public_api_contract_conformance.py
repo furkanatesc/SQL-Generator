@@ -45,6 +45,8 @@ EXPECTED_V1_ROUTES = {
     ("DELETE", "/api/v1/feedback/{feedback_id}"),
     ("GET", "/api/v1/admin/overview"),
     ("GET", "/api/v1/admin/config"),
+    ("GET", "/api/v1/admin/queue"),
+    ("POST", "/api/v1/admin/jobs/{job_id}/requeue"),
     ("POST", "/api/v1/api-keys"),
     ("GET", "/api/v1/api-keys"),
     ("GET", "/api/v1/api-keys/{key_id}"),

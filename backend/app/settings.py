@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     job_execution_mode: Literal["inline", "worker"] = "inline"
     job_worker_poll_seconds: float = Field(default=1.0, gt=0)
     job_stale_seconds: int = Field(default=300, ge=10)
+    # Sprint 32.5 — queue semantics (worker mode only).
+    job_max_attempts: int = Field(default=3, ge=1)
+    job_retry_backoff_seconds: float = Field(default=30.0, gt=0)
+    job_max_concurrent: int = Field(default=0, ge=0)
 
     model_config = SettingsConfigDict(
         env_prefix="NL2SQL_",
