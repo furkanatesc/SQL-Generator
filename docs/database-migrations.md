@@ -13,7 +13,9 @@ The runner (`backend/app/migrations/runner.py`) is forward-only. Applied version
 ## How it runs
 
 - **On every start** the backend applies pending migrations: `init_db()` for the app database and
-  `SQLiteTraceStore` for the trace database. A second start does nothing.
+  `SQLiteTraceStore` for the trace database. A second start does nothing. The trace database is
+  created lazily, on the first trace write, so `status` can report it as `exists: false` until then.
+  Startup validation skips a database that does not exist yet.
 - Each migration runs in **its own transaction** together with its `schema_migrations` row (SQLite DDL is
   transactional). If one fails it is rolled back, later migrations are not attempted, and the database
   stays at the last good version.
