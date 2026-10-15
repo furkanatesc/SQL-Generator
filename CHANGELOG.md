@@ -1151,6 +1151,9 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
 - **Queue System** (Sprint 32.5): worker modunda geçici hatalar için üstel backoff'lu retry, tükenince
   dead-letter (`dead_lettered_at`), öncelik (`priority` -10..10), global eşzamanlılık limiti; admin
   `GET /api/v1/admin/queue` + `POST /api/v1/admin/jobs/{id}/requeue`; migration app v3. (PR #192)
+- **Rate Limiting** (Sprint 32.6): istemci başına API hız sınırı (genel + job oluşturma; varsayılan kapalı,
+  prod compose 300/20 dk), 429 `RATE_LIMITED` + `Retry-After`, `X-RateLimit-*` başlıkları; LLM çağrı limiter'ı
+  artık process-geneli ve ayarlanabilir (`NL2SQL_LLM_REQUESTS_PER_MINUTE`/`NL2SQL_LLM_BURST`). (PR #193)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
