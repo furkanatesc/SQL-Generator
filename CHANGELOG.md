@@ -1133,6 +1133,12 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   sözleşme ↔ `docs/env-contract.md` ↔ `docker-compose.prod.yml` drift guard'ı + yazım hatalı
   `NL2SQL_*` değişkenleri için yeni `UNKNOWN_CONFIG_ENV_VAR` startup uyarısı (yalnız isim,
   `/ready`'yi düşürmez). (PR #188)
+- **Secrets Management** (Sprint 32.2): tek secret resolver `backend/app/secret_resolver.py`
+  (`<NAME>_FILE` Docker secrets konvansiyonu, dosya > env, okunamaz dosyada env'e sessiz düşme yok,
+  restart'sız rotasyon); tüm secret okumaları ve trace redaction resolver'a bağlandı; yeni
+  `SECRET_FILE_UNREADABLE` (critical) / `SECRET_SOURCE_CONFLICT` / `API_KEY_ENV_SHADOWED` uyarıları.
+  Prod compose'ta API key artık Docker secret (`SQLGEN_API_KEY_SECRET_FILE`), container env'inde
+  değil; CI smoke bunu doğrular. (PR #189)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.

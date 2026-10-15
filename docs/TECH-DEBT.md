@@ -1514,6 +1514,8 @@ CI boot smoke'u ekledi ve smoke'un yakaladığı dev-key seed açığını kapat
 2. **TLS sonlandırma yok** (domain/sertifika operatörün önündeki proxy'de). *→ 32.11/ops*
 3. **Secret'lar env değişkeni** (`NL2SQL_API_KEY`, `NVIDIA_API_KEY`); Docker secrets / dosya-tabanlı
    secret yok; DB > env key önceliği değişmedi. *→ 32.2 Secrets Management*
+   **32.2 (PR #189): API key prod compose'ta Docker secret, resolver `*_FILE` destekli — ÇÖZÜLDÜ.**
+   DB > env önceliği bilinçli korundu (`API_KEY_ENV_SHADOWED` ile görünür); NVIDIA key env kaldı (§38).
 4. **Mevcut prod DB'deki dev key otomatik rotate edilmiyor** — yalnız `API_KEY_INSECURE_DEFAULT`
    (critical, `/ready` 503) ile görünür; operatör `POST /api/configs/api_key` ile değiştirir.
 5. **Gömülü Qdrant + SQLite tek-process** — `backend` replika ölçeklenemez; harici Qdrant/DB
@@ -1533,6 +1535,9 @@ CI boot smoke'u ekledi ve smoke'un yakaladığı dev-key seed açığını kapat
 
 1. **Direct `os.getenv` okumaları `Settings`'e taşınmadı** (`NL2SQL_API_KEY`, `NVIDIA_API_KEY`,
    `SQLGEN_DB_PATH`, `NL2SQL_TRACE_DB_PATH`) — secret çözümleme yeniden tasarlanırken. *→ 32.2*
+   **32.2 (PR #189): secret'lar (`NL2SQL_API_KEY`, `NVIDIA_API_KEY`) `app/secret_resolver.py`'a
+   toplandı — ÇÖZÜLDÜ (secret kısmı).** Path değişkenleri (`SQLGEN_DB_PATH`, `NL2SQL_TRACE_DB_PATH`)
+   hâlâ direct `os.getenv` (secret değil; `Settings`'e taşıma açık).
 2. **`.env` dosyasındaki bilinmeyen anahtarlar uyarılmıyor** — yalnız process env'i taranıyor.
    *İlgili Dosya:* `backend/app/config_contract.py::find_unknown_prefixed_env`
 3. **Sözleşme API'de yayınlanmıyor** (ör. `/api/v1/admin/config`'te değişken envanteri). Gerekirse
@@ -1541,3 +1546,21 @@ CI boot smoke'u ekledi ve smoke'un yakaladığı dev-key seed açığını kapat
    bırakıldı (startup'ta exception); `default` alanı yalnız insan-okur metin.
 5. **`SQLGEN_*`/`NVIDIA_*` prefix'li bilinmeyen değişkenler uyarılmıyor** — yalnız `NL2SQL_*`
    (Settings prefix'i) kontrol ediliyor.
+
+## §38. Sprint 32.2 (Secrets Management) devirleri — AÇIK
+
+32.2 tek secret resolver'ı (`backend/app/secret_resolver.py`, `<NAME>_FILE` > `<NAME>`), prod compose'ta
+API key'i Docker secret'a taşımayı ve secret-kaynak uyarılarını ekledi. Kapsam dışı:
+
+1. **Harici secret store yok** (Vault / AWS Secrets Manager / GCP Secret Manager). Resolver yalnız
+   env + dosya bilir; provider arayüzü eklenmedi. *İlgili Dosya:* `backend/app/secret_resolver.py`
+2. **Connection `secret_provider`/`secret_key` by-reference çözümlemesi yok** (30.2; canlı execution
+   olmadığı için tüketicisi yok). *→ §28*
+3. **DB `configs` tablosundaki `api_key` / `nvidia_api_key` düz metin** — hash/şifreleme yok; DB > env/dosya
+   önceliği korunuyor (`API_KEY_ENV_SHADOWED` uyarısıyla görünür).
+4. **`api_keys` tablosu (30.8) `verify_api_key`'i yönetmiyor.** *→ §34*
+5. **Rotasyon otomasyonu / süre dolumu yok** — dosya her çağrıda yeniden okunur ama rotasyon elle.
+6. **`NVIDIA_API_KEY` prod compose'ta hâlâ opsiyonel env değeri** — compose opsiyonel `secrets.file`
+   ifade edemiyor; runbook `docker-compose.override.yml` ile `NVIDIA_API_KEY_FILE` örneği veriyor.
+7. **Secret dosyası her istekte okunuyor** (`verify_api_key` başına bir küçük dosya okuması) — ölçüm
+   yok; 32.12 load testing'de bakılmalı, gerekirse mtime-cache.
