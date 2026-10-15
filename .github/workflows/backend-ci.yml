@@ -343,6 +343,25 @@ jobs:
           docker compose exec -T backend python -m app.migrations status | tee status.json
           python3 -c "import json,sys; r=json.load(open('status.json')); sys.exit(0 if all(d['exists'] and not d['pending'] and not d['ahead'] for d in r) else 1)"
 
+      - name: Jobs are executed by the worker service
+        run: |
+          # Sprint 32.4: the API only enqueues; the worker claims the job. Without an LLM key
+          # the job fails fast, which is enough to prove who ran it and that logs persist.
+          job_id=$(curl -fsS -X POST http://localhost:8000/api/jobs/without-file \
+            -H "X-API-Key: $NL2SQL_API_KEY" -H "Content-Type: application/json" \
+            -d '{"natural_query":"smoke"}' | python3 -c "import json,sys; print(json.load(sys.stdin)['job']['id'])")
+          for i in {1..30}; do
+            status=$(curl -fsS "http://localhost:8000/api/jobs/$job_id" -H "X-API-Key: $NL2SQL_API_KEY" \
+              | python3 -c "import json,sys; print(json.load(sys.stdin)['status'])")
+            [ "$status" = failed ] && break
+            sleep 1
+          done
+          test "$status" = failed
+          docker compose logs worker | grep -q "running job $job_id"
+          # The log line written by the worker process is streamed by the API from job_logs.
+          curl -fsS --max-time 15 "http://localhost:8000/api/jobs/$job_id/stream" \
+            -H "X-API-Key: $NL2SQL_API_KEY" | grep -q "NVIDIA API"
+
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs

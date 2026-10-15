@@ -101,7 +101,13 @@ def migrate(conn: sqlite3.Connection, migrations: Sequence[Migration]) -> Migrat
             if migration.version not in status.pending:
                 continue
             try:
-                conn.execute("BEGIN")
+                # IMMEDIATE takes the write lock up front; re-checking the version inside the
+                # transaction lets a second process (e.g. backend + worker booting together)
+                # skip a migration the first one just applied instead of failing on it.
+                conn.execute("BEGIN IMMEDIATE")
+                if _current_version(conn) >= migration.version:
+                    conn.execute("COMMIT")
+                    continue
                 migration.apply(conn)
                 conn.execute(
                     f"INSERT INTO {MIGRATIONS_TABLE} (version, name, applied_at) VALUES (?, ?, ?)",
