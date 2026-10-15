@@ -1669,3 +1669,15 @@ redaction'ı ekledi (API'de INFO log'larının hiç basılmaması hatası düzel
    (log seviyesi/format/redaction dışında). *İlgili Dosya:* `backend/app/schema_manager.py`
 4. **Log örnekleme / hız sınırlama yok** — gürültülü hata döngüsü log'u şişirebilir.
 5. **Audit olayları ayrı kanala yazılmıyor** — 26.x audit event'leri normal log akışında.
+
+## §46. Sprint 32.10 (LLM Failover) devirleri — AÇIK
+
+32.10 model zinciri failover'ını, tipli LLM hatalarını ve model başına devre kesicileri ekledi. Kapsam dışı:
+
+1. **Farklı sağlayıcı / uç nokta / key'e failover yok** — zincir yalnız aynı NVIDIA NIM uç noktasındaki modeller;
+   ikinci sağlayıcı ikinci secret (32.2 resolver kaydı) ve farklı istek sözleşmesi ister.
+   *İlgili Dosya:* `backend/app/llm/failover.py`
+2. **Devre durumu process başına** — API ve her worker kendi devrelerini tutar; paylaşım yok.
+3. **Embedding (RAG) çağrıları failover'sız** — `rag_manager`/`nvidia_embedding_provider` tek model.
+4. **Maliyet/latency tabanlı yönlendirme yok** — sıra sabit (birincil önce).
+5. **İstemci iç retry bütçesi sabit** (4 deneme, 2/4/8 sn) — failover'dan önce harcanır; ayarlanabilir değil.
