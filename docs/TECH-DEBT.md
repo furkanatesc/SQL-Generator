@@ -1614,3 +1614,16 @@ uç noktalarını ekledi. Kapsam dışı:
 6. **Dead-letter retention/otomatik temizleme yok.**
 7. **Geçici hata sınıflandırması kaba** — yalnız "tüm denemeler `llm_api_error`"; HTTP 429/5xx ayrımı
    yapılmıyor (pipeline exception metnini sınıflandırmıyor).
+
+## §42. Sprint 32.6 (Rate Limiting) devirleri — AÇIK
+
+32.6 istemci başına API hız sınırını (`backend/app/rate_limit.py`), 429 `RATE_LIMITED` sözleşmesini ve
+process-geneli LLM çağrı limiter'ını ekledi. Kapsam dışı:
+
+1. **Dağıtık / çok-replika limit yok** — sayaçlar API process'inin belleğinde; restart'ta sıfırlanır, birden çok
+   API replikasında limit replika başına olur (Redis gerekir).
+2. **Worker'lar arası LLM limiti yok** — limiter process başına; global fren 32.5 `NL2SQL_JOB_MAX_CONCURRENT`.
+3. **Key başına farklı kota / plan yok** — tüm istemciler aynı limit.
+4. **`X-Forwarded-For` güvenilmiyor** — key'siz istemci doğrudan bağlanan IP ile anahtarlanır; reverse proxy
+   gelince (§36.1) proxy arkasında tüm anonim istemciler tek IP olur.
+5. **İstek gövdesi / upload boyutu sınırı yok.**
