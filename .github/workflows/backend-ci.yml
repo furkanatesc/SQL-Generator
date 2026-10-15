@@ -370,6 +370,12 @@ jobs:
           curl -fsS http://localhost:8000/api/v1/admin/queue -H "X-API-Key: $NL2SQL_API_KEY" \
             | python3 -c "import json,sys; d=json.load(sys.stdin)['data']; sys.exit(0 if d['execution_mode']=='worker' and d['counts']['failed']>=1 and d['dead_lettered']==0 and d['retry_scheduled']==0 else 1)"
 
+      - name: LLM failover chain is exposed
+        run: |
+          # Sprint 32.10: chain with the primary model; every circuit closed on a fresh stack.
+          curl -fsS http://localhost:8000/api/v1/admin/llm -H "X-API-Key: $NL2SQL_API_KEY" \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['data']; sys.exit(0 if d['chain'] and all(m['state']=='closed' for m in d['chain']) else 1)"
+
       - name: Backup and restore round-trip
         run: |
           # Sprint 32.8: back up, lose data, restore with the stack stopped, data is back.

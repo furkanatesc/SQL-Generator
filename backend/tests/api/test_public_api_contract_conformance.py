@@ -46,6 +46,7 @@ EXPECTED_V1_ROUTES = {
     ("GET", "/api/v1/admin/overview"),
     ("GET", "/api/v1/admin/config"),
     ("GET", "/api/v1/admin/queue"),
+    ("GET", "/api/v1/admin/llm"),
     ("POST", "/api/v1/admin/jobs/{job_id}/requeue"),
     ("POST", "/api/v1/api-keys"),
     ("GET", "/api/v1/api-keys"),

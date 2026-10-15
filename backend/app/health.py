@@ -111,6 +111,13 @@ def build_component_checks(warnings: Iterable, database_reachable: bool) -> Dict
         checks["disk"] = ComponentCheck(status=status, reason=reason)
     if not _llm_key_configured():
         _merge(checks, "llm", "degraded", "llm_key_not_configured")
+    try:
+        from app.llm.failover import all_circuits_open
+
+        if all_circuits_open():  # Sprint 32.10
+            _merge(checks, "llm", "degraded", "llm_circuits_open")
+    except Exception:
+        pass
     return checks
 
 

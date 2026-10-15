@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # Sprint 32.9 — app/logging_config.py.
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_format: Literal["text", "json"] = "text"
+    # Sprint 32.10 — LLM failover chain (comma-separated NIM model ids) and circuit breaker.
+    llm_fallback_models: str = ""
+    llm_circuit_failures: int = Field(default=3, ge=1)
+    llm_circuit_reset_seconds: float = Field(default=60.0, gt=0)
 
     model_config = SettingsConfigDict(
         env_prefix="NL2SQL_",

@@ -73,6 +73,12 @@ ENV_CONTRACT: tuple[EnvVar, ...] = (
            "Root log level (DEBUG|INFO|WARNING|ERROR|CRITICAL) for the API, worker and CLIs."),
     EnvVar("NL2SQL_LOG_FORMAT", "settings", False, False, "text",
            "Log format: text, or json (one object per line with request_id/job_id)."),
+    EnvVar("NL2SQL_LLM_FALLBACK_MODELS", "settings", False, False, "(none)",
+           "Comma-separated NIM model ids tried after the primary model on transient/unavailable errors."),
+    EnvVar("NL2SQL_LLM_CIRCUIT_FAILURES", "settings", False, False, "3",
+           "Consecutive failures that open a model's circuit (the model is skipped)."),
+    EnvVar("NL2SQL_LLM_CIRCUIT_RESET_SECONDS", "settings", False, False, "60",
+           "How long an open circuit skips its model before one trial call."),
     # --- Direct os.getenv reads ----------------------------------------------------
     EnvVar("NL2SQL_API_KEY", "direct", True, True, "(none)",
            "API key fallback when no key is stored in the DB config (app/auth.py)."),

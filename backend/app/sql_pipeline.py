@@ -136,7 +136,10 @@ class SQLGenerationPipeline:
 
     def _get_nvidia_client(self) -> NVIDIAClient:
         if self.nvidia_client is None:
-            self.nvidia_client = NVIDIAClient()
+            # Sprint 32.10: model chain with failover + per-model circuit breakers.
+            from app.llm.failover import FailoverLLMClient
+
+            self.nvidia_client = FailoverLLMClient()
         return self.nvidia_client
 
     def _generate_sql(

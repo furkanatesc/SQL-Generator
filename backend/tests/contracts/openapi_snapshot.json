@@ -304,6 +304,34 @@
         "title": "ApiResponse[FeedbackResponse]",
         "type": "object"
       },
+      "ApiResponse_LLMStatus_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LLMStatus"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[LLMStatus]",
+        "type": "object"
+      },
       "ApiResponse_QueryHistorySummary_": {
         "properties": {
           "data": {
@@ -2372,6 +2400,60 @@
           "sort_order"
         ],
         "title": "JobsListResponse",
+        "type": "object"
+      },
+      "LLMModelState": {
+        "properties": {
+          "consecutive_failures": {
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "retry_in_seconds": {
+            "title": "Retry In Seconds",
+            "type": "number"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "state",
+          "consecutive_failures",
+          "retry_in_seconds"
+        ],
+        "title": "LLMModelState",
+        "type": "object"
+      },
+      "LLMStatus": {
+        "properties": {
+          "chain": {
+            "items": {
+              "$ref": "#/components/schemas/LLMModelState"
+            },
+            "title": "Chain",
+            "type": "array"
+          },
+          "failure_threshold": {
+            "title": "Failure Threshold",
+            "type": "integer"
+          },
+          "reset_seconds": {
+            "title": "Reset Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "chain",
+          "failure_threshold",
+          "reset_seconds"
+        ],
+        "title": "LLMStatus",
         "type": "object"
       },
       "LLMUsageDetailResponse": {
@@ -6741,6 +6823,36 @@
           }
         ],
         "summary": "Admin Requeue Job",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/llm": {
+      "get": {
+        "description": "Sprint 32.10: model failover chain and per-model circuit state (this process).",
+        "operationId": "admin_llm_api_v1_admin_llm_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_LLMStatus_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Admin Llm",
         "tags": [
           "admin"
         ]

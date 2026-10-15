@@ -135,6 +135,21 @@ Before 32.9 the API process had no logging configuration, so INFO logs (includin
 event) were silently dropped. `uvicorn.access` is now WARNING-only because `http_request` replaces it.
 Shipping logs to Loki or ELK is the platform's job (stdout/stderr of the containers).
 
+### LLM failover (Sprint 32.10)
+SQL generation uses a **model chain**: the configured `llm_model` first, then `NL2SQL_LLM_FALLBACK_MODELS`
+(e.g. `meta/llama-3.1-70b-instruct,nvidia/llama-3.1-nemotron-70b-instruct`) on the same NVIDIA NIM endpoint
+and key.
+- A call moves to the next model when the current one fails transiently (429/5xx/network, after the client's
+  own retries) or is unavailable (400/404). On 401/403 it does **not** fail over: fix the key.
+- After `NL2SQL_LLM_CIRCUIT_FAILURES` consecutive failures a model's circuit **opens** and the model is
+  skipped for `NL2SQL_LLM_CIRCUIT_RESET_SECONDS`. After that it gets one trial call.
+- If every circuit is open, the model that reopens soonest is still tried.
+- Circuits are kept per process (API and each worker).
+- Inspect: `GET /api/v1/admin/llm` (chain, state, failures, retry-in).
+- `/ready` reports `checks.llm = degraded (llm_circuits_open)` while every circuit is open.
+- Failover events are logged by `app.llm.failover` with the job's `job_id`.
+- Job-level retries (32.5) still apply when the whole chain fails.
+
 ### Rate limits (Sprint 32.6)
 The compose file turns on per-client API limits: `NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE=300` for all requests
 and `NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE=20` for job creation. A client is its API key (hashed) or its IP. Over
@@ -293,7 +308,7 @@ warning code in lower case), never paths or values.
 | `upload_dir` | `upload_dir_not_writable`, `upload_dir_not_found` | — |
 | `job_queue` | — | `job_queue_stalled` |
 | `disk` | free space < `NL2SQL_HEALTH_MIN_FREE_DISK_MB` (`low_disk_space`) | < 2× that (`disk_space_low_soon`) |
-| `llm` | — | no LLM key configured (`llm_key_not_configured`): jobs will fail |
+| `llm` | — | no LLM key configured (`llm_key_not_configured`): jobs will fail; every model circuit open (`llm_circuits_open`) |
 | `config` | any other critical warning (e.g. `cors_wildcard_in_production`) | any other warning (e.g. `unknown_config_env_var`) |
 
 ```bash

@@ -97,6 +97,9 @@ Rules:
 | **`NL2SQL_HEALTH_MIN_FREE_DISK_MB`** | Integer ≥ 0 | `100` | Sprint 32.7: `/ready` fails (`checks.disk` = `low_disk_space`) when the app DB volume has less free space than this; below twice this value it is `degraded`. `0` = off. |
 | **`NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE`** | Integer ≥ 0 | `0` (off) | Sprint 32.6: per-client API request limit. A client is its API key (SHA-256 prefix, never the raw key) or its IP. Exceeding it returns 429 `RATE_LIMITED` with `Retry-After`. `/health`, `/ready` and CORS preflight are exempt. The production compose pins `300`. |
 | **`NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE`** | Integer ≥ 0 | `0` (off) | Additional per-client limit for the LLM-costly job-creation endpoints (`POST /api/files/upload`, `POST /api/jobs/without-file`). The production compose pins `20`. |
+| **`NL2SQL_LLM_FALLBACK_MODELS`** | Comma-separated | *(none)* | Sprint 32.10: NIM model ids tried after the primary `llm_model` (same endpoint and key) when a call fails transiently (429/5xx/network) or the model is unavailable (400/404). There is no failover on 401/403. |
+| **`NL2SQL_LLM_CIRCUIT_FAILURES`** | Integer ≥ 1 | `3` | Consecutive failures that open a model's circuit: the model is skipped. |
+| **`NL2SQL_LLM_CIRCUIT_RESET_SECONDS`** | Float > 0 | `60` | How long an open circuit skips its model before one trial call (half-open). |
 | **`NL2SQL_LLM_REQUESTS_PER_MINUTE`** | Float > 0 | `15` | Process-wide LLM (NVIDIA NIM) call rate, shared by every job in that process (API or worker). |
 | **`NL2SQL_LLM_BURST`** | Integer ≥ 1 | `3` | Burst size of the LLM call limiter. |
 | **`NL2SQL_JOB_MAX_ATTEMPTS`** | Integer ≥ 1 | `3` | Worker mode (Sprint 32.5): total attempts for a transiently failing job (every pipeline attempt was an LLM API error, or the worker died) before it is dead-lettered. |
