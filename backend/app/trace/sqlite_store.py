@@ -1,4 +1,5 @@
 import json
+import logging
 import sqlite3
 import threading
 from pathlib import Path
@@ -8,6 +9,10 @@ import datetime as dt
 from app.trace.models import NL2SQLTrace, TraceRecord, DuplicateTraceError, TraceSerializationError
 from app.trace.store import TraceStore
 from app.trace.query import TraceQuery
+from app.migrations.trace_db import TRACE_MIGRATIONS
+from app.migrations.runner import migrate
+
+logger = logging.getLogger(__name__)
 
 
 class SQLiteTraceStore(TraceStore[TraceRecord]):
@@ -51,79 +56,14 @@ class SQLiteTraceStore(TraceStore[TraceRecord]):
         self.close()
 
     def _init_db(self) -> None:
+        # Sprint 32.3: schema lives in versioned migrations (app/migrations/trace_db.py).
         with self._lock:
             conn = self._connect()
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS nl2sql_traces (
-                    trace_id TEXT PRIMARY KEY,
-                    created_at TEXT NOT NULL,
-
-                    raw_query TEXT,
-                    normalized_query TEXT,
-
-                    candidate_signals_json TEXT NOT NULL DEFAULT '[]',
-                    rag_matches_json TEXT NOT NULL DEFAULT '[]',
-                    graph_trace_json TEXT NOT NULL DEFAULT '{}',
-
-                    selected_tables_json TEXT NOT NULL DEFAULT '[]',
-                    dropped_tables_json TEXT NOT NULL DEFAULT '[]',
-
-                    estimated_tokens INTEGER NOT NULL DEFAULT 0,
-                    confidence REAL,
-
-                    generated_sql TEXT,
-                    sql_valid INTEGER,
-                    sql_validation_errors_json TEXT NOT NULL DEFAULT '[]',
-
-                    error_type TEXT,
-                    error_message TEXT,
-
-                    latency_ms_json TEXT NOT NULL DEFAULT '{}',
-                    metadata_json TEXT NOT NULL DEFAULT '{}'
-                )
-            """)
-            conn.commit()
-
-            self._ensure_column(
-                conn,
-                "nl2sql_traces",
-                "last_generated_sql",
-                "last_generated_sql TEXT",
-            )
-            self._ensure_column(
-                conn,
-                "nl2sql_traces",
-                "attempts_json",
-                "attempts_json TEXT NOT NULL DEFAULT '[]'",
-            )
-            self._ensure_column(
-                conn,
-                "nl2sql_traces",
-                "job_id",
-                "job_id TEXT",
-            )
-            self._ensure_column(
-                conn,
-                "nl2sql_traces",
-                "dialect",
-                "dialect TEXT",
-            )
-            conn.commit()
-            
+            status = migrate(conn, TRACE_MIGRATIONS)
+            if not status.ok:
+                logger.error("trace database migrations incomplete: %s", status)
+                return
             self._backfill_metadata_filter_columns(conn)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS traces (
-                    trace_id TEXT PRIMARY KEY,
-                    trace_type TEXT NOT NULL,
-                    payload_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    job_id TEXT,
-                    request_id TEXT,
-                    dialect TEXT,
-                    sql_valid INTEGER,
-                    error_type TEXT
-                )
-            """)
             conn.commit()
 
     def _backfill_metadata_filter_columns(self, conn) -> None:
