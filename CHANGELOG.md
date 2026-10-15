@@ -1157,6 +1157,9 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
 - **Health Checks** (Sprint 32.7): `/ready` bileşen-bazlı `checks` (ok/degraded/fail + kısa neden kodu);
   yeni disk alanı (`NL2SQL_HEALTH_MIN_FREE_DISK_MB`) ve LLM key kontrolleri; worker healthcheck'i DB erişimi
   ister. (PR #194)
+- **Backup / Restore** (Sprint 32.8): `python -m app.backup create|verify|list|restore|prune` — tutarlı SQLite
+  anlık görüntüleri (online backup API), uploads, best-effort Qdrant, checksum'lı manifest; doğrulanan, sürüm
+  kontrollü, güvenlik yedekli restore; migration öncesi otomatik app DB kopyası. (PR #195)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
