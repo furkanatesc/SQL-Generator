@@ -1656,3 +1656,16 @@ migration öncesi otomatik app DB kopyasını ekledi. Kapsam dışı:
 5. **Restore çalışan process'leri durdurmuyor** — runbook'taki sıra (stop → `compose run` restore → up) zorunlu;
    kod kontrol etmiyor.
 6. **Trace DB için migration öncesi kopya yok** (yalnız app DB).
+
+## §45. Sprint 32.9 (Logging) devirleri — AÇIK
+
+32.9 merkezi log yapılandırmasını (`backend/app/logging_config.py`), JSON satırlarını, request/job bağlamını ve
+redaction'ı ekledi (API'de INFO log'larının hiç basılmaması hatası düzeltildi). Kapsam dışı:
+
+1. **Prometheus / OpenTelemetry exporter yok** — 27.6 metrik sözleşmesi + 32.7 `/ready` bileşenleri var; `/metrics`
+   uç noktası yok.
+2. **W3C `traceparent` / dağıtık tracing yayılımı yok** — korelasyon yalnız `X-Request-ID`.
+3. **Kalan `print()`'ler** — `schema_manager.py` (13), `schema_embedding.py` vb. sunucu yolunda stdout'a basıyor
+   (log seviyesi/format/redaction dışında). *İlgili Dosya:* `backend/app/schema_manager.py`
+4. **Log örnekleme / hız sınırlama yok** — gürültülü hata döngüsü log'u şişirebilir.
+5. **Audit olayları ayrı kanala yazılmıyor** — 26.x audit event'leri normal log akışında.

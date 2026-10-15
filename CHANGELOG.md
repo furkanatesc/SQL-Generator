@@ -1160,6 +1160,8 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
 - **Backup / Restore** (Sprint 32.8): `python -m app.backup create|verify|list|restore|prune` — tutarlı SQLite
   anlık görüntüleri (online backup API), uploads, best-effort Qdrant, checksum'lı manifest; doğrulanan, sürüm
   kontrollü, güvenlik yedekli restore; migration öncesi otomatik app DB kopyası. (PR #195)
+- **Logging** (Sprint 32.9): merkezi `configure_logging()` — `NL2SQL_LOG_LEVEL`/`NL2SQL_LOG_FORMAT` (text|json),
+  `request_id`/`job_id` bağlamı, secret redaction, uvicorn yönlendirmesi; prod compose JSON log. (PR #196)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
