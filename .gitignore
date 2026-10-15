@@ -32,6 +32,9 @@ backend/data/
 data/*.db
 sqlgen.db
 *.db.backup
+# Sprint 32.8 backups (python -m app.backup) and pre-migration DB copies
+backend/backups/
+*.pre-v*.bak
 
 # Graphify
 graphify-out/

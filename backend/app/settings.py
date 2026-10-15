@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     llm_burst: int = Field(default=3, ge=1)
     # Sprint 32.7 — /ready fails below this much free space on the app DB volume (0 = off).
     health_min_free_disk_mb: int = Field(default=100, ge=0)
+    # Sprint 32.8 — backups (`python -m app.backup`) and the automatic pre-migration DB copy.
+    backup_dir: str | None = None
+    backup_before_migration: bool = True
 
     model_config = SettingsConfigDict(
         env_prefix="NL2SQL_",
