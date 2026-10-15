@@ -1519,7 +1519,8 @@ CI boot smoke'u ekledi ve smoke'un yakaladığı dev-key seed açığını kapat
 4. **Mevcut prod DB'deki dev key otomatik rotate edilmiyor** — yalnız `API_KEY_INSECURE_DEFAULT`
    (critical, `/ready` 503) ile görünür; operatör `POST /api/configs/api_key` ile değiştirir.
 5. **Gömülü Qdrant + SQLite tek-process** — `backend` replika ölçeklenemez; harici Qdrant/DB
-   servisleştirme + migration *→ 32.3*. Backup/restore yalnız runbook'ta elle tar *→ 32.8*.
+   servisleştirme + migration *→ 32.3*. **32.3 (PR #190): sürümlü SQLite migration'ları — ÇÖZÜLDÜ
+   (migration kısmı).** Harici DB/Qdrant servisleştirme + replika açık (§39). Backup/restore yalnız runbook'ta elle tar *→ 32.8*.
 6. **İmajlar yerelde build ediliyor** — registry publish / sürüm tag'i yok *→ 32.11*.
 7. **`schema_cache.json` `/app` kökünde, kalıcı değil** (yeniden üretilebilir cache; yol
    env'leştirmesi kod değişikliği ister). Bu yüzden **read-only root FS** de uygulanmadı.
@@ -1564,3 +1565,18 @@ API key'i Docker secret'a taşımayı ve secret-kaynak uyarılarını ekledi. Ka
    ifade edemiyor; runbook `docker-compose.override.yml` ile `NVIDIA_API_KEY_FILE` örneği veriyor.
 7. **Secret dosyası her istekte okunuyor** (`verify_api_key` başına bir küçük dosya okuması) — ölçüm
    yok; 32.12 load testing'de bakılmalı, gerekirse mtime-cache.
+
+## §39. Sprint 32.3 (Database Migration Strategy) devirleri — AÇIK
+
+32.3 ileri-yönlü sürümlü SQLite migration runner'ı (`backend/app/migrations/`) ve app/trace DB baseline'larını
+ekledi. Kapsam dışı:
+
+1. **Down migration yok** — geri dönüş = yedekten dönüş; eski imaja dönüş `DB_SCHEMA_AHEAD` (critical) verir.
+2. **Migration öncesi otomatik yedek yok.** *→ 32.8 Backup/Restore*
+3. **Çok-process migration kilidi yok** — tek backend process varsayımı (SQLite yazma kilidi + idempotent
+   baseline riski sınırlar); replika ölçeklemede gerekli. *İlgili Dosya:* `backend/app/migrations/runner.py`
+4. **Checksum yok** — yayınlanmış bir migration'ın düzenlenmesi tespit edilmiyor; yalnız doküman kuralı
+   (`docs/database-migrations.md`).
+5. **Harici DB (Postgres) / Qdrant collection migration'ı yok** (§36.5, §28.8 notu).
+6. **Ayrı "migrate-then-serve" adımı yok** — migration'lar uygulama açılışında (`init_db` +
+   `SQLiteTraceStore`) çalışır; compose init container / deploy öncesi migrate adımı yok (→ 32.11 CI/CD).

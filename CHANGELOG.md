@@ -1139,6 +1139,11 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   `SECRET_FILE_UNREADABLE` (critical) / `SECRET_SOURCE_CONFLICT` / `API_KEY_ENV_SHADOWED` uyarıları.
   Prod compose'ta API key artık Docker secret (`SQLGEN_API_KEY_SECRET_FILE`), container env'inde
   değil; CI smoke bunu doğrular. (PR #189)
+- **Database Migration Strategy** (Sprint 32.3): ileri-yönlü sürümlü SQLite migration runner
+  (`backend/app/migrations/`, `schema_migrations` tablosu, migration başına transaction + rollback);
+  app ve trace DB için idempotent v1 baseline (eski DB'ler veri kaybısız benimsenir); kritik
+  `DB_MIGRATIONS_PENDING` / `DB_SCHEMA_AHEAD` uyarıları; `python -m app.migrations status|upgrade` CLI;
+  `docs/database-migrations.md`. (PR #190)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
