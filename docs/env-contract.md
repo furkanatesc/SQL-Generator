@@ -90,6 +90,9 @@ Rules:
 | **`NL2SQL_APP_DESCRIPTION`** | String | *(built-in)* | API description shown in OpenAPI. |
 | **`NL2SQL_JOB_EXECUTION_MODE`** | `inline` \| `worker` | `inline` | Where NL→SQL jobs run (Sprint 32.4): in the API process, or in the separate `python -m app.jobs.worker` process (the API then only enqueues). The production compose pins `worker`. |
 | **`NL2SQL_JOB_WORKER_POLL_SECONDS`** | Float > 0 | `1.0` | Worker idle poll interval. |
+| **`NL2SQL_JOB_MAX_ATTEMPTS`** | Integer ≥ 1 | `3` | Worker mode (Sprint 32.5): total attempts for a transiently failing job (every pipeline attempt was an LLM API error, or the worker died) before it is dead-lettered. |
+| **`NL2SQL_JOB_RETRY_BACKOFF_SECONDS`** | Float > 0 | `30` | Worker mode: base of the exponential retry backoff (`base × 2^(attempt-1)`, capped at 900 s). |
+| **`NL2SQL_JOB_MAX_CONCURRENT`** | Integer ≥ 0 | `0` | Worker mode: maximum number of jobs `processing` at once across all workers (`0` = unlimited); protects the LLM provider's rate limits. |
 | **`NL2SQL_JOB_STALE_SECONDS`** | Integer ≥ 10 | `300` | A `processing` job whose worker heartbeat is older than this is failed; in worker mode, `pending` jobs older than this raise `JOB_QUEUE_STALLED`. |
 
 ### Unknown `NL2SQL_*` variables (Sprint 32.1)

@@ -240,9 +240,19 @@ def _job_worker(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status_created_at ON jobs (status, created_at)")
 
 
+def _queue(conn: sqlite3.Connection) -> None:
+    """Sprint 32.5 — priority, retry bookkeeping and dead-letter marker."""
+    ensure_column(conn, "jobs", "priority", "priority INTEGER NOT NULL DEFAULT 0")
+    ensure_column(conn, "jobs", "attempts", "attempts INTEGER NOT NULL DEFAULT 0")
+    ensure_column(conn, "jobs", "next_attempt_at", "next_attempt_at TEXT")
+    ensure_column(conn, "jobs", "dead_lettered_at", "dead_lettered_at TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_queue ON jobs (status, priority, created_at)")
+
+
 APP_MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline", _baseline),
     Migration(2, "job_worker", _job_worker),
+    Migration(3, "queue", _queue),
 )
 
 validate_registry(APP_MIGRATIONS)
