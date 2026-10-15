@@ -1573,10 +1573,28 @@ ekledi. Kapsam dışı:
 
 1. **Down migration yok** — geri dönüş = yedekten dönüş; eski imaja dönüş `DB_SCHEMA_AHEAD` (critical) verir.
 2. **Migration öncesi otomatik yedek yok.** *→ 32.8 Backup/Restore*
-3. **Çok-process migration kilidi yok** — tek backend process varsayımı (SQLite yazma kilidi + idempotent
+3. **32.4 (PR #191): tek-host eşzamanlı açılış `BEGIN IMMEDIATE` + transaction içi sürüm kontrolüyle
+   ÇÖZÜLDÜ;** çok-host koordinasyonu hâlâ yok. Eski not: **Çok-process migration kilidi yok** — tek backend process varsayımı (SQLite yazma kilidi + idempotent
    baseline riski sınırlar); replika ölçeklemede gerekli. *İlgili Dosya:* `backend/app/migrations/runner.py`
 4. **Checksum yok** — yayınlanmış bir migration'ın düzenlenmesi tespit edilmiyor; yalnız doküman kuralı
    (`docs/database-migrations.md`).
 5. **Harici DB (Postgres) / Qdrant collection migration'ı yok** (§36.5, §28.8 notu).
 6. **Ayrı "migrate-then-serve" adımı yok** — migration'lar uygulama açılışında (`init_db` +
    `SQLiteTraceStore`) çalışır; compose init container / deploy öncesi migrate adımı yok (→ 32.11 CI/CD).
+
+## §40. Sprint 32.4 (Background Job Worker) devirleri — AÇIK
+
+32.4 ayrı worker process'ini (`backend/app/jobs/`), atomik DB claim'i, heartbeat/stale kurtarmayı, kalıcı
+`job_logs`'u ve prod compose `worker` servisini ekledi. Kapsam dışı:
+
+1. **Retry/backoff, öncelik, dead-letter, eşzamanlılık limiti, harici broker yok** — stale job `failed` olur,
+   yeniden denenmez. *→ 32.5 Queue System*
+2. **`job_logs` retention/temizleme yok** — tablo sınırsız büyür. *İlgili Dosya:* `backend/app/jobs/repository.py`
+3. **Terk edilmiş job için taksonomi `error_code` yok** (ör. `JOB_ABANDONED`) — yalnız `error_message`;
+   frontend `errorInfo.ts` aynası gerektirir.
+4. **İptal çalışan LLM çağrısını kesmiyor** — yalnız sonuç yazılmaz (32.4 öncesiyle aynı).
+5. **RAG/Qdrant kullanan işler worker'da çalışamaz** — gömülü Qdrant tek-process kilitli; worker'a Qdrant
+   volume'u verilmedi. Harici Qdrant servisleştirme gerekir (§36.5).
+6. **Çok-host worker yok** — SQLite yerel volume'da; worker'lar aynı host'ta olmalı.
+7. **Inline modunda SSE canlı akışı hâlâ process-içi** (`job_logs_cache`/`job_queues`); kalıcı loglar yazılıyor
+   ama inline SSE onları okumuyor (restart sonrası inline job zaten `failed`).
