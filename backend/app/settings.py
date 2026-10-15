@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     job_max_attempts: int = Field(default=3, ge=1)
     job_retry_backoff_seconds: float = Field(default=30.0, gt=0)
     job_max_concurrent: int = Field(default=0, ge=0)
+    # Sprint 32.6 — API rate limits per client (0 = off) and the process-wide LLM call rate.
+    rate_limit_requests_per_minute: int = Field(default=0, ge=0)
+    rate_limit_jobs_per_minute: int = Field(default=0, ge=0)
+    llm_requests_per_minute: float = Field(default=15.0, gt=0)
+    llm_burst: int = Field(default=3, ge=1)
 
     model_config = SettingsConfigDict(
         env_prefix="NL2SQL_",

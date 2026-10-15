@@ -90,6 +90,10 @@ Rules:
 | **`NL2SQL_APP_DESCRIPTION`** | String | *(built-in)* | API description shown in OpenAPI. |
 | **`NL2SQL_JOB_EXECUTION_MODE`** | `inline` \| `worker` | `inline` | Where NL→SQL jobs run (Sprint 32.4): in the API process, or in the separate `python -m app.jobs.worker` process (the API then only enqueues). The production compose pins `worker`. |
 | **`NL2SQL_JOB_WORKER_POLL_SECONDS`** | Float > 0 | `1.0` | Worker idle poll interval. |
+| **`NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE`** | Integer ≥ 0 | `0` (off) | Sprint 32.6: per-client API request limit. A client is its API key (SHA-256 prefix, never the raw key) or its IP. Exceeding it returns 429 `RATE_LIMITED` with `Retry-After`. `/health`, `/ready` and CORS preflight are exempt. The production compose pins `300`. |
+| **`NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE`** | Integer ≥ 0 | `0` (off) | Additional per-client limit for the LLM-costly job-creation endpoints (`POST /api/files/upload`, `POST /api/jobs/without-file`). The production compose pins `20`. |
+| **`NL2SQL_LLM_REQUESTS_PER_MINUTE`** | Float > 0 | `15` | Process-wide LLM (NVIDIA NIM) call rate, shared by every job in that process (API or worker). |
+| **`NL2SQL_LLM_BURST`** | Integer ≥ 1 | `3` | Burst size of the LLM call limiter. |
 | **`NL2SQL_JOB_MAX_ATTEMPTS`** | Integer ≥ 1 | `3` | Worker mode (Sprint 32.5): total attempts for a transiently failing job (every pipeline attempt was an LLM API error, or the worker died) before it is dead-lettered. |
 | **`NL2SQL_JOB_RETRY_BACKOFF_SECONDS`** | Float > 0 | `30` | Worker mode: base of the exponential retry backoff (`base × 2^(attempt-1)`, capped at 900 s). |
 | **`NL2SQL_JOB_MAX_CONCURRENT`** | Integer ≥ 0 | `0` | Worker mode: maximum number of jobs `processing` at once across all workers (`0` = unlimited); protects the LLM provider's rate limits. |

@@ -42,6 +42,26 @@ class TokenBucket:
             wait_time = needed / self.fill_rate
             return wait_time
 
+_llm_limiter_lock = threading.Lock()
+_llm_limiter: Optional[TokenBucket] = None
+_llm_limiter_config: Optional[Tuple[float, float]] = None
+
+
+def get_llm_rate_limiter() -> TokenBucket:
+    """Process-wide LLM call limiter (Sprint 32.6): `NL2SQL_LLM_REQUESTS_PER_MINUTE` sustained,
+    `NL2SQL_LLM_BURST` burst (defaults 15/min, 3 — the previous hard-coded values)."""
+    global _llm_limiter, _llm_limiter_config
+    from app.settings import get_settings
+
+    settings = get_settings()
+    config = (float(settings.llm_burst), settings.llm_requests_per_minute / 60.0)
+    with _llm_limiter_lock:
+        if _llm_limiter is None or _llm_limiter_config != config:
+            _llm_limiter = TokenBucket(capacity=config[0], fill_rate=config[1])
+            _llm_limiter_config = config
+        return _llm_limiter
+
+
 def get_nvidia_api_key() -> str:
     """
     Öncelikli olarak NVIDIA_API_KEY_FILE / NVIDIA_API_KEY (app/secret_resolver.py) okur.
@@ -155,8 +175,12 @@ class NVIDIAClient:
                 self.model = f"nvidia/{cfg_model}"
         else:
             self.model = "meta/llama-3.3-70b-instruct"
-        # Varsayılan hız sınırı: dakikada en fazla 15 istek (0.25 fill_rate/saniye), maksimum burst 3.
-        self.limiter = TokenBucket(capacity=3.0, fill_rate=15.0/60.0)
+
+    @property
+    def limiter(self) -> "TokenBucket":
+        # Sprint 32.6: one process-wide bucket shared by every job (was per client instance,
+        # i.e. per job, so nothing was actually limited across jobs).
+        return get_llm_rate_limiter()
 
     def generate_sql(self, prompt: str, api_key: str = None) -> str:
         """
