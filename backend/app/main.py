@@ -12,6 +12,7 @@ from app.database import (
     init_db, get_job, create_job, update_job_status, list_jobs, get_config, set_config
 )
 from app.auth import verify_api_key
+from app.secret_resolver import resolve_secret
 from app.api.debug_traces import router as debug_traces_router
 from app.api.feedback import router as feedback_router
 from app.api.debug_replay import router as debug_replay_router
@@ -403,7 +404,7 @@ def process_job_pipeline(job_id: str, request_id: Optional[str] = None):
         
         # Eğer api key dev key ise ve çevre değişkeni de yoksa hata versin ki kullanıcı ayarlasın
         import os
-        if (not api_key or api_key == "sqlgen_secret_dev_key") and not os.environ.get("NVIDIA_API_KEY"):
+        if (not api_key or api_key == "sqlgen_secret_dev_key") and not resolve_secret("NVIDIA_API_KEY"):
             raise ValueError(
                 "NVIDIA API Anahtarı eksik! Lütfen 'Settings' (Ayarlar) panelinden geçerli bir "
                 "NVIDIA API Key girin veya backend'i NVIDIA_API_KEY çevre değişkeniyle başlatın."
@@ -587,7 +588,7 @@ def search_rag(req: RAGSearchRequest):
         api_key = get_config("nvidia_api_key") or get_config("api_key")
         
         import os
-        if (not api_key or api_key == "sqlgen_secret_dev_key") and not os.environ.get("NVIDIA_API_KEY"):
+        if (not api_key or api_key == "sqlgen_secret_dev_key") and not resolve_secret("NVIDIA_API_KEY"):
             raise ValueError("RAG Arama yapmak için geçerli bir NVIDIA API Key gereklidir.")
 
         if req.collection == "schema_ddl":
@@ -613,7 +614,7 @@ def index_business_rule(req: BusinessRuleIndexRequest):
         api_key = get_config("nvidia_api_key") or get_config("api_key")
         
         import os
-        if (not api_key or api_key == "sqlgen_secret_dev_key") and not os.environ.get("NVIDIA_API_KEY"):
+        if (not api_key or api_key == "sqlgen_secret_dev_key") and not resolve_secret("NVIDIA_API_KEY"):
             raise ValueError("RAG İndeksleme yapmak için geçerli bir NVIDIA API Key gereklidir.")
 
         rag_manager.index_business_rule(
@@ -636,7 +637,7 @@ def index_sql_history(req: SQLHistoryIndexRequest):
         api_key = get_config("nvidia_api_key") or get_config("api_key")
         
         import os
-        if (not api_key or api_key == "sqlgen_secret_dev_key") and not os.environ.get("NVIDIA_API_KEY"):
+        if (not api_key or api_key == "sqlgen_secret_dev_key") and not resolve_secret("NVIDIA_API_KEY"):
             raise ValueError("RAG İndeksleme yapmak için geçerli bir NVIDIA API Key gereklidir.")
 
         rag_manager.index_sql_history(

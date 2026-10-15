@@ -37,12 +37,17 @@ The following deployment methods and technologies are **not supported**:
 
 The compose file **pins** production-safe settings (`NL2SQL_ENVIRONMENT=production`,
 `NL2SQL_DEBUG_ENDPOINTS_ENABLED=false`, `NL2SQL_UPLOAD_DIR=/app/uploads`) and **refuses to start**
-when `NL2SQL_API_KEY` or `NL2SQL_CORS_ALLOW_ORIGINS` is missing.
+when `SQLGEN_API_KEY_SECRET_FILE` or `NL2SQL_CORS_ALLOW_ORIGINS` is missing. Since Sprint 32.2 the API
+key is a **Docker secret**: the host file is mounted at `/run/secrets/nl2sql_api_key` and read through
+`NL2SQL_API_KEY_FILE`, so the key never appears in the container environment (`docker inspect`,
+`/proc/*/environ`).
 
 ```bash
-# 1. Configure (the .env file is gitignored — never commit it)
+# 1. Configure (.env and secrets/ are gitignored — never commit them)
 cp .env.prod.example .env
-#    edit .env: NL2SQL_API_KEY, NL2SQL_CORS_ALLOW_ORIGINS (JSON array, no "*"), optional NVIDIA_API_KEY
+#    edit .env: NL2SQL_CORS_ALLOW_ORIGINS (JSON array, no "*"), optional NVIDIA_API_KEY
+mkdir -p secrets && openssl rand -hex 32 > secrets/nl2sql_api_key
+chmod 0444 secrets/nl2sql_api_key   # the container runs as a non-root user and must read it
 
 # 2. Build and start; --wait blocks until both services report healthy
 docker compose -f docker-compose.prod.yml up -d --build --wait
@@ -71,14 +76,25 @@ with the project name (by default the checkout directory, e.g. `sqlgen_sqlgen_da
 `docker volume ls`): `docker run --rm -v sqlgen_sqlgen_data:/data -v "$PWD":/backup alpine tar czf
 /backup/sqlgen_data.tgz -C /data .`
 
+### Secrets (Sprint 32.2)
+- **Rotate the API key:** overwrite `secrets/nl2sql_api_key`; the file is re-read on every request, so
+  no restart is needed. If `/ready` reports `API_KEY_ENV_SHADOWED`, a key stored in the database config
+  (`POST /api/configs/api_key`) takes precedence and must be changed or removed as well.
+- **LLM key as a secret:** `NVIDIA_API_KEY` stays an optional env value in the compose file (an optional
+  secret file cannot be expressed in compose). To use a file instead, add a `docker-compose.override.yml`
+  that declares a `nvidia_api_key` secret, lists it under `backend.secrets` and sets
+  `NVIDIA_API_KEY_FILE: /run/secrets/nvidia_api_key`.
+- A configured but unreadable/empty secret file raises the critical `SECRET_FILE_UNREADABLE`
+  (`/ready` 503) and is **not** silently replaced by the env value.
+
 ### Frontend → backend
 The SPA calls the backend at `http://<browser host>:8000` by default. If `SQLGEN_BACKEND_PORT` is not
 `8000`, or the backend is on another host, set the backend URL and API key in the UI settings. Add the
 frontend's origin (e.g. `http://sqlgen.example.com:8080`) to `NL2SQL_CORS_ALLOW_ORIGINS`.
 
 ### Known limitations (Sprint 32.0)
-No TLS termination or single-origin reverse proxy, secrets are passed as environment variables
-(Docker secrets → Sprint 32.2), images are built locally (registry publishing → Sprint 32.11), and
+No TLS termination or single-origin reverse proxy, no external secret store (Vault / cloud secret
+managers; see §38), images are built locally (registry publishing → Sprint 32.11), and
 the schema cache file (`/app/schema_cache.json`) is not persisted (it is rebuilt on demand). See
 `docs/TECH-DEBT.md` §36.
 
@@ -99,6 +115,13 @@ docker build -t sql-generator-backend backend
 docker run \
   -p 8000:8000 \
   -e NL2SQL_API_KEY=xxxxx \
+  sql-generator-backend
+
+# Or keep the key out of the environment (Sprint 32.2):
+docker run \
+  -p 8000:8000 \
+  -v "$PWD/secrets/nl2sql_api_key:/run/secrets/nl2sql_api_key:ro" \
+  -e NL2SQL_API_KEY_FILE=/run/secrets/nl2sql_api_key \
   sql-generator-backend
 ```
 
@@ -167,7 +190,7 @@ Startup configuration validation checks are executed during application boot to 
 
 - **`API_KEY_NOT_CONFIGURED`**
   - *Severity*: `critical`
-  - *Trigger*: No LLM API Key is found in the database settings or in the `NL2SQL_API_KEY` environment variable.
+  - *Trigger*: No API key is found in the database settings, `NL2SQL_API_KEY_FILE` or `NL2SQL_API_KEY`.
   - *Action*: Ensure a valid API key is set in the environment or database.
 
 - **`API_KEY_INSECURE_DEFAULT`** (Sprint 32.0)
@@ -177,6 +200,24 @@ Startup configuration validation checks are executed during application boot to 
     environments no longer seed that default into a fresh database; an older database may still hold it.
   - *Action*: Set a strong `NL2SQL_API_KEY`; if the DB still holds the dev default, replace it via
     `POST /api/configs/api_key`.
+
+- **`SECRET_FILE_UNREADABLE`** (Sprint 32.2)
+  - *Severity*: `critical`
+  - *Trigger*: `NL2SQL_API_KEY_FILE` or `NVIDIA_API_KEY_FILE` is set but the file is missing, unreadable
+    (e.g. permissions for the non-root container user), empty or larger than 64 KiB. The secret is then
+    treated as not configured — there is no fallback to the plain env variable.
+  - *Action*: Fix the file / its mode (`chmod 0444`); the message names the variable only.
+
+- **`SECRET_SOURCE_CONFLICT`** (Sprint 32.2)
+  - *Severity*: `warning`
+  - *Trigger*: Both `<NAME>` and `<NAME>_FILE` are set; the file wins.
+  - *Action*: Remove the plain env variable.
+
+- **`API_KEY_ENV_SHADOWED`** (Sprint 32.2)
+  - *Severity*: `warning`
+  - *Trigger*: The database config holds an API key that differs from the env/file key; the database key
+    wins (`verify_api_key`), so rotating the env/file secret has no effect.
+  - *Action*: Change or remove the database key via the config API.
 
 - **`UNKNOWN_CONFIG_ENV_VAR`** (Sprint 32.1)
   - *Severity*: `warning` (does not fail `/ready`)

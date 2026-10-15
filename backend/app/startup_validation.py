@@ -4,6 +4,7 @@ from typing import Literal
 from app.settings import DEV_DEFAULT_API_KEY, get_settings, is_production_like_environment
 from app.database import get_config
 from app.config_contract import find_unknown_prefixed_env
+from app.secret_resolver import SECRET_FILE_VARS, resolve_secret, resolve_secret_detail
 
 class StartupValidationWarning(BaseModel):
     code: str
@@ -24,14 +25,48 @@ def validate_runtime_config() -> StartupValidationResult:
         db_api_key = get_config("api_key")
     except Exception:
         db_api_key = None
-    env_api_key = os.getenv("NL2SQL_API_KEY")
+    env_api_key = resolve_secret("NL2SQL_API_KEY")
     if not (db_api_key or env_api_key):
         warnings.append(StartupValidationWarning(
             code="API_KEY_NOT_CONFIGURED",
             severity="critical",
             message="API key is not configured via database config or environment fallback."
         ))
-        
+
+    # 1a. Secret sources (Sprint 32.2). Variable names only, never values or file paths.
+    for secret_name in SECRET_FILE_VARS:
+        resolution = resolve_secret_detail(secret_name)
+        if resolution.error:
+            warnings.append(StartupValidationWarning(
+                code="SECRET_FILE_UNREADABLE",
+                severity="critical",
+                message=(
+                    f"{resolution.file_var} is set but the secret file is {resolution.error}; "
+                    f"{secret_name} is treated as not configured."
+                )
+            ))
+        if resolution.conflict:
+            warnings.append(StartupValidationWarning(
+                code="SECRET_SOURCE_CONFLICT",
+                severity="warning",
+                message=(
+                    f"Both {secret_name} and {resolution.file_var} are set; "
+                    f"the file wins and {secret_name} is ignored."
+                )
+            ))
+
+    # 1c. DB key shadows the env/file key (verify_api_key prefers the DB), so rotating the
+    # env/file secret would have no effect.
+    if db_api_key and env_api_key and db_api_key != env_api_key:
+        warnings.append(StartupValidationWarning(
+            code="API_KEY_ENV_SHADOWED",
+            severity="warning",
+            message=(
+                "An API key stored in the database config shadows the NL2SQL_API_KEY / "
+                "NL2SQL_API_KEY_FILE value; change it via the config API or remove it."
+            )
+        ))
+
     is_prod = is_production_like_environment(settings.environment)
 
     # 1b. Effective key (DB wins over env, as in verify_api_key) is the public dev default
