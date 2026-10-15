@@ -1162,6 +1162,8 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   kontrollü, güvenlik yedekli restore; migration öncesi otomatik app DB kopyası. (PR #195)
 - **Logging** (Sprint 32.9): merkezi `configure_logging()` — `NL2SQL_LOG_LEVEL`/`NL2SQL_LOG_FORMAT` (text|json),
   `request_id`/`job_id` bağlamı, secret redaction, uvicorn yönlendirmesi; prod compose JSON log. (PR #196)
+- **LLM Failover** (Sprint 32.10): model zinciri (`NL2SQL_LLM_FALLBACK_MODELS`), tipli LLM hataları, model
+  başına devre kesici; `GET /api/v1/admin/llm`; `/ready` `llm_circuits_open`. (PR #197)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
