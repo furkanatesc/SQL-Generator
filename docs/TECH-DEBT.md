@@ -1572,7 +1572,8 @@ API key'i Docker secret'a taşımayı ve secret-kaynak uyarılarını ekledi. Ka
 ekledi. Kapsam dışı:
 
 1. **Down migration yok** — geri dönüş = yedekten dönüş; eski imaja dönüş `DB_SCHEMA_AHEAD` (critical) verir.
-2. **Migration öncesi otomatik yedek yok.** *→ 32.8 Backup/Restore*
+2. **Migration öncesi otomatik yedek yok.** *→ 32.8 Backup/Restore* **32.8 (PR #195): app DB için ÇÖZÜLDÜ**
+   (`NL2SQL_BACKUP_BEFORE_MIGRATION`); trace DB kopyalanmıyor (§44).
 3. **32.4 (PR #191): tek-host eşzamanlı açılış `BEGIN IMMEDIATE` + transaction içi sürüm kontrolüyle
    ÇÖZÜLDÜ;** çok-host koordinasyonu hâlâ yok. Eski not: **Çok-process migration kilidi yok** — tek backend process varsayımı (SQLite yazma kilidi + idempotent
    baseline riski sınırlar); replika ölçeklemede gerekli. *İlgili Dosya:* `backend/app/migrations/runner.py`
@@ -1640,3 +1641,18 @@ Kapsam dışı:
 3. **Bileşen durumları metrik olarak yayınlanmıyor** (Prometheus vb.). *→ 32.9 Logging / observability*
 4. **Frontend'de sağlık paneli yok.**
 5. **Trace DB için ayrı disk/erişim kontrolü yok** — disk ölçümü app DB volume'unda (prod'da ikisi aynı volume).
+
+## §44. Sprint 32.8 (Backup / Restore) devirleri — AÇIK
+
+32.8 `python -m app.backup` CLI'ını (tutarlı SQLite anlık görüntüleri, checksum'lı manifest, doğrulanan restore) ve
+migration öncesi otomatik app DB kopyasını ekledi. Kapsam dışı:
+
+1. **Zamanlanmış yedek yok** — host cron'u + `docker compose exec backend python -m app.backup create` (runbook).
+2. **Off-host / uzak depolama (S3 vb.) ve şifreleme yok** — arşiv `sqlgen_backups` volume'unda, aynı host'ta;
+   operatör `docker compose cp` ile dışarı almalı.
+3. **Qdrant yedeği best-effort** — gömülü modda snapshot API yok; yazma sırasında alınan kopya tutarsız olabilir
+   (çoğu yeniden indekslenebilir; API ile eklenen iş kuralları/SQL geçmişi risk altında). Harici Qdrant + snapshot (§36.5).
+4. **PITR / artımlı yedek yok** — her yedek tam kopya.
+5. **Restore çalışan process'leri durdurmuyor** — runbook'taki sıra (stop → `compose run` restore → up) zorunlu;
+   kod kontrol etmiyor.
+6. **Trace DB için migration öncesi kopya yok** (yalnız app DB).
