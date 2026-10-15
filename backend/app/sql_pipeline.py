@@ -40,6 +40,7 @@ from app.errors import ErrorCode
 import time
 
 from app.trace.redaction import redact_sensitive_text, redact_sensitive
+from app.secret_resolver import known_secret_values
 
 def enforce_oracle_case(sql: str, dialect: str = "oracle") -> str:
     """
@@ -670,9 +671,7 @@ class SQLGenerationPipeline:
         known_secrets = set()
         if api_key:
             known_secrets.add(api_key)
-        env_nvidia = os.environ.get("NVIDIA_API_KEY")
-        if env_nvidia:
-            known_secrets.add(env_nvidia)
+        known_secrets |= known_secret_values()
         for env_k, env_v in os.environ.items():
             if env_v and any(sec in env_k.upper() for sec in ["KEY", "SECRET", "PASSWORD", "TOKEN"]):
                 known_secrets.add(env_v)
@@ -846,9 +845,7 @@ class SQLGenerationPipeline:
 
         # Collect known secrets dynamically for trace redaction
         known_secrets = set(known_secrets or set())
-        env_nvidia = os.environ.get("NVIDIA_API_KEY")
-        if env_nvidia:
-            known_secrets.add(env_nvidia)
+        known_secrets |= known_secret_values()
         for env_k, env_v in os.environ.items():
             if env_v and any(sec in env_k.upper() for sec in ["KEY", "SECRET", "PASSWORD", "TOKEN"]):
                 known_secrets.add(env_v)

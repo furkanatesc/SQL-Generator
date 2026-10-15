@@ -116,10 +116,35 @@ def test_backend_pins_production_safe_settings(backend):
     assert env["NL2SQL_DEBUG_ENDPOINTS_ENABLED"] == "false"
 
 
-@pytest.mark.parametrize("var", ["NL2SQL_API_KEY", "NL2SQL_CORS_ALLOW_ORIGINS"])
-def test_backend_required_vars_fail_fast(backend, var):
+def test_backend_required_vars_fail_fast(backend):
     # `${VAR:?msg}` makes `docker compose` refuse to start when the value is missing.
+    var = "NL2SQL_CORS_ALLOW_ORIGINS"
     assert _env(backend)[var].startswith("${" + var + ":?"), f"{var} must be required via :?"
+
+
+# --- compose: secrets (Sprint 32.2) ---------------------------------------------
+
+def test_api_key_is_a_docker_secret_not_an_env_value(compose, backend):
+    env = _env(backend)
+    assert "NL2SQL_API_KEY" not in env, "the API key must not be passed as a plain env value"
+    assert env["NL2SQL_API_KEY_FILE"] == "/run/secrets/nl2sql_api_key"
+    assert "nl2sql_api_key" in backend.get("secrets", [])
+    secret = compose["secrets"]["nl2sql_api_key"]
+    # Fail fast like the old `${NL2SQL_API_KEY:?}`: compose refuses to start without the path.
+    assert secret["file"].startswith("${SQLGEN_API_KEY_SECRET_FILE:?")
+
+
+def test_every_backend_secret_is_declared(compose, backend):
+    declared = set(compose.get("secrets", {}) or {})
+    for name in backend.get("secrets", []):
+        assert name in declared, f"backend uses undeclared secret {name}"
+        target = "/run/secrets/" + name
+        assert target in _env(backend).values(), f"secret {name} is mounted but no *_FILE points at it"
+
+
+def test_secrets_dir_is_gitignored():
+    lines = {line.strip().rstrip("/") for line in _read(os.path.join(REPO_ROOT, ".gitignore")).splitlines()}
+    assert "secrets" in lines or "/secrets" in lines
 
 
 @pytest.mark.parametrize(

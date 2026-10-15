@@ -3,6 +3,7 @@
 #
 # Usage:
 #   cp .env.prod.example .env      # fill in real values; .env is gitignored
+#   mkdir -p secrets && openssl rand -hex 32 > secrets/nl2sql_api_key && chmod 0444 secrets/nl2sql_api_key
 #   docker compose -f docker-compose.prod.yml up -d --build --wait
 #
 # Contract guard: backend/tests/test_prod_compose_contract.py
@@ -24,11 +25,15 @@ services:
       NL2SQL_UPLOAD_DIR: /app/uploads
       SQLGEN_DB_PATH: /app/data/sqlgen.db
       NL2SQL_TRACE_DB_PATH: /app/data/nl2sql_traces.db
-      # Required: compose refuses to start without them.
-      NL2SQL_API_KEY: ${NL2SQL_API_KEY:?set NL2SQL_API_KEY in .env}
+      # Sprint 32.2: the API key is a Docker secret (file), never a plain env value.
+      NL2SQL_API_KEY_FILE: /run/secrets/nl2sql_api_key
+      # Required: compose refuses to start without it.
       NL2SQL_CORS_ALLOW_ORIGINS: ${NL2SQL_CORS_ALLOW_ORIGINS:?set NL2SQL_CORS_ALLOW_ORIGINS (JSON array) in .env}
       # Optional: LLM provider key (can also be configured at runtime via the config API).
+      # An optional secret cannot be a compose file secret; see the runbook for NVIDIA_API_KEY_FILE.
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+    secrets:
+      - nl2sql_api_key
     volumes:
       - sqlgen_data:/app/data
       - sqlgen_uploads:/app/uploads
@@ -57,6 +62,11 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+secrets:
+  nl2sql_api_key:
+    # Host file holding only the key; must be readable by the container's non-root user (0444).
+    file: ${SQLGEN_API_KEY_SECRET_FILE:?set SQLGEN_API_KEY_SECRET_FILE (path to the API key file) in .env}
 
 volumes:
   sqlgen_data:

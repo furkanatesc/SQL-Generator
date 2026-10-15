@@ -1,10 +1,10 @@
-import os
 import time
 import json
 import random
 import threading
 from typing import Dict, Any, List, Set, Tuple, Optional
 import requests
+from app.secret_resolver import resolve_secret
 
 class TokenBucket:
     def __init__(self, capacity: float, fill_rate: float):
@@ -44,11 +44,11 @@ class TokenBucket:
 
 def get_nvidia_api_key() -> str:
     """
-    Öncelikli olarak Çevre değişkenlerinden (Environment Variables) NVIDIA_API_KEY okur.
+    Öncelikli olarak NVIDIA_API_KEY_FILE / NVIDIA_API_KEY (app/secret_resolver.py) okur.
     Bulamazsa local veritabanı configs tablosundan çeker.
     """
-    # 1. Environment Variable
-    api_key = os.environ.get("NVIDIA_API_KEY")
+    # 1. Secret file / environment variable
+    api_key = resolve_secret("NVIDIA_API_KEY")
     if api_key:
         return api_key
         

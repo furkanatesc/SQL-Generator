@@ -286,11 +286,19 @@ jobs:
     timeout-minutes: 20
     env:
       COMPOSE_FILE: docker-compose.prod.yml
+      # Used by the smoke requests below; the backend receives it only as a Docker secret file.
       NL2SQL_API_KEY: ci-prod-compose-smoke-key
+      SQLGEN_API_KEY_SECRET_FILE: ./secrets/nl2sql_api_key
       NL2SQL_CORS_ALLOW_ORIGINS: '["http://localhost:8080"]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Write the API key Docker secret
+        run: |
+          mkdir -p secrets
+          printf '%s\n' "$NL2SQL_API_KEY" > secrets/nl2sql_api_key
+          chmod 0444 secrets/nl2sql_api_key
 
       - name: Validate compose file
         run: docker compose config -q
@@ -305,6 +313,15 @@ jobs:
           # and a writable upload dir (i.e. the volumes are owned by the non-root user).
           curl -fsS http://localhost:8000/ready
           curl -fsS http://localhost:8080/ | grep -qi "<div id=\"app\""
+
+      - name: API key is a Docker secret, not a container env value
+        run: |
+          # Sprint 32.2: the key authenticates (read from /run/secrets) ...
+          curl -fsS http://localhost:8000/api/v1/workspaces -H "X-API-Key: $NL2SQL_API_KEY" > /dev/null
+          # ... a wrong key is rejected ...
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/api/v1/workspaces -H 'X-API-Key: wrong')" = 403
+          # ... and the value never appears in the container environment.
+          ! docker compose exec -T backend env | grep -F "$NL2SQL_API_KEY"
 
       - name: Persistence survives container recreation
         run: |
