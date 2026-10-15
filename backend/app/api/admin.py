@@ -70,6 +70,32 @@ class QueueStats(BaseModel):
     retry_backoff_seconds: float
 
 
+class LLMModelState(BaseModel):
+    model: str
+    state: str
+    consecutive_failures: int
+    retry_in_seconds: float
+
+
+class LLMStatus(BaseModel):
+    chain: list[LLMModelState]
+    failure_threshold: int
+    reset_seconds: float
+
+
+@router.get("/llm", response_model=ApiResponse[LLMStatus])
+def admin_llm() -> ApiResponse[LLMStatus]:
+    """Sprint 32.10: model failover chain and per-model circuit state (this process)."""
+    from app.llm.failover import circuit_snapshot
+
+    settings = get_settings()
+    return ApiResponse[LLMStatus](data=LLMStatus(
+        chain=[LLMModelState(**m) for m in circuit_snapshot()],
+        failure_threshold=settings.llm_circuit_failures,
+        reset_seconds=settings.llm_circuit_reset_seconds,
+    ))
+
+
 class RequeuedJob(BaseModel):
     id: str
     status: str

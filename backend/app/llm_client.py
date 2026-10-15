@@ -160,21 +160,48 @@ INSTRUCTIONS:
 """
         return prompt
 
+class LLMError(Exception):
+    """Sprint 32.10: typed LLM call failure (still a plain Exception for older callers)."""
+
+    def __init__(self, status: Optional[int], message: str):
+        super().__init__(message)
+        self.status = status
+
+
+class LLMTransientError(LLMError):
+    """429 / 5xx / network or timeout, after the client's own retries: worth another model."""
+
+
+class LLMClientError(LLMError):
+    """Non-retryable 4xx (400/401/403/404...)."""
+
+
+DEFAULT_LLM_MODEL = "meta/llama-3.3-70b-instruct"
+
+
+def configured_llm_model() -> str:
+    """Primary model from the `llm_model` config (short names are normalised)."""
+    from app.database import get_config
+
+    cfg_model = get_config("llm_model")
+    if not cfg_model:
+        return DEFAULT_LLM_MODEL
+    if "/" in cfg_model:
+        return cfg_model
+    if "llama-3.3-70b" in cfg_model:
+        return f"meta/{cfg_model}"
+    return f"nvidia/{cfg_model}"
+
+
 class NVIDIAClient:
-    def __init__(self):
+    def __init__(self, model: Optional[str] = None):
         self.base_url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        if model:
+            # Sprint 32.10: explicit model (failover chain).
+            self.model = model
+            return
         # Configs tablosundan model adını oku, yoksa doğru default modeli kullan
-        from app.database import get_config
-        cfg_model = get_config("llm_model")
-        if cfg_model:
-            if "/" in cfg_model:
-                self.model = cfg_model
-            elif "llama-3.3-70b" in cfg_model:
-                self.model = f"meta/{cfg_model}"
-            else:
-                self.model = f"nvidia/{cfg_model}"
-        else:
-            self.model = "meta/llama-3.3-70b-instruct"
+        self.model = configured_llm_model()
 
     @property
     def limiter(self) -> "TokenBucket":
@@ -238,7 +265,9 @@ class NVIDIAClient:
                 # Retry edilebilir hatalar (429 Too Many Requests veya 5xx Server Error)
                 if response.status_code == 429 or 500 <= response.status_code < 600:
                     if attempt == max_retries - 1:
-                        raise Exception(f"NVIDIA API Hatası {response.status_code}: {response.text}")
+                        raise LLMTransientError(
+                            response.status_code, f"NVIDIA API Hatası {response.status_code}: {response.text}"
+                        )
                         
                     # Üstel geri çekilme (Exponential Backoff) + Jitter
                     delay = base_delay * (2 ** attempt) + random.uniform(0.1, 0.5)
@@ -246,12 +275,14 @@ class NVIDIAClient:
                     continue
                 else:
                     # Retry edilmeyecek hatalar (400, 401, 403 vb.)
-                    raise Exception(f"NVIDIA API İstemci Hatası {response.status_code}: {response.text}")
+                    raise LLMClientError(
+                        response.status_code, f"NVIDIA API İstemci Hatası {response.status_code}: {response.text}"
+                    )
                     
             except requests.RequestException as e:
                 if attempt == max_retries - 1:
-                    raise e
+                    raise LLMTransientError(None, f"NVIDIA API bağlantı hatası: {e}") from e
                 delay = base_delay * (2 ** attempt) + random.uniform(0.1, 0.5)
                 time.sleep(delay)
                 
-        raise Exception("NVIDIA NIM API bağlantısı gerçekleştirilemedi.")
+        raise LLMTransientError(None, "NVIDIA NIM API bağlantısı gerçekleştirilemedi.")
