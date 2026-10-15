@@ -69,6 +69,10 @@ ENV_CONTRACT: tuple[EnvVar, ...] = (
            "Where `python -m app.backup` writes and lists archives."),
     EnvVar("NL2SQL_BACKUP_BEFORE_MIGRATION", "settings", False, False, "true",
            "Copy the app DB (<db>.pre-v<N>-<ts>.bak, last 3 kept) before applying pending migrations."),
+    EnvVar("NL2SQL_LOG_LEVEL", "settings", False, False, "INFO",
+           "Root log level (DEBUG|INFO|WARNING|ERROR|CRITICAL) for the API, worker and CLIs."),
+    EnvVar("NL2SQL_LOG_FORMAT", "settings", False, False, "text",
+           "Log format: text, or json (one object per line with request_id/job_id)."),
     # --- Direct os.getenv reads ----------------------------------------------------
     EnvVar("NL2SQL_API_KEY", "direct", True, True, "(none)",
            "API key fallback when no key is stored in the DB config (app/auth.py)."),

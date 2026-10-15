@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # Sprint 32.8 — backups (`python -m app.backup`) and the automatic pre-migration DB copy.
     backup_dir: str | None = None
     backup_before_migration: bool = True
+    # Sprint 32.9 — app/logging_config.py.
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    log_format: Literal["text", "json"] = "text"
 
     model_config = SettingsConfigDict(
         env_prefix="NL2SQL_",

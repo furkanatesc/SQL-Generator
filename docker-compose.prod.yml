@@ -39,6 +39,8 @@ services:
       NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE: "20"
       # Sprint 32.8: `python -m app.backup create` writes here (copy archives off-host!).
       NL2SQL_BACKUP_DIR: /app/backups
+      # Sprint 32.9: one JSON object per log line (request_id / job_id, secrets redacted).
+      NL2SQL_LOG_FORMAT: json
     secrets:
       - nl2sql_api_key
     volumes:
@@ -71,6 +73,7 @@ services:
       SQLGEN_DB_PATH: /app/data/sqlgen.db
       NL2SQL_TRACE_DB_PATH: /app/data/nl2sql_traces.db
       NL2SQL_JOB_EXECUTION_MODE: worker
+      NL2SQL_LOG_FORMAT: json
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
     volumes:
       - sqlgen_data:/app/data

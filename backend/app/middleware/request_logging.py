@@ -6,6 +6,7 @@ from urllib.parse import urlencode, parse_qsl
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.observability.performance import PerformanceClassifier
+from app.logging_config import request_id_var
 
 logger = logging.getLogger("app.request_logging")
 
@@ -34,6 +35,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         
         # Store in request state for other parts of the application
         request.state.request_id = request_id
+        # Sprint 32.9: every log record written while serving this request carries it.
+        context_token = request_id_var.set(request_id)
         
         start_time = get_current_time()
         
@@ -75,3 +78,4 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "duration_ms": duration_ms
                 }
                 logger.info(json.dumps(slow_event_data))
+            request_id_var.reset(context_token)

@@ -11,6 +11,7 @@ import logging
 from typing import Callable, Dict, Optional
 
 from app.jobs.queue_policy import is_transient_failure
+from app.logging_config import log_context
 from app.secret_resolver import resolve_secret
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,12 @@ def execute_job(
     """`on_failure(error_message, error_code, transient)` returning True means the caller
     handled the failed pipeline result (e.g. scheduled a retry), so the job is not marked
     `failed` here. Unexpected exceptions (e.g. a missing LLM key) never go through it."""
+    # Sprint 32.9: every log record of this job carries job_id (and the originating request_id).
+    with log_context(request_id=request_id, job_id=job_id):
+        _execute_job(job_id, request_id, on_log, on_failure)
+
+
+def _execute_job(job_id, request_id, on_log, on_failure) -> None:
     from app.sql_pipeline import SQLGenerationPipeline
     from app.database import get_job, update_job_status, get_config
     from app.jobs.repository import append_job_log

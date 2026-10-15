@@ -161,7 +161,9 @@ def main(argv=None) -> int:
     if argv[:1] == ["healthcheck"]:
         return 0 if healthcheck() else 1
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    from app.logging_config import configure_logging
+
+    configure_logging()  # Sprint 32.9: NL2SQL_LOG_LEVEL / NL2SQL_LOG_FORMAT, redaction, job_id context
     from app.database import init_db
     from app.settings import get_settings
 
