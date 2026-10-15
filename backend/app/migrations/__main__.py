@@ -42,4 +42,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 if __name__ == "__main__":
+    from app.logging_config import configure_logging
+
+    configure_logging()  # logs go to stderr; stdout stays pure JSON
     sys.exit(main())

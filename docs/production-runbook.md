@@ -116,6 +116,25 @@ Qdrant is restored only with `--include-qdrant`. Schedule `create` + `prune` wit
 - A configured but unreadable/empty secret file raises the critical `SECRET_FILE_UNREADABLE`
   (`/ready` 503) and is **not** silently replaced by the env value.
 
+### Logs (Sprint 32.9)
+Backend and worker write **one JSON object per line** to stderr (`NL2SQL_LOG_FORMAT=json`, level
+`NL2SQL_LOG_LEVEL`). Every line has `ts`, `level` and `logger`. Lines written while serving a request carry
+`request_id` (the same value as the `X-Request-ID` response header). Lines written while running a job carry
+`job_id` and the originating `request_id`. Request events (`"event": "http_request"`, `http_error`,
+`slow_request`) have their fields at the top level. Secrets are redacted: `api_key=`, `token=`, `sk-…`,
+`nvapi-…` and the configured secret values.
+
+```bash
+C="docker compose -f docker-compose.prod.yml"
+$C logs -f backend worker
+$C logs --no-log-prefix backend | grep '"request_id": "<id>"'      # follow one request
+$C logs --no-log-prefix worker  | grep '"job_id": "<job id>"'      # follow one job
+```
+
+Before 32.9 the API process had no logging configuration, so INFO logs (including every `http_request`
+event) were silently dropped. `uvicorn.access` is now WARNING-only because `http_request` replaces it.
+Shipping logs to Loki or ELK is the platform's job (stdout/stderr of the containers).
+
 ### Rate limits (Sprint 32.6)
 The compose file turns on per-client API limits: `NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE=300` for all requests
 and `NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE=20` for job creation. A client is its API key (hashed) or its IP. Over

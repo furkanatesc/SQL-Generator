@@ -388,6 +388,15 @@ jobs:
           curl -fsS http://localhost:8000/api/v1/workspaces -H "X-API-Key: $NL2SQL_API_KEY" | grep -q '"slug":"smoke"'
           docker compose exec -T backend python -m app.backup list | grep -q "pre-restore"
 
+      - name: Structured JSON logs with request ids
+        run: |
+          # Sprint 32.9: app INFO logs are emitted (they were silently dropped before) as JSON.
+          curl -fsS http://localhost:8000/api/jobs -H "X-API-Key: $NL2SQL_API_KEY" -H "X-Request-ID: ci-log-check" > /dev/null
+          docker compose logs --no-log-prefix backend | grep '"event": "http_request"' | grep -q '"request_id": "ci-log-check"'
+          if docker compose logs --no-log-prefix backend worker | grep -qF "$NL2SQL_API_KEY"; then
+            echo "API key leaked into logs"; exit 1
+          fi
+
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs

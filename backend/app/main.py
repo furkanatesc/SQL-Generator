@@ -134,6 +134,10 @@ app.add_middleware(RequestLoggingMiddleware)
 rag_manager = None
 logger = logging.getLogger("app.main")
 
+# Sprint 32.9: without this, app.* INFO records (e.g. http_request events) were dropped.
+from app.logging_config import configure_logging
+configure_logging()
+
 @app.on_event("startup")
 def startup_event():
     global rag_manager
@@ -163,9 +167,9 @@ def startup_event():
     try:
         from app.rag_manager import RAGManager
         rag_manager = RAGManager()
-        print("RAG Manager initialized successfully.")
+        logger.info("RAG Manager initialized successfully.")
     except Exception as e:
-        print(f"RAG Manager initialization failed: {e}")
+        logger.warning("RAG Manager initialization failed: %s", e)
 
 # API test endpoint'i
 @app.get("/health", response_model=HealthResponse)
