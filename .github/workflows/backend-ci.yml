@@ -313,6 +313,9 @@ jobs:
           # and a writable upload dir (i.e. the volumes are owned by the non-root user).
           curl -fsS http://localhost:8000/ready
           curl -fsS http://localhost:8080/ | grep -qi "<div id=\"app\""
+          # Sprint 32.6: production rate limits are active (header on a normal response).
+          curl -fsS -D - -o /dev/null http://localhost:8000/api/jobs -H "X-API-Key: $NL2SQL_API_KEY" \
+            | grep -qi "^x-ratelimit-limit: 300"
 
       - name: API key is a Docker secret, not a container env value
         run: |

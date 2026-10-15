@@ -87,6 +87,15 @@ with the project name (by default the checkout directory, e.g. `sqlgen_sqlgen_da
 - A configured but unreadable/empty secret file raises the critical `SECRET_FILE_UNREADABLE`
   (`/ready` 503) and is **not** silently replaced by the env value.
 
+### Rate limits (Sprint 32.6)
+The compose file turns on per-client API limits: `NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE=300` for all requests
+and `NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE=20` for job creation. A client is its API key (hashed) or its IP. Over
+the limit, the API returns **429** with `{"error": {"code": "RATE_LIMITED", ...}}` and a `Retry-After` header;
+normal responses carry `X-RateLimit-Limit` / `X-RateLimit-Remaining`. Probes (`/health`, `/ready`) are
+exempt. The limits are kept in memory per API process and reset on restart. LLM calls are separately
+throttled per process (API or worker) by `NL2SQL_LLM_REQUESTS_PER_MINUTE` / `NL2SQL_LLM_BURST`; across
+workers, use `NL2SQL_JOB_MAX_CONCURRENT` (32.5) as the global brake.
+
 ### Job worker (Sprint 32.4)
 NL→SQL jobs run in the separate `worker` service; the backend runs with `NL2SQL_JOB_EXECUTION_MODE=worker`,
 so it only writes `pending` jobs. The worker claims them from the shared app database (claims are atomic),

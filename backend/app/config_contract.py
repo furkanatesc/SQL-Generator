@@ -56,6 +56,13 @@ ENV_CONTRACT: tuple[EnvVar, ...] = (
            "Worker mode: base of the exponential retry backoff (capped at 900 s)."),
     EnvVar("NL2SQL_JOB_MAX_CONCURRENT", "settings", False, False, "0",
            "Worker mode: max jobs processing at once across all workers (0 = unlimited)."),
+    EnvVar("NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE", "settings", False, False, "0",
+           "Per-client (API key or IP) API request limit per minute; 0 = off."),
+    EnvVar("NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE", "settings", False, False, "0",
+           "Per-client limit for the job-creation endpoints per minute; 0 = off."),
+    EnvVar("NL2SQL_LLM_REQUESTS_PER_MINUTE", "settings", False, False, "15",
+           "Process-wide LLM (NVIDIA NIM) call rate shared by all jobs."),
+    EnvVar("NL2SQL_LLM_BURST", "settings", False, False, "3", "Burst size of the LLM call limiter."),
     # --- Direct os.getenv reads ----------------------------------------------------
     EnvVar("NL2SQL_API_KEY", "direct", True, True, "(none)",
            "API key fallback when no key is stored in the DB config (app/auth.py)."),
