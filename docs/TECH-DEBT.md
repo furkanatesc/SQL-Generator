@@ -1627,3 +1627,16 @@ process-geneli LLM çağrı limiter'ını ekledi. Kapsam dışı:
 4. **`X-Forwarded-For` güvenilmiyor** — key'siz istemci doğrudan bağlanan IP ile anahtarlanır; reverse proxy
    gelince (§36.1) proxy arkasında tüm anonim istemciler tek IP olur.
 5. **İstek gövdesi / upload boyutu sınırı yok.**
+
+## §43. Sprint 32.7 (Health Checks) devirleri — AÇIK
+
+32.7 `/ready`'ye bileşen-bazlı kontrolleri, disk/LLM key kontrollerini ve DB-farkında worker healthcheck'ini ekledi.
+Kapsam dışı:
+
+1. **`/health` liveness her probe'da tam startup doğrulaması çalıştırıyor** (DB sorguları, upload yazma testi,
+   migration incelemesi) — `HealthResponse.config` sözleşmesi bu sayıları içerdiği için hafif bir `/livez`
+   ayrımı yapılmadı. *İlgili Dosya:* `backend/app/health.py::build_health_response`
+2. **LLM sağlayıcısı / Qdrant canlı erişilebilirlik kontrolü yok** — yalnız yapılandırma (maliyet + rate limit).
+3. **Bileşen durumları metrik olarak yayınlanmıyor** (Prometheus vb.). *→ 32.9 Logging / observability*
+4. **Frontend'de sağlık paneli yok.**
+5. **Trace DB için ayrı disk/erişim kontrolü yok** — disk ölçümü app DB volume'unda (prod'da ikisi aynı volume).
