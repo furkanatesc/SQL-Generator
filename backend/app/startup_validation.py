@@ -4,6 +4,7 @@ from typing import Literal
 from app.settings import DEV_DEFAULT_API_KEY, get_settings, is_production_like_environment
 from app.database import get_config
 from app.config_contract import find_unknown_prefixed_env
+from app.migrations.status import database_statuses
 from app.secret_resolver import SECRET_FILE_VARS, resolve_secret, resolve_secret_detail
 
 class StartupValidationWarning(BaseModel):
@@ -125,6 +126,33 @@ def validate_runtime_config() -> StartupValidationResult:
                 message="Upload directory does not exist or is not a directory."
             ))
             
+    # 4b. Database schema versions (Sprint 32.3). Labels and version numbers only, never paths.
+    try:
+        db_statuses = database_statuses()
+    except Exception:
+        db_statuses = []
+    for db, status in db_statuses:
+        if status is None:
+            continue
+        if status.ahead:
+            warnings.append(StartupValidationWarning(
+                code="DB_SCHEMA_AHEAD",
+                severity="critical",
+                message=(
+                    f"The {db.label} database schema is at version {status.current}, newer than this "
+                    f"release supports ({status.latest}); no migrations were applied."
+                )
+            ))
+        elif status.pending:
+            warnings.append(StartupValidationWarning(
+                code="DB_MIGRATIONS_PENDING",
+                severity="critical",
+                message=(
+                    f"The {db.label} database has pending migrations {status.pending} "
+                    f"(at version {status.current} of {status.latest}); a migration likely failed."
+                )
+            ))
+
     # 5. Unknown NL2SQL_* variables (Sprint 32.1): Settings ignores extras, so a typo
     # would otherwise be silently dropped. Names only, never values.
     unknown_env = find_unknown_prefixed_env(os.environ)
