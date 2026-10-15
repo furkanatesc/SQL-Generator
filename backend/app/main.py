@@ -113,6 +113,11 @@ app.include_router(feedback_v1_router)
 app.include_router(admin_router)
 app.include_router(api_keys_router)
 
+# Rate limiting (Sprint 32.6). Added before CORS so it runs *inside* it: a 429 still carries
+# the CORS headers (and preflight is answered by CORS before reaching the limiter).
+from app.rate_limit import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,

@@ -34,6 +34,9 @@ services:
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
       # Sprint 32.4: the API only enqueues jobs; the `worker` service runs them.
       NL2SQL_JOB_EXECUTION_MODE: worker
+      # Sprint 32.6: per-client API rate limits (off by default outside this file).
+      NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE: "300"
+      NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE: "20"
     secrets:
       - nl2sql_api_key
     volumes:

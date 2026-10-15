@@ -98,6 +98,13 @@ def worker(compose):
     return compose["services"]["worker"]
 
 
+def test_backend_enables_rate_limits(backend):
+    # Sprint 32.6: limits are off by default (dev/test) and pinned on in production.
+    env = _env(backend)
+    assert int(env["NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE"]) > 0
+    assert 0 < int(env["NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE"]) <= int(env["NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE"])
+
+
 def test_api_only_enqueues_and_worker_executes(backend, worker):
     assert _env(backend)["NL2SQL_JOB_EXECUTION_MODE"] == "worker"
     assert _env(worker)["NL2SQL_JOB_EXECUTION_MODE"] == "worker"

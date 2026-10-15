@@ -56,6 +56,7 @@ class ApiResponse(BaseModel, Generic[DataT]):
 _REQUIRED_ERROR_CODES: tuple[str, ...] = (
     "BAD_REQUEST", "UNAUTHORIZED", "FORBIDDEN",
     "NOT_FOUND", "CONFLICT", "VALIDATION_ERROR", "INTERNAL_SERVER_ERROR",
+    "RATE_LIMITED",  # Sprint 32.6
 )
 
 
