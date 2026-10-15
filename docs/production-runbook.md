@@ -229,6 +229,33 @@ To prevent unauthorized information exposure, the health endpoint strictly adher
 
 ---
 
+## Readiness Components (Sprint 32.7)
+
+`/ready` also returns `checks`, one entry per component: `{"status": "ok" | "degraded" | "fail", "reason": <code> | null}`.
+Any `fail` makes `/ready` return 503. `degraded` never does. Reasons are fixed codes (usually a startup
+warning code in lower case), never paths or values.
+
+| Component | `fail` when | `degraded` when |
+| :--- | :--- | :--- |
+| `database` | `SELECT 1` fails (`unreachable`) | — |
+| `migrations` | `db_migrations_pending`, `db_schema_ahead` | — |
+| `api_key` | `api_key_not_configured`, `api_key_insecure_default` | `api_key_env_shadowed` |
+| `secrets` | `secret_file_unreadable` | `secret_source_conflict` |
+| `upload_dir` | `upload_dir_not_writable`, `upload_dir_not_found` | — |
+| `job_queue` | — | `job_queue_stalled` |
+| `disk` | free space < `NL2SQL_HEALTH_MIN_FREE_DISK_MB` (`low_disk_space`) | < 2× that (`disk_space_low_soon`) |
+| `llm` | — | no LLM key configured (`llm_key_not_configured`): jobs will fail |
+| `config` | any other critical warning (e.g. `cors_wildcard_in_production`) | any other warning (e.g. `unknown_config_env_var`) |
+
+```bash
+curl -s http://localhost:8000/ready | python3 -m json.tool
+```
+
+The worker container's healthcheck (`python -m app.jobs.worker healthcheck`) passes only when the worker
+loop ran recently **and** the app database is reachable.
+
+---
+
 ## Startup Warning Interpretation
 
 Startup configuration validation checks are executed during application boot to identify misconfigurations.

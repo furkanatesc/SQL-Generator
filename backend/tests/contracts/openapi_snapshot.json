@@ -1113,6 +1113,36 @@
         "title": "CancelJobResponse",
         "type": "object"
       },
+      "ComponentCheck": {
+        "description": "Sprint 32.7: one readiness component; `reason` is a short fixed code, never a path or value.",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "degraded",
+              "fail"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ComponentCheck",
+        "type": "object"
+      },
       "ConfigResponse": {
         "properties": {
           "key": {
@@ -3158,6 +3188,13 @@
           "api_key_configured": {
             "title": "Api Key Configured",
             "type": "boolean"
+          },
+          "checks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ComponentCheck"
+            },
+            "title": "Checks",
+            "type": "object"
           },
           "critical_warnings_count": {
             "title": "Critical Warnings Count",

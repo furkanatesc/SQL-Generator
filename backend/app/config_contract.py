@@ -63,6 +63,8 @@ ENV_CONTRACT: tuple[EnvVar, ...] = (
     EnvVar("NL2SQL_LLM_REQUESTS_PER_MINUTE", "settings", False, False, "15",
            "Process-wide LLM (NVIDIA NIM) call rate shared by all jobs."),
     EnvVar("NL2SQL_LLM_BURST", "settings", False, False, "3", "Burst size of the LLM call limiter."),
+    EnvVar("NL2SQL_HEALTH_MIN_FREE_DISK_MB", "settings", False, False, "100",
+           "/ready fails (disk check) below this much free space on the app DB volume; 0 = off."),
     # --- Direct os.getenv reads ----------------------------------------------------
     EnvVar("NL2SQL_API_KEY", "direct", True, True, "(none)",
            "API key fallback when no key is stored in the DB config (app/auth.py)."),

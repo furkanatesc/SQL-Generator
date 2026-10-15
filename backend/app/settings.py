@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     rate_limit_jobs_per_minute: int = Field(default=0, ge=0)
     llm_requests_per_minute: float = Field(default=15.0, gt=0)
     llm_burst: int = Field(default=3, ge=1)
+    # Sprint 32.7 — /ready fails below this much free space on the app DB volume (0 = off).
+    health_min_free_disk_mb: int = Field(default=100, ge=0)
 
     model_config = SettingsConfigDict(
         env_prefix="NL2SQL_",

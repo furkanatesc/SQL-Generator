@@ -22,12 +22,19 @@ class HealthResponse(BaseModel):
     config: RuntimeConfigDiagnostics
 
 
+class ComponentCheck(BaseModel):
+    """Sprint 32.7: one readiness component; `reason` is a short fixed code, never a path or value."""
+    status: Literal["ok", "degraded", "fail"]
+    reason: Optional[str] = None
+
+
 class ReadinessResponse(BaseModel):
     status: Literal["ok", "unhealthy"]
     database_reachable: bool
     api_key_configured: bool
     upload_dir_writable: bool
     critical_warnings_count: int
+    checks: Dict[str, ComponentCheck] = Field(default_factory=dict)
 
 
 class ConfigUpdateRequest(BaseModel):
