@@ -10,14 +10,24 @@ import datetime
 import logging
 from typing import Callable, Dict, Optional
 
+from app.jobs.queue_policy import is_transient_failure
 from app.secret_resolver import resolve_secret
 
 logger = logging.getLogger(__name__)
 
 LogSink = Callable[[Dict], None]
+FailureHook = Callable[[str, Optional[str], bool], bool]
 
 
-def execute_job(job_id: str, request_id: Optional[str] = None, on_log: Optional[LogSink] = None) -> None:
+def execute_job(
+    job_id: str,
+    request_id: Optional[str] = None,
+    on_log: Optional[LogSink] = None,
+    on_failure: Optional[FailureHook] = None,
+) -> None:
+    """`on_failure(error_message, error_code, transient)` returning True means the caller
+    handled the failed pipeline result (e.g. scheduled a retry), so the job is not marked
+    `failed` here. Unexpected exceptions (e.g. a missing LLM key) never go through it."""
     from app.sql_pipeline import SQLGenerationPipeline
     from app.database import get_job, update_job_status, get_config
     from app.jobs.repository import append_job_log
@@ -86,6 +96,11 @@ def execute_job(job_id: str, request_id: Optional[str] = None, on_log: Optional[
             # tipsiz string kod taşır, enum değil). ErrorCode enum üyelerinden
             # .value çıkar; ham string ise olduğu gibi geç (defensive).
             ec = res.get("error_code")
+            # Sprint 32.5: the worker may retry / dead-letter instead (inline: no hook).
+            if on_failure is not None and on_failure(
+                res["error"] or "SQL üretimi başarısız.", getattr(ec, "value", ec), is_transient_failure(res)
+            ):
+                return
             update_job_status(
                 job_id, "failed",
                 error_message=res["error"] or "SQL üretimi başarısız.",

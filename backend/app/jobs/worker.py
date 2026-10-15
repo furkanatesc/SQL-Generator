@@ -7,6 +7,10 @@ Claims `pending` jobs from the app database one at a time (`claim_next_job` is a
 several worker processes can share one database), heartbeats while a job runs, and fails
 `processing` jobs whose heartbeat is older than `NL2SQL_JOB_STALE_SECONDS` (their worker died).
 Use with `NL2SQL_JOB_EXECUTION_MODE=worker` on the API so it only enqueues.
+
+Sprint 32.5: claims honour priority, retry backoff and `NL2SQL_JOB_MAX_CONCURRENT`; transient
+failures (and stale jobs) are retried up to `NL2SQL_JOB_MAX_ATTEMPTS`, then dead-lettered
+(policy: `app/jobs/queue_policy.py`).
 """
 import logging
 import os
@@ -20,7 +24,14 @@ import uuid
 from typing import Optional
 
 from app.jobs.executor import execute_job
-from app.jobs.repository import ABANDONED_MESSAGE, claim_next_job, fail_abandoned_jobs, touch_heartbeat
+from app.jobs.queue_policy import backoff_seconds, decide_failure
+from app.jobs.repository import (
+    claim_next_job,
+    dead_letter,
+    recover_stale_jobs,
+    schedule_retry,
+    touch_heartbeat,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +49,18 @@ class JobWorker:
         stale_seconds: float = 300,
         heartbeat_seconds: Optional[float] = None,
         liveness_path: Optional[str] = None,
+        max_attempts: int = 3,
+        retry_backoff_seconds: float = 30,
+        max_concurrent: int = 0,
     ):
         self.worker_id = worker_id or f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
         self.poll_seconds = poll_seconds
         self.stale_seconds = stale_seconds
         self.heartbeat_seconds = heartbeat_seconds or max(1.0, stale_seconds / 5)
         self.liveness_path = liveness_path
+        self.max_attempts = max_attempts
+        self.retry_backoff_seconds = retry_backoff_seconds
+        self.max_concurrent = max_concurrent
 
     def _mark_alive(self) -> None:
         if not self.liveness_path:
@@ -58,12 +75,12 @@ class JobWorker:
     def run_once(self) -> bool:
         """Recover stale jobs, then claim and run at most one job. True if a job ran."""
         self._mark_alive()
-        failed = fail_abandoned_jobs(("processing",), older_than_seconds=self.stale_seconds,
-                                     message=ABANDONED_MESSAGE)
-        if failed:
-            logger.warning("failed %d stale job(s) with no worker heartbeat", len(failed))
+        requeued, dead = recover_stale_jobs(self.stale_seconds, self.max_attempts, self.retry_backoff_seconds)
+        if requeued or dead:
+            logger.warning("stale jobs with no worker heartbeat: requeued=%d dead_lettered=%d",
+                           len(requeued), len(dead))
 
-        job = claim_next_job(self.worker_id)
+        job = claim_next_job(self.worker_id, max_concurrent=self.max_concurrent)
         if job is None:
             return False
 
@@ -78,13 +95,33 @@ class JobWorker:
         beater.start()
         try:
             logger.info("worker %s running job %s", self.worker_id, job["id"])
-            execute_job(job["id"])
+            execute_job(job["id"], on_failure=self._failure_hook(job))
         except Exception:  # noqa: BLE001 — execute_job records failures; never kill the loop
             logger.exception("job %s crashed the executor", job["id"])
         finally:
             stop.set()
             beater.join(timeout=5)
         return True
+
+    def _failure_hook(self, job):
+        """Sprint 32.5: retry transient failures with backoff, dead-letter when exhausted."""
+        attempts = job.get("attempts") or 1
+
+        def on_failure(error_message, error_code, transient) -> bool:
+            decision = decide_failure(attempts, self.max_attempts, transient)
+            if decision == "retry":
+                delay = backoff_seconds(attempts, self.retry_backoff_seconds)
+                logger.info("job %s attempt %d/%d failed transiently; retry in %.0fs",
+                            job["id"], attempts, self.max_attempts, delay)
+                schedule_retry(job["id"], delay, error_message, error_code)
+                return True
+            if decision == "dead_letter":
+                logger.warning("job %s dead-lettered after %d attempts", job["id"], attempts)
+                dead_letter(job["id"], error_message, error_code)
+                return True
+            return False
+
+        return on_failure
 
     def run_forever(self, stop_event: threading.Event) -> None:
         logger.info("job worker %s started", self.worker_id)
@@ -124,6 +161,9 @@ def main(argv=None) -> int:
         poll_seconds=settings.job_worker_poll_seconds,
         stale_seconds=settings.job_stale_seconds,
         liveness_path=DEFAULT_LIVENESS_PATH,
+        max_attempts=settings.job_max_attempts,
+        retry_backoff_seconds=settings.job_retry_backoff_seconds,
+        max_concurrent=settings.job_max_concurrent,
     ).run_forever(stop)
     return 0
 

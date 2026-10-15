@@ -360,6 +360,62 @@
         "title": "ApiResponse[QueryRunResponse]",
         "type": "object"
       },
+      "ApiResponse_QueueStats_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/QueueStats"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[QueueStats]",
+        "type": "object"
+      },
+      "ApiResponse_RequeuedJob_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RequeuedJob"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponseMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponse[RequeuedJob]",
+        "type": "object"
+      },
       "ApiResponse_RuntimeConfigDiagnostics_": {
         "properties": {
           "data": {
@@ -2069,6 +2125,13 @@
               }
             ],
             "title": "Previous Sql"
+          },
+          "priority": {
+            "default": 0,
+            "maximum": 10.0,
+            "minimum": -10.0,
+            "title": "Priority",
+            "type": "integer"
           }
         },
         "required": [
@@ -3003,6 +3066,63 @@
         "title": "QueryRunResult",
         "type": "object"
       },
+      "QueueStats": {
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "dead_lettered": {
+            "title": "Dead Lettered",
+            "type": "integer"
+          },
+          "execution_mode": {
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "max_concurrent": {
+            "title": "Max Concurrent",
+            "type": "integer"
+          },
+          "oldest_pending_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Pending Age Seconds"
+          },
+          "retry_backoff_seconds": {
+            "title": "Retry Backoff Seconds",
+            "type": "number"
+          },
+          "retry_scheduled": {
+            "title": "Retry Scheduled",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "execution_mode",
+          "counts",
+          "retry_scheduled",
+          "dead_lettered",
+          "max_attempts",
+          "max_concurrent",
+          "retry_backoff_seconds"
+        ],
+        "title": "QueueStats",
+        "type": "object"
+      },
       "RAGSearchRequest": {
         "properties": {
           "collection": {
@@ -3513,6 +3633,34 @@
           "changed"
         ],
         "title": "ReplayValidationDelta",
+        "type": "object"
+      },
+      "RequeuedJob": {
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "attempts",
+          "priority"
+        ],
+        "title": "RequeuedJob",
         "type": "object"
       },
       "ResourceCounts": {
@@ -6511,6 +6659,56 @@
         ]
       }
     },
+    "/api/v1/admin/jobs/{job_id}/requeue": {
+      "post": {
+        "operationId": "admin_requeue_job_api_v1_admin_jobs__job_id__requeue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_RequeuedJob_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Admin Requeue Job",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/overview": {
       "get": {
         "operationId": "admin_overview_api_v1_admin_overview_get",
@@ -6535,6 +6733,35 @@
           }
         ],
         "summary": "Admin Overview",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/queue": {
+      "get": {
+        "operationId": "admin_queue_api_v1_admin_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_QueueStats_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "summary": "Admin Queue",
         "tags": [
           "admin"
         ]

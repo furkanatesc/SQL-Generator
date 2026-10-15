@@ -48,6 +48,8 @@ class ConfigUpdateResponse(BaseModel):
 class JobCreateRequest(BaseModel):
     natural_query: str
     previous_sql: Optional[str] = None
+    # Sprint 32.5: higher runs first in worker mode (ignored by inline execution order).
+    priority: int = Field(default=0, ge=-10, le=10)
 
 
 class JobDetailResponse(BaseModel):

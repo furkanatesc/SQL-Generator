@@ -98,6 +98,18 @@ stream (`/api/jobs/{id}/stream`) reads it.
 - **Restart / crash:** a `processing` job whose heartbeat is older than `NL2SQL_JOB_STALE_SECONDS`
   (default 300 s) is marked `failed` ("worker stopped before completion"). It is not retried
   (retries → Sprint 32.5). On SIGTERM the worker finishes its current job first (`stop_grace_period: 60s`).
+- **Retries and dead-letter (Sprint 32.5):** a job retries only on transient failures: every LLM call
+  failed upstream, or its worker stopped heartbeating. It retries with exponential backoff
+  (`NL2SQL_JOB_RETRY_BACKOFF_SECONDS`, capped at 900 s) up to `NL2SQL_JOB_MAX_ATTEMPTS`; after that it is
+  `failed` with a `dead_lettered_at` marker. Deterministic failures (invalid SQL, schema or input errors, a
+  missing LLM key) fail at once. Inline mode never retries.
+- **Priority / concurrency:** `POST /api/jobs/without-file` accepts `"priority"` from -10 to 10 (higher runs
+  first). `NL2SQL_JOB_MAX_CONCURRENT` caps how many jobs run at once across all workers.
+- **Operate the queue:**
+  ```bash
+  curl -H "X-API-Key: $KEY" http://localhost:8000/api/v1/admin/queue                    # counts, retries, dead letters, oldest pending
+  curl -X POST -H "X-API-Key: $KEY" http://localhost:8000/api/v1/admin/jobs/<id>/requeue  # failed -> pending, attempts reset
+  ```
 - **Health:** `python -m app.jobs.worker healthcheck` (the compose healthcheck) checks that the worker loop
   ran in the last 180 s. If the backend reports `JOB_QUEUE_STALLED`, check `docker compose logs worker`.
 - **LLM key:** the worker needs `NVIDIA_API_KEY` (or a key stored via the config API) just like the
@@ -263,7 +275,8 @@ Startup configuration validation checks are executed during application boot to 
 
 - **`JOB_QUEUE_STALLED`** (Sprint 32.4)
   - *Severity*: `warning` (does not fail `/ready`)
-  - *Trigger*: In worker mode, at least one job has been `pending` longer than `NL2SQL_JOB_STALE_SECONDS`;
+  - *Trigger*: In worker mode, at least one job has been due (`pending`, not waiting for a retry backoff)
+    for longer than `NL2SQL_JOB_STALE_SECONDS`;
     no worker seems to be claiming jobs.
   - *Action*: Check that the `worker` service is running and healthy (`docker compose ps`,
     `docker compose logs worker`).

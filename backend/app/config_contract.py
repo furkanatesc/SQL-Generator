@@ -50,6 +50,12 @@ ENV_CONTRACT: tuple[EnvVar, ...] = (
     EnvVar("NL2SQL_JOB_STALE_SECONDS", "settings", False, False, "300",
            "A processing job whose worker heartbeat is older than this is failed; pending jobs "
            "older than this raise JOB_QUEUE_STALLED in worker mode."),
+    EnvVar("NL2SQL_JOB_MAX_ATTEMPTS", "settings", False, False, "3",
+           "Worker mode: total attempts for a transiently failing job before it is dead-lettered."),
+    EnvVar("NL2SQL_JOB_RETRY_BACKOFF_SECONDS", "settings", False, False, "30",
+           "Worker mode: base of the exponential retry backoff (capped at 900 s)."),
+    EnvVar("NL2SQL_JOB_MAX_CONCURRENT", "settings", False, False, "0",
+           "Worker mode: max jobs processing at once across all workers (0 = unlimited)."),
     # --- Direct os.getenv reads ----------------------------------------------------
     EnvVar("NL2SQL_API_KEY", "direct", True, True, "(none)",
            "API key fallback when no key is stored in the DB config (app/auth.py)."),
