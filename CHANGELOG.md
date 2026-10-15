@@ -1154,6 +1154,9 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
 - **Rate Limiting** (Sprint 32.6): istemci başına API hız sınırı (genel + job oluşturma; varsayılan kapalı,
   prod compose 300/20 dk), 429 `RATE_LIMITED` + `Retry-After`, `X-RateLimit-*` başlıkları; LLM çağrı limiter'ı
   artık process-geneli ve ayarlanabilir (`NL2SQL_LLM_REQUESTS_PER_MINUTE`/`NL2SQL_LLM_BURST`). (PR #193)
+- **Health Checks** (Sprint 32.7): `/ready` bileşen-bazlı `checks` (ok/degraded/fail + kısa neden kodu);
+  yeni disk alanı (`NL2SQL_HEALTH_MIN_FREE_DISK_MB`) ve LLM key kontrolleri; worker healthcheck'i DB erişimi
+  ister. (PR #194)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
