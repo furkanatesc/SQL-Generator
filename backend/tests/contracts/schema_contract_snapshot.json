@@ -117,6 +117,16 @@
       "data"
     ]
   },
+  "ApiResponse_LLMStatus_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "ApiResponse_QueryHistorySummary_": {
     "properties": [
       "data",
@@ -801,6 +811,32 @@
       "sort_by",
       "sort_order",
       "status"
+    ]
+  },
+  "LLMModelState": {
+    "properties": [
+      "consecutive_failures",
+      "model",
+      "retry_in_seconds",
+      "state"
+    ],
+    "required": [
+      "consecutive_failures",
+      "model",
+      "retry_in_seconds",
+      "state"
+    ]
+  },
+  "LLMStatus": {
+    "properties": [
+      "chain",
+      "failure_threshold",
+      "reset_seconds"
+    ],
+    "required": [
+      "chain",
+      "failure_threshold",
+      "reset_seconds"
     ]
   },
   "LLMUsageDetailResponse": {
