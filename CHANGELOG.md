@@ -1144,6 +1144,10 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   app ve trace DB için idempotent v1 baseline (eski DB'ler veri kaybısız benimsenir); kritik
   `DB_MIGRATIONS_PENDING` / `DB_SCHEMA_AHEAD` uyarıları; `python -m app.migrations status|upgrade` CLI;
   `docs/database-migrations.md`. (PR #190)
+- **Background Job Worker** (Sprint 32.4): `python -m app.jobs.worker` ayrı process'i (atomik DB claim,
+  heartbeat, stale job kurtarma, zarif kapanış, healthcheck); `NL2SQL_JOB_EXECUTION_MODE=inline|worker`;
+  kalıcı `job_logs` (worker modunda SSE buradan); inline modunda yetim job'lar açılışta `failed`;
+  migration app v2; prod compose'ta `worker` servisi; `JOB_QUEUE_STALLED` uyarısı. (PR #191)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
