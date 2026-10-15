@@ -222,8 +222,27 @@ def _baseline(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _job_worker(conn: sqlite3.Connection) -> None:
+    """Sprint 32.4 — worker claim/heartbeat columns + persistent job logs."""
+    ensure_column(conn, "jobs", "worker_id", "worker_id TEXT")
+    ensure_column(conn, "jobs", "claimed_at", "claimed_at TEXT")
+    ensure_column(conn, "jobs", "heartbeat_at", "heartbeat_at TEXT")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS job_logs (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id     TEXT NOT NULL,
+            step       INTEGER,
+            message    TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_job_logs_job_id ON job_logs (job_id, id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status_created_at ON jobs (status, created_at)")
+
+
 APP_MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline", _baseline),
+    Migration(2, "job_worker", _job_worker),
 )
 
 validate_registry(APP_MIGRATIONS)

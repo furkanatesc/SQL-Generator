@@ -28,6 +28,18 @@ The runner (`backend/app/migrations/runner.py`) is forward-only. Applied version
   is idempotent (`CREATE ... IF NOT EXISTS` + `ensure_column`), so databases created before 32.3 are adopted
   without data loss.
 
+## Shipped migrations
+
+| DB | Version | Name | Sprint | Change |
+| :--- | :--- | :--- | :--- | :--- |
+| app | 1 | `baseline` | 32.3 | The pre-32.3 schema (12 tables, 6 indexes) |
+| app | 2 | `job_worker` | 32.4 | Adds `jobs.worker_id`, `claimed_at` and `heartbeat_at`; adds the `job_logs` table and two indexes |
+| trace | 1 | `baseline` | 32.3 | The pre-32.3 trace schema |
+
+The runner opens each migration with `BEGIN IMMEDIATE` and checks the version again inside the
+transaction. If the backend and the worker start at the same time, the second one skips a migration the
+first one already applied.
+
 ## Operator CLI
 
 ```bash
@@ -56,6 +68,7 @@ docker compose -f docker-compose.prod.yml exec backend python -m app.migrations 
 
 - No down migrations. Rollback means restoring a backup (32.8).
 - No automatic backup before migrating.
-- No lock against several processes migrating at once (assumes one backend process).
+- Concurrent start-up on one host is handled (`BEGIN IMMEDIATE` and a version re-check). There is no
+  coordination across hosts.
 - No checksum to detect an edited migration.
 - No external database (Postgres) or Qdrant collection migrations.

@@ -87,8 +87,48 @@ def _healthcheck_cmd(service):
 
 # --- compose: shape -----------------------------------------------------------
 
-def test_prod_compose_has_exactly_backend_and_frontend(compose):
-    assert set(compose["services"]) == {"backend", "frontend"}
+def test_prod_compose_has_exactly_backend_worker_and_frontend(compose):
+    assert set(compose["services"]) == {"backend", "worker", "frontend"}
+
+
+# --- compose: worker (Sprint 32.4) ------------------------------------------------
+
+@pytest.fixture(scope="module")
+def worker(compose):
+    return compose["services"]["worker"]
+
+
+def test_api_only_enqueues_and_worker_executes(backend, worker):
+    assert _env(backend)["NL2SQL_JOB_EXECUTION_MODE"] == "worker"
+    assert _env(worker)["NL2SQL_JOB_EXECUTION_MODE"] == "worker"
+    assert worker["command"] == ["python", "-m", "app.jobs.worker"]
+
+
+def test_worker_reuses_backend_image_without_pulling(backend, worker):
+    assert worker["image"] == backend["image"]
+    assert "build" not in worker and worker["pull_policy"] == "never"
+    assert worker["depends_on"]["backend"]["condition"] == "service_healthy"
+    assert "no-new-privileges:true" in worker.get("security_opt", [])
+
+
+@pytest.mark.parametrize(
+    "var", ["NL2SQL_ENVIRONMENT", "SQLGEN_DB_PATH", "NL2SQL_TRACE_DB_PATH", "NL2SQL_UPLOAD_DIR"]
+)
+def test_worker_shares_backend_state_settings(backend, worker, var):
+    assert _env(worker)[var] == _env(backend)[var]
+
+
+def test_worker_shares_data_and_uploads_but_not_qdrant(backend, worker):
+    mounts = _mounts(worker)
+    for target in ("/app/data", "/app/uploads"):
+        assert mounts[target] == _mounts(backend)[target]
+    assert "/app/qdrant_data" not in mounts  # embedded Qdrant is single-process
+
+
+def test_worker_has_its_own_healthcheck_and_no_api_secret(worker):
+    assert _healthcheck_cmd(worker) == "CMD python -m app.jobs.worker healthcheck"
+    assert "secrets" not in worker
+    assert "NL2SQL_API_KEY" not in _env(worker)
 
 
 def test_prod_compose_has_no_test_database_images(compose):

@@ -43,6 +43,13 @@ ENV_CONTRACT: tuple[EnvVar, ...] = (
     EnvVar("NL2SQL_UPLOAD_DIR", "settings", False, False, "<backend>/uploads", "Directory for uploaded files."),
     EnvVar("NL2SQL_DEBUG_ENDPOINTS_ENABLED", "settings", False, True, "true",
            "Expose /api/debug/* endpoints; must be false in production."),
+    EnvVar("NL2SQL_JOB_EXECUTION_MODE", "settings", False, False, "inline",
+           "Where NL→SQL jobs run: inline (API process) or worker (python -m app.jobs.worker)."),
+    EnvVar("NL2SQL_JOB_WORKER_POLL_SECONDS", "settings", False, False, "1.0",
+           "Worker idle poll interval in seconds."),
+    EnvVar("NL2SQL_JOB_STALE_SECONDS", "settings", False, False, "300",
+           "A processing job whose worker heartbeat is older than this is failed; pending jobs "
+           "older than this raise JOB_QUEUE_STALLED in worker mode."),
     # --- Direct os.getenv reads ----------------------------------------------------
     EnvVar("NL2SQL_API_KEY", "direct", True, True, "(none)",
            "API key fallback when no key is stored in the DB config (app/auth.py)."),

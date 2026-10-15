@@ -1,4 +1,6 @@
 from functools import lru_cache
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,6 +33,12 @@ class Settings(BaseSettings):
     upload_dir: str | None = None
 
     debug_endpoints_enabled: bool = True
+
+    # Sprint 32.4 — where NL→SQL jobs run: in the API process ("inline") or in the
+    # separate `python -m app.jobs.worker` process ("worker").
+    job_execution_mode: Literal["inline", "worker"] = "inline"
+    job_worker_poll_seconds: float = Field(default=1.0, gt=0)
+    job_stale_seconds: int = Field(default=300, ge=10)
 
     model_config = SettingsConfigDict(
         env_prefix="NL2SQL_",

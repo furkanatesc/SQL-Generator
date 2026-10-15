@@ -27,6 +27,7 @@ from app.settings import get_settings
 APP_TABLES = {
     "configs", "jobs", "synonym_rules", "query_traces", "feedback", "sql_cache", "workspaces",
     "connections", "schema_syncs", "query_runs", "query_run_feedback", "api_keys",
+    "job_logs",  # v2 (Sprint 32.4)
 }
 APP_INDEXES = {
     "idx_feedback_job_id", "idx_connections_workspace_id", "idx_schema_syncs_connection_id",

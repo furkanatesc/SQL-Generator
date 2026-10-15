@@ -32,6 +32,8 @@ services:
       # Optional: LLM provider key (can also be configured at runtime via the config API).
       # An optional secret cannot be a compose file secret; see the runbook for NVIDIA_API_KEY_FILE.
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      # Sprint 32.4: the API only enqueues jobs; the `worker` service runs them.
+      NL2SQL_JOB_EXECUTION_MODE: worker
     secrets:
       - nl2sql_api_key
     volumes:
@@ -44,6 +46,38 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+
+  # Sprint 32.4 — runs NL→SQL jobs claimed from the shared app DB. Same image as `backend`
+  # (built by it). Scale with `--scale worker=N` (claims are atomic). No Qdrant volume: the
+  # job pipeline does not use RAG, and the embedded Qdrant store is single-process.
+  worker:
+    image: sqlgen-backend:${SQLGEN_IMAGE_TAG:-latest}
+    pull_policy: never
+    command: ["python", "-m", "app.jobs.worker"]
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 60s
+    environment:
+      NL2SQL_ENVIRONMENT: production
+      NL2SQL_DEBUG_ENDPOINTS_ENABLED: "false"
+      NL2SQL_UPLOAD_DIR: /app/uploads
+      SQLGEN_DB_PATH: /app/data/sqlgen.db
+      NL2SQL_TRACE_DB_PATH: /app/data/nl2sql_traces.db
+      NL2SQL_JOB_EXECUTION_MODE: worker
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+    volumes:
+      - sqlgen_data:/app/data
+      - sqlgen_uploads:/app/uploads
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.jobs.worker", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   frontend:
     build: ./frontend
