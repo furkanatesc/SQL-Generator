@@ -90,6 +90,8 @@ Rules:
 | **`NL2SQL_APP_DESCRIPTION`** | String | *(built-in)* | API description shown in OpenAPI. |
 | **`NL2SQL_JOB_EXECUTION_MODE`** | `inline` \| `worker` | `inline` | Where NL→SQL jobs run (Sprint 32.4): in the API process, or in the separate `python -m app.jobs.worker` process (the API then only enqueues). The production compose pins `worker`. |
 | **`NL2SQL_JOB_WORKER_POLL_SECONDS`** | Float > 0 | `1.0` | Worker idle poll interval. |
+| **`NL2SQL_BACKUP_DIR`** | String | `<backend>/backups` | Sprint 32.8: where `python -m app.backup` writes and lists archives. The production compose pins `/app/backups` (named volume `sqlgen_backups`). |
+| **`NL2SQL_BACKUP_BEFORE_MIGRATION`** | Boolean | `true` | Before applying pending migrations to an existing app DB, copy it to `<db>.pre-v<N>-<ts>.bak` (SQLite online backup; the last 3 are kept). |
 | **`NL2SQL_HEALTH_MIN_FREE_DISK_MB`** | Integer ≥ 0 | `100` | Sprint 32.7: `/ready` fails (`checks.disk` = `low_disk_space`) when the app DB volume has less free space than this; below twice this value it is `degraded`. `0` = off. |
 | **`NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE`** | Integer ≥ 0 | `0` (off) | Sprint 32.6: per-client API request limit. A client is its API key (SHA-256 prefix, never the raw key) or its IP. Exceeding it returns 429 `RATE_LIMITED` with `Retry-After`. `/health`, `/ready` and CORS preflight are exempt. The production compose pins `300`. |
 | **`NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE`** | Integer ≥ 0 | `0` (off) | Additional per-client limit for the LLM-costly job-creation endpoints (`POST /api/files/upload`, `POST /api/jobs/without-file`). The production compose pins `20`. |

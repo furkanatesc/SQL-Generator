@@ -70,11 +70,40 @@ git pull && docker compose -f docker-compose.prod.yml up -d --build --wait
 | `sqlgen_uploads` | `/app/uploads` | uploaded files |
 | `sqlgen_qdrant` | `/app/qdrant_data` | embedded Qdrant vector store |
 
-`docker compose down` keeps the volumes; **`down -v` deletes all data**. Backup/restore is planned
-for Sprint 32.8; until then, stop the stack and copy the volumes. Compose prefixes volume names
+`docker compose down` keeps the volumes; **`down -v` deletes all data**. Use the backup CLI below
+(Sprint 32.8); the raw `tar` of a volume shown next is only safe while the stack is stopped. Compose prefixes volume names
 with the project name (by default the checkout directory, e.g. `sqlgen_sqlgen_data`; check with
 `docker volume ls`): `docker run --rm -v sqlgen_sqlgen_data:/data -v "$PWD":/backup alpine tar czf
 /backup/sqlgen_data.tgz -C /data .`
+
+### Backup and restore (Sprint 32.8)
+`python -m app.backup` writes one `.tar.gz` that contains:
+- consistent snapshots of the app DB and the trace DB (SQLite online backup API, safe while running);
+- the uploads;
+- the embedded Qdrant store, as a **best-effort** file copy (it is mostly re-buildable by re-indexing);
+- a `manifest.json` with schema versions and SHA-256 checksums.
+
+```bash
+C="docker compose -f docker-compose.prod.yml"
+$C exec backend python -m app.backup create                 # -> /app/backups/sqlgen-backup-<UTC>.tar.gz
+$C exec backend python -m app.backup list
+$C exec backend python -m app.backup verify /app/backups/<archive>
+$C cp backend:/app/backups/<archive> ./offsite/             # keep a copy OFF the host
+$C exec backend python -m app.backup prune --keep 7
+
+# Restore: stop writers first, restore in a one-off container, start again
+$C stop backend worker
+$C run --rm --no-deps backend python -m app.backup restore /app/backups/<archive> --yes [--include-qdrant]
+$C up -d --wait
+```
+
+Restore checks the archive first (checksums, SQLite integrity, safe paths). It refuses a backup taken by a
+newer release (newer schema). Before writing anything it takes a `pre-restore` safety backup of the current
+state. Databases are written through the SQLite backup API. Uploads are overwritten but extra files are kept.
+Qdrant is restored only with `--include-qdrant`. Schedule `create` + `prune` with the host's cron.
+
+**Before migrations:** when a new release has pending migrations, the backend first copies the app DB to
+`/app/data/sqlgen.db.pre-v<N>-<ts>.bak` (`NL2SQL_BACKUP_BEFORE_MIGRATION`, last 3 kept).
 
 ### Secrets (Sprint 32.2)
 - **Rotate the API key:** overwrite `secrets/nl2sql_api_key`; the file is re-read on every request, so
@@ -132,7 +161,8 @@ them in `schema_migrations`. Check them with:
 docker compose -f docker-compose.prod.yml exec backend python -m app.migrations status
 ```
 
-**Upgrading:** back up the `sqlgen_data` volume first (see *Persistent state*), then `up -d --build`.
+**Upgrading:** take a backup first (`python -m app.backup create`, see *Backup and restore*), then
+`up -d --build`; the backend also copies the app DB automatically before migrating it.
 **Rolling back to an older image** after an upgrade that added migrations gives `DB_SCHEMA_AHEAD`
 (`/ready` 503). Restore the pre-upgrade backup or run the newer image again. Details:
 `docs/database-migrations.md`.
