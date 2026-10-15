@@ -334,10 +334,14 @@ jobs:
 
       - name: Database migrations are recorded and up to date
         run: |
-          # Sprint 32.3: both databases report no pending migrations after a restart.
+          # Sprint 32.3: the app DB is migrated on start; the trace DB is created lazily on the
+          # first trace write, so before `upgrade` it may not exist yet (but must not lag behind).
+          docker compose exec -T backend python -m app.migrations status | tee status.json
+          python3 -c "import json,sys; r={d['db']: d for d in json.load(open('status.json'))}; a=r['app']; t=r['trace']; sys.exit(0 if a['exists'] and not a['pending'] and not a['ahead'] and (not t['exists'] or (not t['pending'] and not t['ahead'])) else 1)"
+          # The operator CLI brings both databases to the latest version.
+          docker compose exec -T backend python -m app.migrations upgrade
           docker compose exec -T backend python -m app.migrations status | tee status.json
           python3 -c "import json,sys; r=json.load(open('status.json')); sys.exit(0 if all(d['exists'] and not d['pending'] and not d['ahead'] for d in r) else 1)"
-          docker compose exec -T backend python -m app.migrations upgrade
 
       - name: Dump logs on failure
         if: failure()
