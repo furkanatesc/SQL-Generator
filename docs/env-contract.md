@@ -88,6 +88,9 @@ Rules:
 | **`NL2SQL_APP_NAME`** | String | `SQLGen API` | API title shown in OpenAPI. |
 | **`NL2SQL_APP_VERSION`** | String | `0.1.0` | Version reported by `/health`. |
 | **`NL2SQL_APP_DESCRIPTION`** | String | *(built-in)* | API description shown in OpenAPI. |
+| **`NL2SQL_JOB_EXECUTION_MODE`** | `inline` \| `worker` | `inline` | Where NL→SQL jobs run (Sprint 32.4): in the API process, or in the separate `python -m app.jobs.worker` process (the API then only enqueues). The production compose pins `worker`. |
+| **`NL2SQL_JOB_WORKER_POLL_SECONDS`** | Float > 0 | `1.0` | Worker idle poll interval. |
+| **`NL2SQL_JOB_STALE_SECONDS`** | Integer ≥ 10 | `300` | A `processing` job whose worker heartbeat is older than this is failed; in worker mode, `pending` jobs older than this raise `JOB_QUEUE_STALLED`. |
 
 ### Unknown `NL2SQL_*` variables (Sprint 32.1)
 
@@ -115,6 +118,9 @@ e.g. mode `0444`); `NL2SQL_API_KEY` is no longer passed as an env value. Compose
 variables: `SQLGEN_API_KEY_SECRET_FILE`, `SQLGEN_BACKEND_PORT` (default `8000`), `SQLGEN_FRONTEND_PORT`
 (default `8080`), `SQLGEN_IMAGE_TAG` (default `latest`). Every variable it references is documented in
 `.env.prod.example` (enforced by `backend/tests/test_prod_compose_contract.py`).
+
+Since Sprint 32.4 both `backend` and the new `worker` service pin `NL2SQL_JOB_EXECUTION_MODE=worker`.
+The worker gets the same state paths and `NVIDIA_API_KEY`, but not the API key secret.
 
 ---
 

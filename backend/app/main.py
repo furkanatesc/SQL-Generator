@@ -133,6 +133,15 @@ logger = logging.getLogger("app.main")
 def startup_event():
     global rag_manager
     init_db()
+
+    # Sprint 32.4: inline mode cannot resume jobs a previous process left behind.
+    try:
+        from app.jobs.startup import recover_jobs_on_api_startup
+        recovered = recover_jobs_on_api_startup()
+        if recovered:
+            logger.warning("startup_failed_orphaned_jobs count=%d", len(recovered))
+    except Exception as e:
+        logger.error("Failed to recover orphaned jobs: %s", str(e))
     
     # Run startup validation checks
     try:
@@ -230,7 +239,7 @@ def upload_excel_file(
     job = create_job(job_id=job_id, file_path=dest_path, natural_query=natural_query, dialect=dialect)
     
     # Arka planda gerçek SQL üretim pipeline'ını çalıştır
-    background_tasks.add_task(process_job_pipeline, job_id, request_id=getattr(request.state, "request_id", None))
+    _enqueue_job(background_tasks, job_id, getattr(request.state, "request_id", None))
     
     return {
         "status": "success",
@@ -254,7 +263,7 @@ def start_job_without_file(
     job_id = str(uuid.uuid4())
     dialect = get_config("target_db_type") or "postgres"
     job = create_job(job_id=job_id, natural_query=request.natural_query, previous_sql=request.previous_sql, dialect=dialect)
-    background_tasks.add_task(process_job_pipeline, job_id, request_id=getattr(http_request.state, "request_id", None))
+    _enqueue_job(background_tasks, job_id, getattr(http_request.state, "request_id", None))
     return {
         "status": "success",
         "job": job
@@ -303,6 +312,10 @@ async def stream_job_logs(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail=f"Job with ID '{job_id}' not found.")
         
+    if get_settings().job_execution_mode == "worker":
+        # Sprint 32.4: the job runs in another process; stream its persisted logs.
+        return StreamingResponse(_persisted_log_stream(job_id), media_type="text/event-stream")
+
     async def log_generator():
         # Önceden üretilmiş tüm logları istemciye sırayla bas
         if job_id in job_logs_cache:
@@ -344,6 +357,29 @@ async def stream_job_logs(job_id: str):
                     
     return StreamingResponse(log_generator(), media_type="text/event-stream")
 
+def _sse_log_event(entry) -> str:
+    payload = {"message": entry["message"], "step": entry["step"], "timestamp": entry["created_at"]}
+    return f"data: {json.dumps(payload)}\n\n"
+
+async def _persisted_log_stream(job_id: str, poll_seconds: float = 1.0):
+    from app.jobs.repository import list_job_logs
+
+    last_id = 0
+    while True:
+        logs = await asyncio.to_thread(list_job_logs, job_id, last_id)
+        for entry in logs:
+            last_id = entry["id"]
+            yield _sse_log_event(entry)
+        current = await asyncio.to_thread(get_job, job_id)
+        if not current or current["status"] in ("completed", "failed", "cancelled"):
+            # Drain lines written between the read above and the final status.
+            for entry in await asyncio.to_thread(list_job_logs, job_id, last_id):
+                yield _sse_log_event(entry)
+            return
+        if not logs:
+            yield ": ping\n\n"
+        await asyncio.sleep(poll_seconds)
+
 @app.post("/api/jobs/{job_id}/cancel", dependencies=[Depends(verify_api_key)], response_model=CancelJobResponse, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
 def cancel_job_execution(job_id: str):
     job = get_job(job_id)
@@ -363,99 +399,29 @@ def cancel_job_execution(job_id: str):
         "job": updated_job
     }
 
-# Gerçek Asenkron SQL Üretim Pipeline Worker'ı
+# Inline job execution (NL2SQL_JOB_EXECUTION_MODE=inline). The job body lives in
+# app/jobs/executor.py (Sprint 32.4) and is shared with the worker process; this wrapper
+# only feeds the in-memory SSE cache/queues of this API process.
 def process_job_pipeline(job_id: str, request_id: Optional[str] = None):
-    from app.sql_pipeline import SQLGenerationPipeline
-    from app.database import get_job, update_job_status, get_config
-    import datetime
-    
-    job = get_job(job_id)
-    if not job:
-        return
-        
-    update_job_status(job_id, "processing")
-    
-    def log_callback(message: str, step: int):
-        log_entry = {
-            "message": message,
-            "step": step,
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-        if job_id not in job_logs_cache:
-            job_logs_cache[job_id] = []
-        job_logs_cache[job_id].append(log_entry)
-        
-        if job_id in job_queues:
-            for q in job_queues[job_id]:
-                q.put(log_entry)
-    
+    from app.jobs.executor import execute_job
+
+    def push(log_entry):
+        job_logs_cache.setdefault(job_id, []).append(log_entry)
+        for q in job_queues.get(job_id, []):
+            q.put(log_entry)
+
     try:
-        from app.trace.dependencies import get_trace_store
-        pipeline = SQLGenerationPipeline(trace_store=get_trace_store())
-        dialect = get_config("target_db_type") or "postgres"
-        api_key = get_config("nvidia_api_key")
-        
-        # Eğer nvidia_api_key bulunamadıysa, varsayılan api_key'i dene
-        if not api_key:
-            api_key = get_config("api_key")
-            
-        file_path = job.get("file_path")
-        natural_query = job.get("natural_query")
-        
-        # Eğer api key dev key ise ve çevre değişkeni de yoksa hata versin ki kullanıcı ayarlasın
-        import os
-        if (not api_key or api_key == "sqlgen_secret_dev_key") and not resolve_secret("NVIDIA_API_KEY"):
-            raise ValueError(
-                "NVIDIA API Anahtarı eksik! Lütfen 'Settings' (Ayarlar) panelinden geçerli bir "
-                "NVIDIA API Key girin veya backend'i NVIDIA_API_KEY çevre değişkeniyle başlatın."
-            )
-            
-        res = pipeline.run_pipeline(
-            job_id=job_id,
-            excel_file_path=file_path,
-            natural_query=natural_query,
-            previous_sql=job.get("previous_sql"),
-            dialect=dialect,
-            api_key=api_key,
-            log_callback=log_callback,
-            request_id=request_id
-        )
-        
-        # İşin iptal edilip edilmediğini kontrol et
-        current_job = get_job(job_id)
-        if current_job and current_job["status"] == "cancelled":
-            return
-            
-        if res["success"]:
-            log_callback("SQL üretimi başarıyla tamamlandı.", 5)
-            update_job_status(job_id, "completed", result_sql=res["generated_sql"])
-        else:
-            log_callback(f"SQL üretimi başarısız oldu: {res['error'] or 'Bilinmeyen hata'}", 5)
-            # error_code sınırda ham string olarak taşınır (API sözleşmesi
-            # tipsiz string kod taşır, enum değil). ErrorCode enum üyelerinden
-            # .value çıkar; ham string ise olduğu gibi geç (defensive).
-            ec = res.get("error_code")
-            update_job_status(
-                job_id, "failed",
-                error_message=res["error"] or "SQL üretimi başarısız.",
-                error_code=getattr(ec, "value", ec),
-            )
-            
-    except Exception as e:
-        # İptal edilmişse hata olarak kaydetme
-        current_job = get_job(job_id)
-        if current_job and current_job["status"] == "cancelled":
-            return
-        log_callback(f"Beklenmeyen hata: {str(e)}", 5)
-        # error_code bilinçli olarak GEÇİLMEZ → NULL kalır. Registry'nin
-        # INTERNAL → kod-yok tasarımıyla tutarlı: beklenmeyen bir job-runner
-        # exception'ının taksonomi kodu yoktur.
-        update_job_status(job_id, "failed", error_message=str(e))
+        execute_job(job_id, request_id=request_id, on_log=push)
     finally:
         # Tüm SSE dinleyicilerini kapatmak için EOF sinyali gönder
-        if job_id in job_queues:
-            for q in job_queues[job_id]:
-                q.put("EOF")
+        for q in job_queues.get(job_id, []):
+            q.put("EOF")
+
+
+def _enqueue_job(background_tasks: BackgroundTasks, job_id: str, request_id: Optional[str]) -> None:
+    """Sprint 32.4: run in-process (inline) or leave `pending` for the worker process."""
+    if get_settings().job_execution_mode == "inline":
+        background_tasks.add_task(process_job_pipeline, job_id, request_id=request_id)
 
 # 4. Schema API
 @app.get("/api/schema/raw", dependencies=[Depends(verify_api_key)])

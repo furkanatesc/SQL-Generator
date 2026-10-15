@@ -87,6 +87,22 @@ with the project name (by default the checkout directory, e.g. `sqlgen_sqlgen_da
 - A configured but unreadable/empty secret file raises the critical `SECRET_FILE_UNREADABLE`
   (`/ready` 503) and is **not** silently replaced by the env value.
 
+### Job worker (Sprint 32.4)
+NL→SQL jobs run in the separate `worker` service; the backend runs with `NL2SQL_JOB_EXECUTION_MODE=worker`,
+so it only writes `pending` jobs. The worker claims them from the shared app database (claims are atomic),
+sends a heartbeat while a job runs, and writes every log line to the `job_logs` table, where the API's SSE
+stream (`/api/jobs/{id}/stream`) reads it.
+
+- **Scale:** `docker compose -f docker-compose.prod.yml up -d --scale worker=3`. All workers must share
+  one host, because the database is SQLite on a local volume.
+- **Restart / crash:** a `processing` job whose heartbeat is older than `NL2SQL_JOB_STALE_SECONDS`
+  (default 300 s) is marked `failed` ("worker stopped before completion"). It is not retried
+  (retries → Sprint 32.5). On SIGTERM the worker finishes its current job first (`stop_grace_period: 60s`).
+- **Health:** `python -m app.jobs.worker healthcheck` (the compose healthcheck) checks that the worker loop
+  ran in the last 180 s. If the backend reports `JOB_QUEUE_STALLED`, check `docker compose logs worker`.
+- **LLM key:** the worker needs `NVIDIA_API_KEY` (or a key stored via the config API) just like the
+  backend did.
+
 ### Database migrations (Sprint 32.3)
 The backend applies pending schema migrations to the app and trace databases on every start and records
 them in `schema_migrations`. Check them with:
@@ -244,6 +260,13 @@ Startup configuration validation checks are executed during application boot to 
   - *Trigger*: The database schema version is newer than the running release supports, usually after
     rolling back to an older image. No migrations are applied.
   - *Action*: Run the newer image, or restore the backup taken before the upgrade.
+
+- **`JOB_QUEUE_STALLED`** (Sprint 32.4)
+  - *Severity*: `warning` (does not fail `/ready`)
+  - *Trigger*: In worker mode, at least one job has been `pending` longer than `NL2SQL_JOB_STALE_SECONDS`;
+    no worker seems to be claiming jobs.
+  - *Action*: Check that the `worker` service is running and healthy (`docker compose ps`,
+    `docker compose logs worker`).
 
 - **`UNKNOWN_CONFIG_ENV_VAR`** (Sprint 32.1)
   - *Severity*: `warning` (does not fail `/ready`)

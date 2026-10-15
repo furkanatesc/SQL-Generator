@@ -4,6 +4,7 @@ from typing import Literal
 from app.settings import DEV_DEFAULT_API_KEY, get_settings, is_production_like_environment
 from app.database import get_config
 from app.config_contract import find_unknown_prefixed_env
+from app.jobs.repository import count_stalled_pending
 from app.migrations.status import database_statuses
 from app.secret_resolver import SECRET_FILE_VARS, resolve_secret, resolve_secret_detail
 
@@ -150,6 +151,22 @@ def validate_runtime_config() -> StartupValidationResult:
                 message=(
                     f"The {db.label} database has pending migrations {status.pending} "
                     f"(at version {status.current} of {status.latest}); a migration likely failed."
+                )
+            ))
+
+    # 4c. Worker mode: pending jobs nobody picks up (Sprint 32.4)
+    if settings.job_execution_mode == "worker":
+        try:
+            stalled = count_stalled_pending(settings.job_stale_seconds)
+        except Exception:
+            stalled = 0
+        if stalled:
+            warnings.append(StartupValidationWarning(
+                code="JOB_QUEUE_STALLED",
+                severity="warning",
+                message=(
+                    f"{stalled} job(s) have been pending longer than {settings.job_stale_seconds}s; "
+                    "is the job worker (python -m app.jobs.worker) running?"
                 )
             ))
 
