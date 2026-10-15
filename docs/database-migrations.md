@@ -68,7 +68,8 @@ docker compose -f docker-compose.prod.yml exec backend python -m app.migrations 
 ## Not covered (TECH-DEBT §39)
 
 - No down migrations. Rollback means restoring a backup (32.8).
-- No automatic backup before migrating.
+- Since Sprint 32.8, the app DB is copied before pending migrations are applied (`NL2SQL_BACKUP_BEFORE_MIGRATION`).
+  The trace DB is not copied.
 - Concurrent start-up on one host is handled (`BEGIN IMMEDIATE` and a version re-check). There is no
   coordination across hosts.
 - No checksum to detect an edited migration.

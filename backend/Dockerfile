@@ -18,7 +18,8 @@ COPY evals /app/evals
 # Sprint 32.0 — persistent state dirs. Named volumes inherit this ownership on first
 # mount, so the non-root user can write the SQLite/trace DBs, uploads and the
 # embedded Qdrant store.
-RUN mkdir -p /app/uploads /app/data /app/qdrant_data \
+# Sprint 32.8 — /app/backups holds `python -m app.backup` archives.
+RUN mkdir -p /app/uploads /app/data /app/qdrant_data /app/backups \
     && chown -R app:app /app
 
 USER app

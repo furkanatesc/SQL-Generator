@@ -20,10 +20,25 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def _backup_before_pending_migrations(conn) -> None:
+    """Sprint 32.8: copy an existing app DB before migrating it (never blocks startup)."""
+    from app.migrations.runner import inspect
+
+    try:
+        status = inspect(conn, APP_MIGRATIONS)
+        if status.pending and status.current > 0 and not status.ahead and get_settings().backup_before_migration:
+            from app.backup.core import backup_db_before_migration
+
+            backup_db_before_migration(get_db_path(), status.latest)
+    except Exception:
+        logger.exception("pre-migration backup failed; continuing with the migration")
+
+
 def init_db():
     with get_db_connection() as conn:
         # Sprint 32.3: schema lives in versioned migrations (app/migrations/app_db.py);
         # init_db only applies them and seeds default data.
+        _backup_before_pending_migrations(conn)
         status = migrate(conn, APP_MIGRATIONS)
         if not status.ok:
             logger.error("app database migrations incomplete: %s", status)

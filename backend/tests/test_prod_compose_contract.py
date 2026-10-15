@@ -195,7 +195,7 @@ def test_secrets_dir_is_gitignored():
 
 
 @pytest.mark.parametrize(
-    "var", ["SQLGEN_DB_PATH", "NL2SQL_TRACE_DB_PATH", "NL2SQL_UPLOAD_DIR"]
+    "var", ["SQLGEN_DB_PATH", "NL2SQL_TRACE_DB_PATH", "NL2SQL_UPLOAD_DIR", "NL2SQL_BACKUP_DIR"]
 )
 def test_backend_state_paths_live_under_a_mounted_volume(backend, var):
     path = _env(backend)[var]
@@ -253,7 +253,7 @@ def test_env_example_holds_no_real_dev_key():
 
 def test_backend_dockerfile_creates_persistent_dirs_and_healthcheck():
     content = _read(BACKEND_DOCKERFILE)
-    for d in ("/app/uploads", "/app/data", "/app/qdrant_data"):
+    for d in ("/app/uploads", "/app/data", "/app/qdrant_data", "/app/backups"):
         assert d in content, f"backend Dockerfile must create {d}"
     assert "HEALTHCHECK" in content
     assert "/health" in content

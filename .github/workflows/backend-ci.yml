@@ -370,6 +370,24 @@ jobs:
           curl -fsS http://localhost:8000/api/v1/admin/queue -H "X-API-Key: $NL2SQL_API_KEY" \
             | python3 -c "import json,sys; d=json.load(sys.stdin)['data']; sys.exit(0 if d['execution_mode']=='worker' and d['counts']['failed']>=1 and d['dead_lettered']==0 and d['retry_scheduled']==0 else 1)"
 
+      - name: Backup and restore round-trip
+        run: |
+          # Sprint 32.8: back up, lose data, restore with the stack stopped, data is back.
+          archive=$(docker compose exec -T backend python -m app.backup create \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['archive'])")
+          docker compose exec -T backend python -m app.backup verify "$archive"
+          ws=$(curl -fsS http://localhost:8000/api/v1/workspaces -H "X-API-Key: $NL2SQL_API_KEY" \
+            | python3 -c "import json,sys; print([w['id'] for w in json.load(sys.stdin)['data'] if w['slug']=='smoke'][0])")
+          curl -fsS -X DELETE "http://localhost:8000/api/v1/workspaces/$ws" -H "X-API-Key: $NL2SQL_API_KEY" > /dev/null
+          if curl -fsS http://localhost:8000/api/v1/workspaces -H "X-API-Key: $NL2SQL_API_KEY" | grep -q '"slug":"smoke"'; then
+            echo "workspace was not deleted"; exit 1
+          fi
+          docker compose stop backend worker
+          docker compose run --rm --no-deps -T backend python -m app.backup restore "$archive" --yes
+          docker compose up -d --wait --wait-timeout 180
+          curl -fsS http://localhost:8000/api/v1/workspaces -H "X-API-Key: $NL2SQL_API_KEY" | grep -q '"slug":"smoke"'
+          docker compose exec -T backend python -m app.backup list | grep -q "pre-restore"
+
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs
