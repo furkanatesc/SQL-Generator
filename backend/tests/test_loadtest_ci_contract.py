@@ -67,3 +67,23 @@ def test_report_is_uploaded_always(job):
     assert step["if"] == "always()"
     assert "loadtest-report.json" in str(step["with"]["path"])
     assert names.index(step["name"]) < names.index("Tear down")
+
+
+def test_load_step_has_no_failure_masking(job):
+    step = _step(job, "Load test (mixed scenario)")
+    assert "continue-on-error" not in step
+    assert "|| true" not in step["run"]
+
+
+def test_load_step_waits_for_worker_to_drain_created_jobs(job):
+    run = _step(job, "Load test (mixed scenario)")["run"]
+    # Order: load run, then the queue drain poll, then the /ready check.
+    assert run.index("python3 -m loadtest") < run.index("/api/v1/admin/queue") < run.index("/ready")
+    assert "X-API-Key" in run
+    # The poll is bounded and judges the documented queue fields.
+    for token in ("deadline", "dead_lettered", "retry_scheduled", "pending", "running", "failed"):
+        assert token in run
+    # It compares against the number of jobs the load run created (from the JSON report).
+    assert "job_create" in run and "loadtest-report.json" in run
+    # A timeout fails the step with the last stats.
+    assert "sys.exit(1)" in run or "raise SystemExit(1)" in run
