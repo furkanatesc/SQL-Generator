@@ -8,13 +8,17 @@ from app.database import init_db, get_db_connection
 def _setup():
     init_db()
     with get_db_connection() as conn:
+        conn.execute("DELETE FROM connections")
         conn.execute("DELETE FROM workspaces")
+        conn.execute("DELETE FROM organizations WHERE slug != 'default'")
         conn.commit()
     app.dependency_overrides[verify_api_key] = lambda: True
     yield
     app.dependency_overrides.clear()
     with get_db_connection() as conn:
+        conn.execute("DELETE FROM connections")
         conn.execute("DELETE FROM workspaces")
+        conn.execute("DELETE FROM organizations WHERE slug != 'default'")
         conn.commit()
 
 
@@ -95,3 +99,59 @@ def test_requires_api_key():
     app.dependency_overrides.clear()  # drop the auth override for this check
     r = client.get("/api/v1/workspaces")
     assert r.status_code == 403
+
+
+def _org(name):
+    r = client.post("/api/v1/organizations", json={"name": name})
+    assert r.status_code == 201
+    return r.json()["data"]["id"]
+
+
+def _default_org_id():
+    from app.organization_repository import get_default_organization
+    return get_default_organization()["id"]
+
+
+def test_create_without_org_uses_default_org():
+    r = client.post("/api/v1/workspaces", json={"name": "Alpha"})
+    assert r.status_code == 201
+    assert r.json()["data"]["organization_id"] == _default_org_id()
+
+
+def test_create_with_unknown_org_400():
+    r = client.post("/api/v1/workspaces",
+                    json={"name": "Alpha", "organization_id": "nope"})
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "BAD_REQUEST"
+    assert r.json()["error"]["message"] == "organization_id mevcut değil"
+
+
+def test_same_slug_in_two_orgs_ok_same_org_409():
+    o1, o2 = _org("One"), _org("Two")
+    body = {"name": "Alpha", "slug": "alpha"}
+    assert client.post("/api/v1/workspaces", json={**body, "organization_id": o1}).status_code == 201
+    r2 = client.post("/api/v1/workspaces", json={**body, "organization_id": o2})
+    assert r2.status_code == 201 and r2.json()["data"]["organization_id"] == o2
+    assert client.post("/api/v1/workspaces", json={**body, "organization_id": o1}).status_code == 409
+
+
+def test_list_filter_by_organization():
+    o1 = _org("One")
+    client.post("/api/v1/workspaces", json={"name": "A"})
+    b = client.post("/api/v1/workspaces", json={"name": "B", "organization_id": o1}).json()["data"]
+    r = client.get("/api/v1/workspaces", params={"organization_id": o1})
+    assert [w["id"] for w in r.json()["data"]] == [b["id"]]
+    assert len(client.get("/api/v1/workspaces").json()["data"]) == 2
+
+
+def test_delete_workspace_with_connection_409():
+    wid = client.post("/api/v1/workspaces", json={"name": "Alpha"}).json()["data"]["id"]
+    c = client.post("/api/v1/connections", json=dict(
+        connection_ref="pg-local", name="PG Local", dialect="postgresql",
+        environment="local", host="localhost", port=5432, database="sqlgen",
+        auth_mode="secret_ref", secret_ref={"provider": "env", "key": "PG_PASSWORD"},
+        workspace_id=wid))
+    assert c.status_code == 201
+    r = client.delete(f"/api/v1/workspaces/{wid}")
+    assert r.status_code == 409
+    assert client.get(f"/api/v1/workspaces/{wid}").status_code == 200
