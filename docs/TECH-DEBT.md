@@ -1521,7 +1521,7 @@ CI boot smoke'u ekledi ve smoke'un yakaladığı dev-key seed açığını kapat
 5. **Gömülü Qdrant + SQLite tek-process** — `backend` replika ölçeklenemez; harici Qdrant/DB
    servisleştirme + migration *→ 32.3*. **32.3 (PR #190): sürümlü SQLite migration'ları — ÇÖZÜLDÜ
    (migration kısmı).** Harici DB/Qdrant servisleştirme + replika açık (§39). Backup/restore yalnız runbook'ta elle tar *→ 32.8*.
-6. **İmajlar yerelde build ediliyor** — registry publish / sürüm tag'i yok *→ 32.11*.
+6. ~~**İmajlar yerelde build ediliyor** — registry publish / sürüm tag'i yok *→ 32.11*.~~ **ÇÖZÜLDÜ (32.11, PR #198)** — `release.yml` GHCR yayını + `SQLGEN_IMAGE_REGISTRY`.
 7. **`schema_cache.json` `/app` kökünde, kalıcı değil** (yeniden üretilebilir cache; yol
    env'leştirmesi kod değişikliği ister). Bu yüzden **read-only root FS** de uygulanmadı.
    *İlgili Dosya:* `backend/app/schema_manager.py` (`CACHE_PATH`)
@@ -1681,3 +1681,14 @@ redaction'ı ekledi (API'de INFO log'larının hiç basılmaması hatası düzel
 3. **Embedding (RAG) çağrıları failover'sız** — `rag_manager`/`nvidia_embedding_provider` tek model.
 4. **Maliyet/latency tabanlı yönlendirme yok** — sıra sabit (birincil önce).
 5. **İstemci iç retry bütçesi sabit** (4 deneme, 2/4/8 sn) — failover'dan önce harcanır; ayarlanabilir değil.
+
+## §47. Sprint 32.11 (CI/CD Release Pipeline + Staging) devirleri — AÇIK
+
+32.11 tag-tetiklemeli GHCR yayınını, yayınlanan imajlarla staging smoke'unu ve staging compose overlay'ini ekledi (§36.6 kapandı). Kapsam dışı:
+
+1. **Otomatik prod/staging sunucu deploy'u yok** (SSH/Kubernetes) ve GitHub environments onay kapısı yok — staging smoke CI runner'ında koşar; gerçek sunucuya `pull`+`up` operatör adımı (runbook).
+   *İlgili Dosya:* `.github/workflows/release.yml`
+2. **İmaj imzalama (cosign), SBOM, güvenlik taraması (Trivy) yok.**
+3. **Yalnız linux/amd64 imajları** — arm64 / çok mimarili build yok.
+4. **Deploy öncesi ayrı migration adımı yok** — migration'lar hâlâ uygulama başlangıcında (§39 notu).
+5. **İlk gerçek yayın (tag push) yapılmadı** — workflow'un GHCR'a yazması ilk `v*.*.*` tag'inde doğrulanacak.

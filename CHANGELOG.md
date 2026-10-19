@@ -1164,6 +1164,9 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
   `request_id`/`job_id` bağlamı, secret redaction, uvicorn yönlendirmesi; prod compose JSON log. (PR #196)
 - **LLM Failover** (Sprint 32.10): model zinciri (`NL2SQL_LLM_FALLBACK_MODELS`), tipli LLM hataları, model
   başına devre kesici; `GET /api/v1/admin/llm`; `/ready` `llm_circuits_open`. (PR #197)
+- **CI/CD Release Pipeline + Staging** (Sprint 32.11): tag-tetiklemeli `release.yml` (GHCR yayını, yayınlanan
+  imajlarla staging smoke, GitHub release), `docker-compose.staging.yml`, sürümlü imajlar + OCI label'ları,
+  `SQLGEN_IMAGE_REGISTRY` öneki. (PR #198)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
