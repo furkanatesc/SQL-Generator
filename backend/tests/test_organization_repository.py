@@ -84,3 +84,38 @@ def test_in_use_blocks_delete():
     with pytest.raises(repo.OrganizationInUse):
         repo.delete_organization(o["id"])
     assert repo.get_organization(o["id"]) is not None
+
+
+def test_delete_is_atomic_even_if_prechecks_bypassed():
+    # The guard lives in the DELETE itself: a workspace row blocks the delete
+    # regardless of any earlier read (simulates a concurrent insert).
+    o = repo.create_organization("Acme", "acme", None)
+    with get_db_connection() as conn:
+        conn.execute(
+            "INSERT INTO workspaces (id, organization_id, name, slug, description, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (uuid.uuid4().hex, o["id"], "W", "w", None, "t", "t"),
+        )
+        conn.commit()
+        cur = conn.execute(
+            "DELETE FROM organizations WHERE id = ? AND slug != 'default' "
+            "AND NOT EXISTS (SELECT 1 FROM workspaces WHERE organization_id = organizations.id)",
+            (o["id"],),
+        )
+        assert cur.rowcount == 0
+    with pytest.raises(repo.OrganizationInUse):
+        repo.delete_organization(o["id"])
+    assert repo.get_organization(o["id"]) is not None
+
+
+def test_get_default_missing_raises_runtime_error():
+    with get_db_connection() as conn:
+        conn.execute("UPDATE organizations SET slug='tmp-default' WHERE slug='default'")
+        conn.commit()
+    try:
+        with pytest.raises(RuntimeError):
+            repo.get_default_organization()
+    finally:
+        with get_db_connection() as conn:
+            conn.execute("UPDATE organizations SET slug='default' WHERE slug='tmp-default'")
+            conn.commit()
