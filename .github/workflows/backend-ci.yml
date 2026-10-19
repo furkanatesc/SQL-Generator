@@ -414,7 +414,34 @@ jobs:
           # mixed read/write scenario and gate on error rate and p95 latency.
           docker compose -f docker-compose.prod.yml -f docker-compose.loadtest.yml up -d --wait --wait-timeout 180 backend
           cd backend
-          python3 -m loadtest --base-url http://localhost:8000 --api-key-file ../secrets/nl2sql_api_key             --scenario mixed --concurrency 16 --duration 20             --max-error-rate 0 --max-p95-ms 2000 --json ../loadtest-report.json
+          python3 -m loadtest --base-url http://localhost:8000 \
+            --api-key-file ../secrets/nl2sql_api_key \
+            --scenario mixed --concurrency 16 --duration 20 \
+            --max-error-rate 0 --max-p95-ms 2000 \
+            --json ../loadtest-report.json
+          # The worker must drain every job the load created (they fail fast without an LLM key):
+          # no pending/running left, nothing dead-lettered or waiting for a retry, and at least
+          # as many failed jobs as the run created. Bounded by a 180 s deadline.
+          python3 - <<'PY'
+          import json, time, urllib.request, sys
+          with open("../loadtest-report.json", encoding="utf-8") as f:
+              created = json.load(f)["summary"]["endpoints"]["job_create"]["requests"]
+          key = open("../secrets/nl2sql_api_key", encoding="utf-8").read().strip()
+          req = urllib.request.Request("http://localhost:8000/api/v1/admin/queue", headers={"X-API-Key": key})
+          deadline = time.time() + 180
+          d = {}
+          while time.time() < deadline:
+              with urllib.request.urlopen(req, timeout=10) as r:
+                  d = json.load(r)["data"]
+              c = d["counts"]
+              if c["pending"] == 0 and c["running"] == 0 and d["dead_lettered"] == 0 \
+                  and d["retry_scheduled"] == 0 and c["failed"] >= created:
+                  print("queue drained:", d, "jobs created:", created)
+                  sys.exit(0)
+              time.sleep(2)
+          print("queue did not drain within 180 s; jobs created:", created, "last stats:", d)
+          sys.exit(1)
+          PY
           # The stack must still be healthy after the load.
           curl -fsS http://localhost:8000/ready | python3 -c "import json,sys; c=json.load(sys.stdin)['checks']; sys.exit(0 if all(v['status']!='fail' for v in c.values()) else 1)"
 

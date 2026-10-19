@@ -25,6 +25,8 @@ def run(
     timeout_s: float = 10.0,
 ) -> tuple[list[Result], float]:
     base = base_url.rstrip("/")
+    # Localhost load must never be routed through HTTP(S)_PROXY; the opener is shared by all threads.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     run_id = uuid.uuid4().hex[:8]  # keeps slugs unique across repeated runs
     lock = threading.Lock()
     cursor = itertools.count()  # shared schedule cursor; also the per-run seq
@@ -46,7 +48,7 @@ def run(
         start = time.perf_counter()
         status: int | None
         try:
-            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            with opener.open(req, timeout=timeout_s) as resp:
                 resp.read()
                 status = resp.status
         except urllib.error.HTTPError as exc:

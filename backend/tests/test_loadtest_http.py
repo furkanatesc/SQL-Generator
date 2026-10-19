@@ -77,7 +77,22 @@ def test_http_protocol_errors_count_as_errors_and_keep_results(monkeypatch):
     def boom(*a, **k):
         raise http.client.IncompleteRead(b"x")
 
-    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", boom)
     results, elapsed = run("http://127.0.0.1:1", "k", SCENARIOS["read"], concurrency=2, duration_s=0.3)
     assert results and all(r.status is None and not r.ok for r in results)
     assert summarize(results, elapsed)["errors"] == len(results)
+
+
+def test_runner_opener_ignores_proxy_env(monkeypatch):
+    import urllib.request
+
+    seen = {}
+    real = urllib.request.build_opener
+
+    def spy(*handlers):
+        seen["handlers"] = handlers
+        return real(*handlers)
+
+    monkeypatch.setattr(urllib.request, "build_opener", spy)
+    run("http://127.0.0.1:1", "k", SCENARIOS["read"], concurrency=1, duration_s=0.1)
+    assert any(isinstance(h, urllib.request.ProxyHandler) and not h.proxies for h in seen["handlers"])

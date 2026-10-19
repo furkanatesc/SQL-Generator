@@ -34,6 +34,26 @@ def test_breaker_counts_every_concurrent_failure():
     assert breaker.consecutive_failures == 8 * 5000
 
 
+def test_breaker_opens_when_threshold_failures_arrive_in_parallel():
+    from app.llm.failover import CircuitBreaker
+
+    k = 5
+    breaker = CircuitBreaker(failure_threshold=k, reset_seconds=60.0)
+    barrier = threading.Barrier(k)
+
+    def fail():
+        barrier.wait()
+        breaker.record_failure(0.0)
+
+    threads = [threading.Thread(target=fail) for _ in range(k)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert breaker.consecutive_failures == k
+    assert breaker.state(0.0) == "open"
+
+
 def test_stream_endpoint_reads_job_off_the_event_loop(monkeypatch):
     import app.main as main
     from app.database import create_job, update_job_status

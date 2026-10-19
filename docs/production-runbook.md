@@ -139,6 +139,8 @@ Qdrant is restored only with `--include-qdrant`. Schedule `create` + `prune` wit
 **Before migrations:** when a new release has pending migrations, the backend first copies the app DB to
 `/app/data/sqlgen.db.pre-v<N>-<ts>.bak` (`NL2SQL_BACKUP_BEFORE_MIGRATION`, last 3 kept).
 
+**WAL mode:** the app DB runs in SQLite WAL mode, so `sqlgen.db`, `sqlgen.db-wal` and `sqlgen.db-shm` belong together; never copy `sqlgen.db` alone. To roll back to a `.bak`: stop the backend and worker, then preferably run `sqlite3 sqlgen.db ".restore <bak>"` (or delete the `-wal` and `-shm` files before copying the `.bak` over `sqlgen.db`). The `python -m app.backup restore` CLI is WAL-safe.
+
 ### Secrets (Sprint 32.2)
 - **Rotate the API key:** overwrite `secrets/nl2sql_api_key`; the file is re-read on every request, so
   no restart is needed. If `/ready` reports `API_KEY_ENV_SHADOWED`, a key stored in the database config
@@ -198,10 +200,13 @@ The stdlib harness in `backend/loadtest/` drives a running API over HTTP and rep
 latency percentiles and error rate (JSON report). Run it from `backend/`:
 
 ```bash
-python3 -m loadtest --base-url http://localhost:8000 --api-key-file ../secrets/nl2sql_api_key   --scenario mixed --concurrency 16 --duration 20   --max-error-rate 0 --max-p95-ms 2000 --json ../loadtest-report.json
+python3 -m loadtest --base-url http://localhost:8000 \
+  --api-key-file ../secrets/nl2sql_api_key \
+  --scenario mixed --concurrency 16 --duration 20 \
+  --max-error-rate 0 --max-p95-ms 2000 --json ../loadtest-report.json
 ```
 
-- Scenarios: `read` (jobs, query history, workspaces listings), `write` (workspace and job creation), `mixed` (both at once).
+- Scenarios: `read` (`/health`, `/ready`, jobs, query history, workspaces listings), `write` (workspace and job creation), `mixed` (both at once).
 - Thresholds: `--max-error-rate` is the allowed fraction of failed requests (0 = none);
   `--max-p95-ms` caps the 95th-percentile latency. Exit code 0 = ok, 1 = a threshold was
   violated, 2 = no API key.
