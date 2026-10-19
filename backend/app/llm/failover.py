@@ -31,8 +31,13 @@ class CircuitBreaker:
         self.reset_seconds = reset_seconds
         self.consecutive_failures = 0
         self.opened_at: Optional[float] = None
+        self._lock = threading.Lock()
 
     def state(self, now: float) -> str:
+        with self._lock:
+            return self._state(now)
+
+    def _state(self, now: float) -> str:
         if self.opened_at is None:
             return "closed"
         return "half_open" if now >= self.opened_at + self.reset_seconds else "open"
@@ -41,18 +46,26 @@ class CircuitBreaker:
         return self.state(now) != "open"
 
     def retry_in(self, now: float) -> float:
-        if self.opened_at is None:
-            return 0.0
-        return max(0.0, self.opened_at + self.reset_seconds - now)
+        with self._lock:
+            if self.opened_at is None:
+                return 0.0
+            return max(0.0, self.opened_at + self.reset_seconds - now)
 
     def record_success(self) -> None:
-        self.consecutive_failures = 0
-        self.opened_at = None
+        with self._lock:
+            self.consecutive_failures = 0
+            self.opened_at = None
 
     def record_failure(self, now: float) -> None:
-        self.consecutive_failures += 1
-        if self.opened_at is not None or self.consecutive_failures >= self.failure_threshold:
-            self.opened_at = now  # (re)open; a failed half-open trial restarts the timer
+        with self._lock:
+            self.consecutive_failures += 1
+            if self.opened_at is not None or self.consecutive_failures >= self.failure_threshold:
+                self.opened_at = now  # (re)open; a failed half-open trial restarts the timer
+
+    def configure(self, failure_threshold: int, reset_seconds: float) -> None:
+        with self._lock:
+            self.failure_threshold = failure_threshold
+            self.reset_seconds = reset_seconds
 
 
 _lock = threading.Lock()
@@ -74,8 +87,7 @@ def get_breaker(model: str) -> CircuitBreaker:
             breaker = _breakers[model] = CircuitBreaker(settings.llm_circuit_failures,
                                                         settings.llm_circuit_reset_seconds)
         else:
-            breaker.failure_threshold = settings.llm_circuit_failures
-            breaker.reset_seconds = settings.llm_circuit_reset_seconds
+            breaker.configure(settings.llm_circuit_failures, settings.llm_circuit_reset_seconds)
         return breaker
 
 
