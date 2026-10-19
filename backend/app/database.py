@@ -16,7 +16,9 @@ def get_db_path():
     )
 
 def get_db_connection():
-    conn = sqlite3.connect(get_db_path())
+    busy_ms = get_settings().db_busy_timeout_ms
+    conn = sqlite3.connect(get_db_path(), timeout=busy_ms / 1000)
+    conn.execute(f"PRAGMA busy_timeout={int(busy_ms)}")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -36,6 +38,8 @@ def _backup_before_pending_migrations(conn) -> None:
 
 def init_db():
     with get_db_connection() as conn:
+        # Sprint 32.12: WAL lets readers proceed during a write (persistent, set once).
+        conn.execute("PRAGMA journal_mode=WAL")
         # Sprint 32.3: schema lives in versioned migrations (app/migrations/app_db.py);
         # init_db only applies them and seeds default data.
         _backup_before_pending_migrations(conn)
