@@ -81,9 +81,21 @@ def test_load_step_waits_for_worker_to_drain_created_jobs(job):
     assert run.index("python3 -m loadtest") < run.index("/api/v1/admin/queue") < run.index("/ready")
     assert "X-API-Key" in run
     # The poll is bounded and judges the documented queue fields.
-    for token in ("deadline", "dead_lettered", "retry_scheduled", "pending", "running", "failed"):
+    for token in ("deadline", "dead_lettered", "retry_scheduled", "pending", "processing", "failed"):
         assert token in run
     # It compares against the number of jobs the load run created (from the JSON report).
     assert "job_create" in run and "loadtest-report.json" in run
     # A timeout fails the step with the last stats.
     assert "sys.exit(1)" in run or "raise SystemExit(1)" in run
+
+
+def test_drain_script_only_reads_real_queue_status_keys(job):
+    import re
+
+    from app.jobs.repository import JOB_STATUSES
+
+    run = _step(job, "Load test (mixed scenario)")["run"]
+    keys = set(re.findall(r'c\["(\w+)"\]', run))
+    assert keys and keys <= set(JOB_STATUSES)
+    assert "processing" in keys
+    assert '"running"' not in run
