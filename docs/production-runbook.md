@@ -76,6 +76,40 @@ with the project name (by default the checkout directory, e.g. `sqlgen_sqlgen_da
 `docker volume ls`): `docker run --rm -v sqlgen_sqlgen_data:/data -v "$PWD":/backup alpine tar czf
 /backup/sqlgen_data.tgz -C /data .`
 
+### Releases (Sprint 32.11)
+A release is a version tag. `.github/workflows/release.yml` runs **only** for `v*.*.*` tags or a manual
+dispatch:
+1. **verify**: backend test suite and frontend build.
+2. **publish**: builds and pushes `ghcr.io/<owner>/sqlgen-backend` and `sqlgen-frontend`, tagged `<version>`,
+   `<major>.<minor>` and `sha-<commit>`. The backend image reports the version on `/health`.
+3. **staging-smoke**: pulls the **published** images (no build) and runs them with the staging overlay. It
+   checks `/health` (version), `/ready` (no failing component), the SPA, and that a job runs on the worker.
+4. **github-release**: for tags only, creates a GitHub Release with generated notes.
+
+```bash
+git tag v1.1.0 && git push origin v1.1.0      # publishes images: an outward-facing step, done by a maintainer
+```
+
+**Deploy a released version** (no local build):
+```bash
+# .env: SQLGEN_IMAGE_REGISTRY=ghcr.io/<owner>/  SQLGEN_IMAGE_TAG=1.1.0   (docker login ghcr.io if the package is private)
+C="docker compose -f docker-compose.prod.yml"
+$C exec backend python -m app.backup create        # 32.8: back up first
+$C pull && $C up -d --no-build --wait
+```
+**Roll back:** set `SQLGEN_IMAGE_TAG` to the previous version and `pull && up`. If the newer release ran
+migrations, the older image reports `DB_SCHEMA_AHEAD`: restore the backup taken before the upgrade.
+
+### Staging (Sprint 32.11)
+`docker-compose.staging.yml` is an overlay for the production file. It uses a separate compose project
+(`sqlgen-staging`: its own volumes and network) and `NL2SQL_ENVIRONMENT=production-staging`, so every
+production safety check stays on. Create `.env.staging` from `.env.prod.example` with other ports (e.g.
+`SQLGEN_BACKEND_PORT=8100`, `SQLGEN_FRONTEND_PORT=8180`), its own API-key file and the release to test:
+```bash
+S="docker compose --env-file .env.staging -f docker-compose.prod.yml -f docker-compose.staging.yml"
+$S pull && $S up -d --no-build --wait
+```
+
 ### Backup and restore (Sprint 32.8)
 `python -m app.backup` writes one `.tar.gz` that contains:
 - consistent snapshots of the app DB and the trace DB (SQLite online backup API, safe while running);
@@ -208,7 +242,7 @@ frontend's origin (e.g. `http://sqlgen.example.com:8080`) to `NL2SQL_CORS_ALLOW_
 
 ### Known limitations (Sprint 32.0)
 No TLS termination or single-origin reverse proxy, no external secret store (Vault / cloud secret
-managers; see §38), images are built locally (registry publishing → Sprint 32.11), and
+managers; see §38), no automated server deploy (releases publish images to GHCR; deploying is an operator step, §47), and
 the schema cache file (`/app/schema_cache.json`) is not persisted (it is rebuilt on demand). See
 `docs/TECH-DEBT.md` §36.
 
