@@ -22,8 +22,9 @@ def _db():
 
 def test_counts_all_keys_zero_when_empty():
     c = repo.resource_counts()
-    assert set(c.keys()) == set(_TABLES)
-    assert all(v == 0 for v in c.values())
+    assert set(c.keys()) == set(_TABLES) | {"organizations"}
+    assert c["organizations"] == 1  # default org (migration v4)
+    assert all(v == 0 for k, v in c.items() if k != "organizations")
 
 
 def test_counts_reflect_rows():

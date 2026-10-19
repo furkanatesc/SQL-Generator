@@ -35,7 +35,7 @@ def test_overview_envelope_and_counts():
     assert b["data"]["environment"]
     assert "debug_endpoints_enabled" in b["data"]
     assert b["data"]["resources"]["workspaces"] == 2
-    assert set(b["data"]["resources"].keys()) == {"workspaces", "connections",
+    assert set(b["data"]["resources"].keys()) == {"organizations", "workspaces", "connections",
         "schema_syncs", "query_runs", "query_run_feedback"}
 
 

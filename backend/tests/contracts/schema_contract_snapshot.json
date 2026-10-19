@@ -127,6 +127,16 @@
       "data"
     ]
   },
+  "ApiResponse_OrganizationResponse_": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
   "ApiResponse_QueryHistorySummary_": {
     "properties": [
       "data",
@@ -218,6 +228,16 @@
     ]
   },
   "ApiResponse_list_FeedbackResponse__": {
+    "properties": [
+      "data",
+      "meta",
+      "status"
+    ],
+    "required": [
+      "data"
+    ]
+  },
+  "ApiResponse_list_OrganizationResponse__": {
     "properties": [
       "data",
       "meta",
@@ -981,6 +1001,40 @@
       "total_tokens"
     ]
   },
+  "OrganizationCreate": {
+    "properties": [
+      "description",
+      "name",
+      "slug"
+    ],
+    "required": [
+      "name"
+    ]
+  },
+  "OrganizationResponse": {
+    "properties": [
+      "created_at",
+      "description",
+      "id",
+      "name",
+      "slug",
+      "updated_at"
+    ],
+    "required": [
+      "created_at",
+      "id",
+      "name",
+      "slug",
+      "updated_at"
+    ]
+  },
+  "OrganizationUpdate": {
+    "properties": [
+      "description",
+      "name"
+    ],
+    "required": []
+  },
   "PageMeta": {
     "properties": [
       "count",
@@ -1293,6 +1347,7 @@
   "ResourceCounts": {
     "properties": [
       "connections",
+      "organizations",
       "query_run_feedback",
       "query_runs",
       "schema_syncs",
@@ -1300,6 +1355,7 @@
     ],
     "required": [
       "connections",
+      "organizations",
       "query_run_feedback",
       "query_runs",
       "schema_syncs",

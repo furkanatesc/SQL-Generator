@@ -27,6 +27,7 @@ router = APIRouter(
 
 
 class ResourceCounts(BaseModel):
+    organizations: int
     workspaces: int
     connections: int
     schema_syncs: int
