@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     llm_fallback_models: str = ""
     llm_circuit_failures: int = Field(default=3, ge=1)
     llm_circuit_reset_seconds: float = Field(default=60.0, gt=0)
+    db_busy_timeout_ms: int = Field(default=5000, ge=0)
 
     model_config = SettingsConfigDict(
         env_prefix="NL2SQL_",

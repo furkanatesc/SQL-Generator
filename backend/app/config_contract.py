@@ -79,6 +79,8 @@ ENV_CONTRACT: tuple[EnvVar, ...] = (
            "Consecutive failures that open a model's circuit (the model is skipped)."),
     EnvVar("NL2SQL_LLM_CIRCUIT_RESET_SECONDS", "settings", False, False, "60",
            "How long an open circuit skips its model before one trial call."),
+    EnvVar("NL2SQL_DB_BUSY_TIMEOUT_MS", "settings", False, False, "5000",
+           "Milliseconds a SQLite app-DB connection waits for a lock before failing."),
     # --- Direct os.getenv reads ----------------------------------------------------
     EnvVar("NL2SQL_API_KEY", "direct", True, True, "(none)",
            "API key fallback when no key is stored in the DB config (app/auth.py)."),

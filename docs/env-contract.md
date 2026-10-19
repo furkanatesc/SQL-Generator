@@ -100,6 +100,7 @@ Rules:
 | **`NL2SQL_LLM_FALLBACK_MODELS`** | Comma-separated | *(none)* | Sprint 32.10: NIM model ids tried after the primary `llm_model` (same endpoint and key) when a call fails transiently (429/5xx/network) or the model is unavailable (400/404). There is no failover on 401/403. |
 | **`NL2SQL_LLM_CIRCUIT_FAILURES`** | Integer ≥ 1 | `3` | Consecutive failures that open a model's circuit: the model is skipped. |
 | **`NL2SQL_LLM_CIRCUIT_RESET_SECONDS`** | Float > 0 | `60` | How long an open circuit skips its model before one trial call (half-open). |
+| **`NL2SQL_DB_BUSY_TIMEOUT_MS`** | Integer ≥ 0 | `5000` | Sprint 32.12: milliseconds a SQLite app-DB connection waits for a lock before failing (`database is locked`). The app DB also runs in WAL mode. |
 | **`NL2SQL_LLM_REQUESTS_PER_MINUTE`** | Float > 0 | `15` | Process-wide LLM (NVIDIA NIM) call rate, shared by every job in that process (API or worker). |
 | **`NL2SQL_LLM_BURST`** | Integer ≥ 1 | `3` | Burst size of the LLM call limiter. |
 | **`NL2SQL_JOB_MAX_ATTEMPTS`** | Integer ≥ 1 | `3` | Worker mode (Sprint 32.5): total attempts for a transiently failing job (every pipeline attempt was an LLM API error, or the worker died) before it is dead-lettered. |
