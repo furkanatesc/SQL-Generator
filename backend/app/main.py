@@ -25,6 +25,7 @@ from app.api.schema_sync_api import router as schema_sync_router
 from app.api.cache_api import router as cache_router
 from app.api.v1_meta import router as v1_meta_router
 from app.api.workspaces import router as workspaces_router
+from app.api.organizations import router as organizations_router
 from app.api.connections import router as connections_router
 from app.api.schema_syncs import router as schema_syncs_router
 from app.api.query_runs import router as query_runs_router
@@ -104,6 +105,7 @@ app.include_router(rule_suggestions_router)
 app.include_router(schema_sync_router)
 app.include_router(cache_router)
 app.include_router(v1_meta_router)
+app.include_router(organizations_router)
 app.include_router(workspaces_router)
 app.include_router(connections_router)
 app.include_router(schema_syncs_router)

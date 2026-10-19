@@ -19,6 +19,11 @@ client = TestClient(app)
 # here (and made to conform) or this guard fails -> forces conformance review.
 EXPECTED_V1_ROUTES = {
     ("GET", "/api/v1"),
+    ("POST", "/api/v1/organizations"),
+    ("GET", "/api/v1/organizations"),
+    ("GET", "/api/v1/organizations/{organization_id}"),
+    ("PATCH", "/api/v1/organizations/{organization_id}"),
+    ("DELETE", "/api/v1/organizations/{organization_id}"),
     ("POST", "/api/v1/workspaces"),
     ("GET", "/api/v1/workspaces"),
     ("GET", "/api/v1/workspaces/{workspace_id}"),

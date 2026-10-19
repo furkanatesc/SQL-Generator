@@ -9,6 +9,7 @@ from app.database import get_db_connection
 
 # Fixed table names (no user input) — interpolation is safe.
 _RESOURCE_TABLES = (
+    "organizations",
     "workspaces",
     "connections",
     "schema_syncs",
