@@ -193,6 +193,28 @@ exempt. The limits are kept in memory per API process and reset on restart. LLM 
 throttled per process (API or worker) by `NL2SQL_LLM_REQUESTS_PER_MINUTE` / `NL2SQL_LLM_BURST`; across
 workers, use `NL2SQL_JOB_MAX_CONCURRENT` (32.5) as the global brake.
 
+### Load testing (Sprint 32.12)
+The stdlib harness in `backend/loadtest/` drives a running API over HTTP and reports throughput,
+latency percentiles and error rate (JSON report). Run it from `backend/`:
+
+```bash
+python3 -m loadtest --base-url http://localhost:8000 --api-key-file ../secrets/nl2sql_api_key   --scenario mixed --concurrency 16 --duration 20   --max-error-rate 0 --max-p95-ms 2000 --json ../loadtest-report.json
+```
+
+- Scenarios: `read` (jobs, query history, workspaces listings), `write` (workspace and job creation), `mixed` (both at once).
+- Thresholds: `--max-error-rate` is the allowed fraction of failed requests (0 = none);
+  `--max-p95-ms` caps the 95th-percentile latency. Exit code 0 = ok, 1 = a threshold was
+  violated, 2 = no API key.
+- Rate limits: the production limits (300 req/min, 20 jobs/min) would turn a load run into a
+  stream of 429s. For measurements use the overlay `docker-compose.loadtest.yml`
+  (`-f docker-compose.prod.yml -f docker-compose.loadtest.yml`), which sets both limits to 0.
+  It is for CI and measurement only - never use it in production.
+- CI (`prod-compose-smoke`) runs the mixed scenario on the production stack and uploads the JSON
+  report as an artifact. The CI numbers are a reference for regressions, not an SLA: shared
+  runners are noisy.
+- Limits to expect: one uvicorn process and a SQLite app DB (WAL, busy timeout) - writes are
+  serialized, so throughput plateaus well before CPU does. Known gaps and follow-ups: TECH-DEBT §48.
+
 ### Job worker (Sprint 32.4)
 NL→SQL jobs run in the separate `worker` service; the backend runs with `NL2SQL_JOB_EXECUTION_MODE=worker`,
 so it only writes `pending` jobs. The worker claims them from the shared app database (claims are atomic),
