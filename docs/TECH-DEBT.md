@@ -1692,3 +1692,18 @@ redaction'ı ekledi (API'de INFO log'larının hiç basılmaması hatası düzel
 3. **Yalnız linux/amd64 imajları** — arm64 / çok mimarili build yok.
 4. **Deploy öncesi ayrı migration adımı yok** — migration'lar hâlâ uygulama başlangıcında (§39 notu).
 5. **İlk gerçek yayın (tag push) yapılmadı** — workflow'un GHCR'a yazması ilk `v*.*.*` tag'inde doğrulanacak.
+
+## §48. Sprint 32.12 (API Load / Concurrency Testing) devirleri — AÇIK
+
+32.12 app DB'yi WAL + busy timeout'a aldı, eşzamanlılık düzeltmeleri/testleri, stdlib yük harness'ı ve CI yük kapısını ekledi. Kapsam dışı:
+
+1. **Dağıtık / uzun süreli (soak) yük testi yok** — tek runner, 20 sn; bellek sızıntısı/uzun süre davranışı ölçülmedi.
+   *İlgili Dosya:* `backend/loadtest/`
+2. **Gerçek LLM'li yük yok** — job'lar anahtarsız worker'da hızlı fail olur (NIM ~40 RPM kotası/maliyet).
+3. **Tek uvicorn process** — çoklu worker'da rate limit (§42) ve devre durumu (§46) process başına; paylaşılan durum yok.
+4. **App DB SQLite (WAL)** — tek yazar; yüksek yazma yükünde Postgres/bağlantı havuzu gerekir (Phase 14). Trace DB tek bağlantı + RLock throughput tavanı yalnız ölçüldü.
+5. **SLO ve latency regresyon kapısı yok** — CI p95 tavanı cömert (2000 ms), baseline karşılaştırması yok.
+6. **Ertelenen küçük notlar:** harness'ta `--timeout` bayrağı yok, eksik `--api-key-file` traceback verir, worker içindeki HTTP-dışı istisna hata sayılmaz (yalnız traceback); admin LLM durumu devre alanlarını tek anlık görüntü olmadan okur.
+7. **Harness'ta `--accept-429` yok** — rate limit'li gerçek prod stack'ine karşı 429'lar hata sayılır; ölçüm `docker-compose.loadtest.yml` overlay'iyle (yalnız CI/ölçüm) yapılır.
+8. **Half-open devre tek deneme ile sınırlı değil** (32.10'dan kalma) — aynı anda `half_open` gören birden çok thread modele gider.
+   *İlgili Dosya:* `backend/app/llm/failover.py`
