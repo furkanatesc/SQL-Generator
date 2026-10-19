@@ -192,7 +192,7 @@ admin console ile SaaS readiness sağlamak.
 
 | Sprint | İş |
 |---|---|
-| 33.0 | Organization / Workspace Model |
+| 33.0 | Organization / Workspace Model | ✅ Tamam (PR #200) · **Organization / Workspace Model** — **Phase 14 (SaaS / Multi-Tenant Readiness) İLK sprint'i.** App DB migration v4 `organizations`: yeni `organizations` tablosu (global UNIQUE slug = kiracı kimliği) + her DB'de **default org** (`slug=default`); `workspaces` tablo rebuild ile `organization_id NOT NULL` + **`UNIQUE(organization_id, slug)`** (global slug UNIQUE kalktı — bir kiracının slug'ı başka kiracıya 409 ile sızıyordu); mevcut workspace'ler default org'a taşındı (idempotent, testli). Yeni `/api/v1/organizations` CRUD (30.1 deseni; default org ve workspace'i olan org silinemez → 409, tek koşullu DELETE ile atomik). Workspace API geriye uyumlu: opsiyonel `organization_id` (yoksa default org; geçersiz → 400), yanıtta `organization_id`, `?organization_id=` filtresi; org check + insert tek `BEGIN IMMEDIATE`. **Bütünlük düzeltmesi:** bağlantısı olan workspace artık silinemez (409; önceden sessizce sahipsiz connection bırakıyordu). Admin overview `organizations` sayacı; sözleşme allowlist + snapshot'lar. 26.1 eşlemesi: `tenant_id ≙ organization_id`. Full suite 3280 passed/37 skipped. **Bilinçli kapsam dışı (TECH-DEBT §49):** kullanıcı/üyelik ve org rolleri (→33.1), RBAC + 26.1 canlı enforcement (→33.2), API key'lerin org kapsamı, workspace taşıma/org slug değişikliği/soft delete, frontend seçici, legacy uç noktaların kapsamı. |
 | 33.1 | User Roles |
 | 33.2 | RBAC |
 | 33.3 | Billing Boundary |
