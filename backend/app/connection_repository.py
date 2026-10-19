@@ -26,6 +26,10 @@ class ConnectionRefConflict(Exception):
     """Raised when creating a connection whose connection_ref already exists."""
 
 
+class UnknownWorkspace(Exception):
+    """Raised when creating a connection in a workspace that does not exist."""
+
+
 def _now() -> str:
     return datetime.datetime.utcnow().isoformat()
 
@@ -69,6 +73,14 @@ def create_connection(
     now = _now()
     try:
         with get_db_connection() as conn:
+            # Workspace check + insert share one write transaction so a
+            # concurrent delete_workspace cannot orphan this connection.
+            conn.execute("BEGIN IMMEDIATE")
+            if workspace_id is not None and conn.execute(
+                "SELECT 1 FROM workspaces WHERE id = ?", (workspace_id,)
+            ).fetchone() is None:
+                conn.rollback()
+                raise UnknownWorkspace(workspace_id)
             conn.execute(
                 """
                 INSERT INTO connections (id, connection_ref, workspace_id, name,
@@ -83,6 +95,7 @@ def create_connection(
             )
             conn.commit()
     except sqlite3.IntegrityError as exc:
+        # (the failed transaction is rolled back when the connection closes)
         # Only the UNIQUE(connection_ref) constraint maps to a 409 conflict; any
         # other integrity violation is a genuine error and must surface, not be
         # mislabeled as a duplicate.

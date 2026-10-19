@@ -35,7 +35,14 @@ The runner (`backend/app/migrations/runner.py`) is forward-only. Applied version
 | app | 1 | `baseline` | 32.3 | The pre-32.3 schema (12 tables, 6 indexes) |
 | app | 2 | `job_worker` | 32.4 | Adds `jobs.worker_id`, `claimed_at` and `heartbeat_at`; adds the `job_logs` table and two indexes |
 | app | 3 | `queue` | 32.5 | Adds `jobs.priority`, `attempts`, `next_attempt_at` and `dead_lettered_at`; adds the `idx_jobs_queue` index |
+| app | 4 | `organizations` | 33.0 | Adds the `organizations` table (seeded with a `default` org) and rebuilds `workspaces` with `NOT NULL organization_id` and `UNIQUE(organization_id, slug)`; existing workspaces move to the default org |
 | trace | 1 | `baseline` | 32.3 | The pre-32.3 trace schema |
+
+Rolling back the image on a v4 database is not supported: the old code inserts
+workspaces without `organization_id`, which fails on the `NOT NULL` column and
+surfaces as a misleading 409 "slug zaten kullanımda". Roll back with the
+pre-migration backup instead (`python -m app.backup restore`, see the
+production runbook).
 
 The runner opens each migration with `BEGIN IMMEDIATE` and checks the version again inside the
 transaction. If the backend and the worker start at the same time, the second one skips a migration the
