@@ -151,8 +151,10 @@ def update_workspace(
 def delete_workspace(workspace_id: str) -> bool:
     """Delete a workspace; False if absent, WorkspaceInUse if connections use it.
 
-    The in-use check and the delete are one conditional statement, so a
-    connection created concurrently cannot be orphaned.
+    The in-use check and the delete are one conditional statement, and
+    connection creation checks the workspace and inserts in one BEGIN
+    IMMEDIATE transaction (connection_repository.create_connection), so the
+    two are serialized and a connection can never be orphaned.
     """
     with get_db_connection() as conn:
         cur = conn.execute(

@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field, model_validator
 from app.api.contract import API_V1_PREFIX, ApiResponse, PageMeta, ResponseMeta
 from app.auth import verify_api_key
 from app import connection_repository as repo
-from app import workspace_repository as ws_repo
 from app.evaluation.connection_abstraction import (
     SQLConnectionAuthMode,
     SQLConnectionEnvironment,
@@ -99,8 +98,6 @@ def _resp(row) -> ApiResponse[ConnectionResponse]:
 
 @router.post("", status_code=201, response_model=ApiResponse[ConnectionResponse])
 def create_connection(payload: ConnectionCreate) -> ApiResponse[ConnectionResponse]:
-    if payload.workspace_id is not None and ws_repo.get_workspace(payload.workspace_id) is None:
-        raise HTTPException(status_code=400, detail="workspace_id mevcut değil")
     sp = payload.secret_ref.provider if payload.secret_ref else None
     sk = payload.secret_ref.key if payload.secret_ref else None
     try:
@@ -112,6 +109,8 @@ def create_connection(payload: ConnectionCreate) -> ApiResponse[ConnectionRespon
             secret_provider=sp, secret_key=sk, max_rows=payload.max_rows,
             timeout_seconds=payload.timeout_seconds,
         )
+    except repo.UnknownWorkspace:
+        raise HTTPException(status_code=400, detail="workspace_id mevcut değil")
     except repo.ConnectionRefConflict:
         raise HTTPException(status_code=409, detail=f"connection_ref '{payload.connection_ref}' zaten kullanımda")
     except SQLConnectionAbstractionContractError as exc:

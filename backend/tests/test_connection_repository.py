@@ -64,12 +64,27 @@ def test_bad_port_rejected():
 
 
 def test_list_filter_by_workspace_and_paginate():
-    repo.create_connection(**_mk(connection_ref="a", workspace_id="ws1"))
-    repo.create_connection(**_mk(connection_ref="b", workspace_id="ws1"))
-    repo.create_connection(**_mk(connection_ref="c", workspace_id="ws2"))
-    assert len(repo.list_connections(limit=50, offset=0)) == 3
-    assert len(repo.list_connections(limit=50, offset=0, workspace_id="ws1")) == 2
-    assert len(repo.list_connections(limit=1, offset=0, workspace_id="ws1")) == 1
+    from app import workspace_repository as wsr
+    ws1 = wsr.create_workspace("WS1 repo", "ws1-repo-test", None)["id"]
+    ws2 = wsr.create_workspace("WS2 repo", "ws2-repo-test", None)["id"]
+    try:
+        repo.create_connection(**_mk(connection_ref="a", workspace_id=ws1))
+        repo.create_connection(**_mk(connection_ref="b", workspace_id=ws1))
+        repo.create_connection(**_mk(connection_ref="c", workspace_id=ws2))
+        assert len(repo.list_connections(limit=50, offset=0)) == 3
+        assert len(repo.list_connections(limit=50, offset=0, workspace_id=ws1)) == 2
+        assert len(repo.list_connections(limit=1, offset=0, workspace_id=ws1)) == 1
+    finally:
+        with get_db_connection() as conn:
+            conn.execute("DELETE FROM connections")
+            conn.execute("DELETE FROM workspaces WHERE id IN (?, ?)", (ws1, ws2))
+            conn.commit()
+
+
+def test_create_unknown_workspace_raises_and_inserts_nothing():
+    with pytest.raises(repo.UnknownWorkspace):
+        repo.create_connection(**_mk(workspace_id="nope"))
+    assert repo.list_connections(limit=50, offset=0) == []
 
 
 def test_update_whitelist_revalidates():

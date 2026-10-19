@@ -66,3 +66,26 @@ def test_migration_is_idempotent(tmp_path):
     _default_org(conn)
     assert status.current == 4
     assert [r[0] for r in conn.execute("SELECT version FROM schema_migrations")][-1] == 4
+
+
+def test_v4_function_rerun_on_migrated_db_is_noop(tmp_path):
+    from app.migrations.app_db import _organizations
+    conn = _conn(tmp_path)
+    migrate(conn, APP_MIGRATIONS[:3])
+    for i in (1, 2):
+        conn.execute(
+            "INSERT INTO workspaces (id, name, slug, description, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (f"w{i}", f"N{i}", f"s{i}", f"d{i}", "t1", "t2"),
+        )
+    conn.commit()
+    migrate(conn, APP_MIGRATIONS)
+    orgs_before = [tuple(r) for r in conn.execute("SELECT * FROM organizations ORDER BY id")]
+    ws_before = [tuple(r) for r in conn.execute("SELECT * FROM workspaces ORDER BY id")]
+    org_id = _default_org(conn)["id"]
+    _organizations(conn)
+    conn.commit()
+    assert [tuple(r) for r in conn.execute("SELECT * FROM organizations ORDER BY id")] == orgs_before
+    assert [tuple(r) for r in conn.execute("SELECT * FROM workspaces ORDER BY id")] == ws_before
+    assert conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0] == 1
+    assert _default_org(conn)["id"] == org_id

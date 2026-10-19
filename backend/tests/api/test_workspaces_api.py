@@ -155,3 +155,9 @@ def test_delete_workspace_with_connection_409():
     r = client.delete(f"/api/v1/workspaces/{wid}")
     assert r.status_code == 409
     assert client.get(f"/api/v1/workspaces/{wid}").status_code == 200
+
+
+def test_list_workspaces_unknown_organization_is_empty():
+    r = client.get("/api/v1/workspaces", params={"organization_id": "nope"})
+    assert r.status_code == 200
+    assert r.json()["data"] == []

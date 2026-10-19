@@ -118,3 +118,26 @@ def test_patch_empty_body_422():
 def test_requires_api_key():
     app.dependency_overrides.clear()
     assert client.get("/api/v1/connections").status_code == 403
+
+
+def test_workspace_deleted_before_insert_is_400_and_no_orphan(monkeypatch):
+    """The workspace check and the INSERT share one transaction: a workspace
+    deleted after API entry but before the repository transaction must yield
+    400, never an orphan connection."""
+    from app import connection_repository as crepo
+    ws = client.post("/api/v1/workspaces", json={"name": "Gone"}).json()["data"]["id"]
+    real = crepo.build_profile
+
+    def build_then_delete(**kw):
+        out = real(**kw)
+        with get_db_connection() as conn:
+            conn.execute("DELETE FROM workspaces WHERE id = ?", (ws,))
+            conn.commit()
+        return out
+
+    monkeypatch.setattr(crepo, "build_profile", build_then_delete)
+    r = client.post("/api/v1/connections", json=_payload(workspace_id=ws))
+    assert r.status_code == 400
+    assert r.json()["error"]["message"] == "workspace_id mevcut değil"
+    with get_db_connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM connections").fetchone()[0] == 0
