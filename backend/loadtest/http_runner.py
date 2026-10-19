@@ -1,6 +1,7 @@
 """Threaded urllib runner. Stdlib only."""
 from __future__ import annotations
 
+import http.client
 import itertools
 import json
 import threading
@@ -51,7 +52,7 @@ def run(
         except urllib.error.HTTPError as exc:
             status = exc.code
             exc.close()
-        except (urllib.error.URLError, OSError, ValueError):
+        except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError):
             status = None
         latency = (time.perf_counter() - start) * 1000.0
         return Result(spec.name, status, latency, status is not None and status in spec.expected)
@@ -61,11 +62,13 @@ def run(
 
     def worker() -> None:
         local: list[Result] = []
-        while time.perf_counter() < deadline:
-            spec, seq = next_spec()
-            local.append(fire(spec, seq))
-        with lock:
-            results.extend(local)
+        try:
+            while time.perf_counter() < deadline:
+                spec, seq = next_spec()
+                local.append(fire(spec, seq))
+        finally:
+            with lock:
+                results.extend(local)
 
     threads = [threading.Thread(target=worker, daemon=True) for _ in range(max(1, concurrency))]
     for t in threads:

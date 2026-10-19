@@ -68,3 +68,16 @@ def test_cli_writes_json_and_hides_key(live_url, tmp_path, capsys):
     assert DEV_DEFAULT_API_KEY not in text
     assert DEV_DEFAULT_API_KEY not in capsys.readouterr().out
     assert main(argv + ["--max-p95-ms", "0"]) == 1
+
+
+def test_http_protocol_errors_count_as_errors_and_keep_results(monkeypatch):
+    import http.client
+    import urllib.request
+
+    def boom(*a, **k):
+        raise http.client.IncompleteRead(b"x")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    results, elapsed = run("http://127.0.0.1:1", "k", SCENARIOS["read"], concurrency=2, duration_s=0.3)
+    assert results and all(r.status is None and not r.ok for r in results)
+    assert summarize(results, elapsed)["errors"] == len(results)
