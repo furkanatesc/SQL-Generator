@@ -4831,6 +4831,18 @@
             "title": "Name",
             "type": "string"
           },
+          "organization_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          },
           "slug": {
             "anyOf": [
               {
@@ -4876,6 +4888,10 @@
             "title": "Name",
             "type": "string"
           },
+          "organization_id": {
+            "title": "Organization Id",
+            "type": "string"
+          },
           "slug": {
             "title": "Slug",
             "type": "string"
@@ -4887,6 +4903,7 @@
         },
         "required": [
           "id",
+          "organization_id",
           "name",
           "slug",
           "created_at",
@@ -8886,6 +8903,22 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "organization_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Organization Id"
             }
           }
         ],

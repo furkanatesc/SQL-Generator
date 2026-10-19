@@ -1,17 +1,22 @@
 import pytest
 from app.database import init_db, get_db_connection
 from app import workspace_repository as repo
+from app import organization_repository as org_repo
 
 
 @pytest.fixture(autouse=True)
 def _db():
     init_db()
     with get_db_connection() as conn:
+        conn.execute("DELETE FROM connections")
         conn.execute("DELETE FROM workspaces")
+        conn.execute("DELETE FROM organizations WHERE slug != 'default'")
         conn.commit()
     yield
     with get_db_connection() as conn:
+        conn.execute("DELETE FROM connections")
         conn.execute("DELETE FROM workspaces")
+        conn.execute("DELETE FROM organizations WHERE slug != 'default'")
         conn.commit()
 
 
@@ -47,8 +52,11 @@ def test_duplicate_slug_raises():
 
 def test_get_by_slug():
     repo.create_workspace("Alpha", "alpha", None)
-    assert repo.get_workspace_by_slug("alpha")["name"] == "Alpha"
-    assert repo.get_workspace_by_slug("missing") is None
+    default = org_repo.get_default_organization()
+    assert repo.get_workspace_by_slug(default["id"], "alpha")["name"] == "Alpha"
+    assert repo.get_workspace_by_slug(default["id"], "missing") is None
+    other = org_repo.create_organization("Other", "other", None)
+    assert repo.get_workspace_by_slug(other["id"], "alpha") is None
 
 
 def test_list_pagination():
@@ -79,3 +87,52 @@ def test_delete():
     assert repo.delete_workspace(ws["id"]) is True
     assert repo.get_workspace(ws["id"]) is None
     assert repo.delete_workspace(ws["id"]) is False
+
+
+def test_create_defaults_to_default_org():
+    ws = repo.create_workspace("Alpha", "alpha", None)
+    assert ws["organization_id"] == org_repo.get_default_organization()["id"]
+
+
+def test_create_unknown_org_raises():
+    with pytest.raises(repo.UnknownOrganization):
+        repo.create_workspace("Alpha", "alpha", None, organization_id="nope")
+
+
+def test_same_slug_in_two_orgs_ok_same_org_conflicts():
+    other = org_repo.create_organization("Other", "other", None)
+    a = repo.create_workspace("A", "same", None)
+    b = repo.create_workspace("B", "same", None, organization_id=other["id"])
+    assert a["organization_id"] != b["organization_id"]
+    with pytest.raises(repo.WorkspaceSlugConflict):
+        repo.create_workspace("C", "same", None, organization_id=other["id"])
+
+
+def test_list_filters_by_organization():
+    other = org_repo.create_organization("Other", "other", None)
+    repo.create_workspace("A", "a", None)
+    b = repo.create_workspace("B", "b", None, organization_id=other["id"])
+    rows = repo.list_workspaces(limit=10, offset=0, organization_id=other["id"])
+    assert [r["id"] for r in rows] == [b["id"]]
+    assert len(repo.list_workspaces(limit=10, offset=0)) == 2
+
+
+def _add_connection(workspace_id):
+    with get_db_connection() as conn:
+        conn.execute(
+            "INSERT INTO connections (id, workspace_id, connection_ref, name, dialect, "
+            "environment, host, port, database, access_mode, auth_mode, max_rows, "
+            "timeout_seconds, created_at, updated_at) "
+            "VALUES ('c1', ?, 'r', 'n', 'postgresql', 'local', 'h', 1, 'd', 'read_only', "
+            "'secret_ref', 10, 1.0, 't', 't')",
+            (workspace_id,),
+        )
+        conn.commit()
+
+
+def test_delete_in_use_raises_and_keeps_workspace():
+    ws = repo.create_workspace("Alpha", "alpha", None)
+    _add_connection(ws["id"])
+    with pytest.raises(repo.WorkspaceInUse):
+        repo.delete_workspace(ws["id"])
+    assert repo.get_workspace(ws["id"]) is not None
