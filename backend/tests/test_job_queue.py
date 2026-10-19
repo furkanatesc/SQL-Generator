@@ -121,7 +121,7 @@ def test_migration_v3_adds_queue_columns(fresh_db):
     conn = sqlite3.connect(str(fresh_db))
     cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)")}
     assert {"priority", "attempts", "next_attempt_at", "dead_lettered_at"} <= cols
-    assert [r[0] for r in conn.execute("SELECT version FROM schema_migrations")] == [1, 2, 3]
+    assert [r[0] for r in conn.execute("SELECT version FROM schema_migrations")] == [1, 2, 3, 4]
 
 
 def test_v2_database_upgrades_with_defaults(tmp_path):
@@ -131,7 +131,7 @@ def test_v2_database_upgrades_with_defaults(tmp_path):
     migrate(conn, APP_MIGRATIONS[:2])
     conn.execute("INSERT INTO jobs (id, status, created_at, updated_at) VALUES ('j', 'pending', 't', 't')")
     conn.commit()
-    assert migrate(conn, APP_MIGRATIONS).applied == [3]
+    assert migrate(conn, APP_MIGRATIONS).applied == [3, 4]
     assert conn.execute("SELECT priority, attempts FROM jobs WHERE id='j'").fetchone() == (0, 0)
 
 
