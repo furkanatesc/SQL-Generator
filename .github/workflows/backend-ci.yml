@@ -305,6 +305,8 @@ jobs:
           docker compose config -q
           # Sprint 32.11: the staging overlay must stay valid on top of the production file.
           docker compose -f docker-compose.prod.yml -f docker-compose.staging.yml config -q
+          # Sprint 32.12: the load-test overlay (rate limits off) must stay valid too.
+          docker compose -f docker-compose.prod.yml -f docker-compose.loadtest.yml config -q
 
       - name: Build and start the stack
         run: docker compose up -d --build --wait --wait-timeout 180
@@ -405,6 +407,24 @@ jobs:
           if docker compose logs --no-log-prefix backend worker | grep -qF "$NL2SQL_API_KEY"; then
             echo "API key leaked into logs"; exit 1
           fi
+
+      - name: Load test (mixed scenario)
+        run: |
+          # Sprint 32.12: recreate the backend with the rate limits off (overlay), then drive the
+          # mixed read/write scenario and gate on error rate and p95 latency.
+          docker compose -f docker-compose.prod.yml -f docker-compose.loadtest.yml up -d --wait --wait-timeout 180 backend
+          cd backend
+          python3 -m loadtest --base-url http://localhost:8000 --api-key-file ../secrets/nl2sql_api_key             --scenario mixed --concurrency 16 --duration 20             --max-error-rate 0 --max-p95-ms 2000 --json ../loadtest-report.json
+          # The stack must still be healthy after the load.
+          curl -fsS http://localhost:8000/ready | python3 -c "import json,sys; c=json.load(sys.stdin)['checks']; sys.exit(0 if all(v['status']!='fail' for v in c.values()) else 1)"
+
+      - name: Upload load test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadtest-report
+          path: loadtest-report.json
+          if-no-files-found: ignore
 
       - name: Dump logs on failure
         if: failure()
