@@ -25,7 +25,7 @@ from app.migrations.__main__ import main as cli_main
 from app.settings import get_settings
 
 APP_TABLES = {
-    "configs", "jobs", "synonym_rules", "query_traces", "feedback", "sql_cache", "workspaces",
+    "configs", "jobs", "synonym_rules", "query_traces", "feedback", "sql_cache", "workspaces", "organizations",
     "connections", "schema_syncs", "query_runs", "query_run_feedback", "api_keys",
     "job_logs",  # v2 (Sprint 32.4)
 }

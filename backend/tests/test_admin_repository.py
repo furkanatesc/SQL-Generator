@@ -29,8 +29,8 @@ def test_counts_all_keys_zero_when_empty():
 def test_counts_reflect_rows():
     with get_db_connection() as conn:
         conn.execute(
-            "INSERT INTO workspaces (id, name, slug, description, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?)",
+            "INSERT INTO workspaces (id, organization_id, name, slug, description, created_at, updated_at) "
+            "VALUES (?,(SELECT id FROM organizations WHERE slug='default'),?,?,?,?,?)",
             (uuid.uuid4().hex, "W", "w", None, "2026-01-01T00:00:00", "2026-01-01T00:00:00"),
         )
         conn.execute(
