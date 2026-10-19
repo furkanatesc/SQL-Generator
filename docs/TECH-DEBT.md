@@ -1707,3 +1707,19 @@ redaction'ı ekledi (API'de INFO log'larının hiç basılmaması hatası düzel
 7. **Harness'ta `--accept-429` yok** — rate limit'li gerçek prod stack'ine karşı 429'lar hata sayılır; ölçüm `docker-compose.loadtest.yml` overlay'iyle (yalnız CI/ölçüm) yapılır.
 8. **Half-open devre tek deneme ile sınırlı değil** (32.10'dan kalma) — aynı anda `half_open` gören birden çok thread modele gider.
    *İlgili Dosya:* `backend/app/llm/failover.py`
+
+## §49. Sprint 33.0 (Organization / Workspace Model) devirleri — AÇIK
+
+33.0 organizasyon (kiracı) varlığını, org'a ait workspace'leri (org içi tekil slug) ve silme bütünlük korumalarını ekledi. Kapsam dışı:
+
+1. **Kullanıcı / üyelik / org rolleri yok** (→ 33.1); principal kavramı yok.
+2. **26.1 TenantWorkspaceBoundary canlı enforcement yok** (→ 33.2 RBAC) — eşleme `tenant_id ≙ organization_id`, `workspace_id ≙ workspaces.id`; tüm API key'ler tüm org'ları görür.
+   *İlgili Dosya:* `backend/app/security/tenant_workspace_boundary.py`
+3. **API key'ler org'a kapsamlı değil** — 30.8 yönetilen key'ler hâlâ `verify_api_key`'e bağlı değil (§26–§34).
+4. **Workspace org'lar arası taşınamaz; org slug değişmez; soft delete yok; kaskad silme yok** (bilinçli 409).
+5. **Frontend'de org/workspace seçici yok** (frontend workspace kullanmıyor).
+6. **Legacy (pre-v1) uç noktalar ve job'lar org/workspace kapsamı dışında.**
+7. **SQL FOREIGN KEY yok** (repo geneli) — bütünlük repository'de: org silme tek koşullu DELETE, workspace oluşturma ve workspace'li connection oluşturma `BEGIN IMMEDIATE`; doğrudan SQL ile yazan yeni kod bu korumaları atlar.
+8. **`connections.connection_ref` hâlâ global UNIQUE** — workspace slug'ında kapatılan kiracılar arası 409 sızıntısının aynısı; org/workspace kapsamlı tekillik connections tablo rebuild'i ve 33.2 kapsam kararı ister.
+   *İlgili Dosya:* `backend/app/migrations/app_db.py` (baseline `connections`)
+9. **Ertelenen küçük test notları:** org silme atomiklik testi eski kodu da geçirir (gerçek interleaving testi yok); workspace 409 silme testi hata gövdesini doğrulamaz; `idx_workspaces_org` UNIQUE indeksiyle örtüşür.

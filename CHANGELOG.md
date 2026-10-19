@@ -1170,6 +1170,9 @@ ile kapanır. Durum için `ROADMAP.md`'deki tabloya bakın.
 - **API Load / Concurrency Testing** (Sprint 32.12): app DB WAL + `NL2SQL_DB_BUSY_TIMEOUT_MS`, thread-safe
   devre kesici, SSE job okuması event loop dışında; eşzamanlılık testleri; stdlib yük harness'ı
   (`python -m loadtest`); CI yük kapısı (hata oranı 0, p95 ≤ 2000 ms). (PR #199)
+- **Organization / Workspace Model** (Sprint 33.0): `/api/v1/organizations` CRUD, default org, workspace'ler
+  org'a ait (org içi tekil slug, `organization_id` alanı/filtresi), bağlantılı workspace silme 409;
+  app DB migration v4. (PR #200)
 
 **Bilinen sınır:** Sprint 27.2 öncesi kaydedilmiş trace satırları v1 kod adlarını
 taşır ve `?error_type=` filtresiyle eşleşmez; geliştirme veritabanı migrate edilmedi.
