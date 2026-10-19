@@ -1,0 +1,12 @@
+# Sprint 32.12 - load-test overlay for docker-compose.prod.yml.
+# CI / measurement only - never in production: it switches the per-client rate limits off so the
+# load harness (backend/loadtest) measures the API, not the 429 limiter.
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.loadtest.yml up -d --wait backend
+#
+# Contract guard: backend/tests/test_loadtest_ci_contract.py
+services:
+  backend:
+    environment:
+      NL2SQL_RATE_LIMIT_REQUESTS_PER_MINUTE: "0"
+      NL2SQL_RATE_LIMIT_JOBS_PER_MINUTE: "0"
