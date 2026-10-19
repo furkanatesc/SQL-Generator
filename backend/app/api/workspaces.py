@@ -25,6 +25,7 @@ class WorkspaceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     slug: Optional[str] = Field(default=None, pattern=_SLUG_PATTERN, max_length=200)
     description: Optional[str] = Field(default=None, max_length=2000)
+    organization_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class WorkspaceUpdate(BaseModel):
@@ -40,6 +41,7 @@ class WorkspaceUpdate(BaseModel):
 
 class WorkspaceResponse(BaseModel):
     id: str
+    organization_id: str
     name: str
     slug: str
     description: Optional[str] = None
@@ -51,7 +53,11 @@ class WorkspaceResponse(BaseModel):
 def create_workspace(payload: WorkspaceCreate) -> ApiResponse[WorkspaceResponse]:
     slug = payload.slug or repo.slugify(payload.name)
     try:
-        ws = repo.create_workspace(payload.name, slug, payload.description)
+        ws = repo.create_workspace(
+            payload.name, slug, payload.description, payload.organization_id
+        )
+    except repo.UnknownOrganization:
+        raise HTTPException(status_code=400, detail="organization_id mevcut değil")
     except repo.WorkspaceSlugConflict:
         raise HTTPException(status_code=409, detail=f"slug '{slug}' zaten kullanımda")
     return ApiResponse[WorkspaceResponse](data=WorkspaceResponse(**ws))
@@ -61,8 +67,11 @@ def create_workspace(payload: WorkspaceCreate) -> ApiResponse[WorkspaceResponse]
 def list_workspaces(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    organization_id: Optional[str] = Query(default=None),
 ) -> ApiResponse[list[WorkspaceResponse]]:
-    rows = repo.list_workspaces(limit=limit, offset=offset)
+    rows = repo.list_workspaces(
+        limit=limit, offset=offset, organization_id=organization_id
+    )
     data = [WorkspaceResponse(**r) for r in rows]
     meta = ResponseMeta(pagination=PageMeta(limit=limit, offset=offset, count=len(data)))
     return ApiResponse[list[WorkspaceResponse]](data=data, meta=meta)
@@ -93,6 +102,12 @@ def delete_workspace(workspace_id: str) -> ApiResponse[WorkspaceResponse]:
         raise HTTPException(status_code=404, detail="workspace bulunamadı")
     # Gate the response on the delete actually removing a row, so a concurrent
     # delete loses with a 404 instead of a stale 200.
-    if not repo.delete_workspace(workspace_id):
+    try:
+        deleted = repo.delete_workspace(workspace_id)
+    except repo.WorkspaceInUse:
+        raise HTTPException(
+            status_code=409, detail="workspace'e bağlı connection kayıtları var"
+        )
+    if not deleted:
         raise HTTPException(status_code=404, detail="workspace bulunamadı")
     return ApiResponse[WorkspaceResponse](data=WorkspaceResponse(**ws))

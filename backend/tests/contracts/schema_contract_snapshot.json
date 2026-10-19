@@ -1681,6 +1681,7 @@
     "properties": [
       "description",
       "name",
+      "organization_id",
       "slug"
     ],
     "required": [
@@ -1693,6 +1694,7 @@
       "description",
       "id",
       "name",
+      "organization_id",
       "slug",
       "updated_at"
     ],
@@ -1700,6 +1702,7 @@
       "created_at",
       "id",
       "name",
+      "organization_id",
       "slug",
       "updated_at"
     ]

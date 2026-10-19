@@ -3,7 +3,7 @@
 Single-responsibility data access for the `workspaces` table, mirroring the
 database.py sqlite idiom (get_db_connection + dict rows + column-whitelist
 dynamic UPDATE). The workspace is the top-level container later Phase 11
-resources will belong to; 30.1 keeps it standalone (no retro-scoping).
+resources belong to; since 33.0 each workspace belongs to an organization.
 """
 from __future__ import annotations
 
@@ -14,10 +14,19 @@ import uuid
 from typing import Any, Optional
 
 from app.database import get_db_connection
+from app.organization_repository import DEFAULT_ORGANIZATION_SLUG
 
 
 class WorkspaceSlugConflict(Exception):
-    """Raised when creating a workspace whose slug already exists."""
+    """Raised when the slug already exists within the organization."""
+
+
+class UnknownOrganization(Exception):
+    """Raised when creating a workspace in an organization that does not exist."""
+
+
+class WorkspaceInUse(Exception):
+    """Raised when deleting a workspace that still has connections."""
 
 
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
@@ -34,27 +43,45 @@ def _now() -> str:
     return datetime.datetime.utcnow().isoformat()
 
 
-def create_workspace(name: str, slug: str, description: Optional[str]) -> dict:
+def create_workspace(
+    name: str,
+    slug: str,
+    description: Optional[str],
+    organization_id: Optional[str] = None,
+) -> dict:
+    """Create a workspace inside an organization (None -> the default org).
+
+    Raises UnknownOrganization if the organization does not exist. The org
+    check and the insert share one write transaction (BEGIN IMMEDIATE).
+    """
     ws_id = uuid.uuid4().hex
     now = _now()
-    # The UNIQUE(slug) column + IntegrityError handler below is the sole,
-    # race-free guard against duplicate slugs (no pre-check needed).
+    # UNIQUE(organization_id, slug) + the IntegrityError handler below is the
+    # sole, race-free guard against duplicate slugs within an organization.
     try:
         with get_db_connection() as conn:
-            # Task 1 interim: workspaces are org-scoped (v4); until the public
-            # organization_id parameter lands, new workspaces go to the default org.
-            org_id = conn.execute(
-                "SELECT id FROM organizations WHERE slug = 'default'"
-            ).fetchone()[0]
+            conn.execute("BEGIN IMMEDIATE")
+            if organization_id is None:
+                org_row = conn.execute(
+                    "SELECT id FROM organizations WHERE slug = ?",
+                    (DEFAULT_ORGANIZATION_SLUG,),
+                ).fetchone()
+            else:
+                org_row = conn.execute(
+                    "SELECT id FROM organizations WHERE id = ?", (organization_id,)
+                ).fetchone()
+            if org_row is None:
+                conn.rollback()
+                raise UnknownOrganization(organization_id)
             conn.execute(
                 """
                 INSERT INTO workspaces (id, organization_id, name, slug, description, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (ws_id, org_id, name, slug, description, now, now),
+                (ws_id, org_row["id"], name, slug, description, now, now),
             )
             conn.commit()
-    except sqlite3.IntegrityError as exc:  # UNIQUE(slug) backstop against races
+    except sqlite3.IntegrityError as exc:  # UNIQUE(organization_id, slug) backstop
         raise WorkspaceSlugConflict(slug) from exc
     return get_workspace(ws_id)
 
@@ -67,19 +94,24 @@ def get_workspace(workspace_id: str) -> Optional[dict]:
         return dict(row) if row else None
 
 
-def get_workspace_by_slug(slug: str) -> Optional[dict]:
+def get_workspace_by_slug(organization_id: str, slug: str) -> Optional[dict]:
     with get_db_connection() as conn:
         row = conn.execute(
-            "SELECT * FROM workspaces WHERE slug = ?", (slug,)
+            "SELECT * FROM workspaces WHERE organization_id = ? AND slug = ?",
+            (organization_id, slug),
         ).fetchone()
         return dict(row) if row else None
 
 
-def list_workspaces(limit: int, offset: int) -> list[dict]:
+def list_workspaces(
+    limit: int, offset: int, organization_id: Optional[str] = None
+) -> list[dict]:
+    where = "WHERE organization_id = ? " if organization_id is not None else ""
+    params: tuple = (organization_id,) if organization_id is not None else ()
     with get_db_connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM workspaces ORDER BY created_at DESC, id LIMIT ? OFFSET ?",
-            (limit, offset),
+            f"SELECT * FROM workspaces {where}ORDER BY created_at DESC, id LIMIT ? OFFSET ?",
+            (*params, limit, offset),
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -117,7 +149,23 @@ def update_workspace(
 
 
 def delete_workspace(workspace_id: str) -> bool:
+    """Delete a workspace; False if absent, WorkspaceInUse if connections use it.
+
+    The in-use check and the delete are one conditional statement, so a
+    connection created concurrently cannot be orphaned.
+    """
     with get_db_connection() as conn:
-        cur = conn.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,))
+        cur = conn.execute(
+            "DELETE FROM workspaces WHERE id = ? AND NOT EXISTS "
+            "(SELECT 1 FROM connections WHERE workspace_id = ?)",
+            (workspace_id, workspace_id),
+        )
         conn.commit()
-        return cur.rowcount > 0
+        if cur.rowcount > 0:
+            return True
+        exists = conn.execute(
+            "SELECT 1 FROM workspaces WHERE id = ?", (workspace_id,)
+        ).fetchone()
+        if exists:
+            raise WorkspaceInUse(workspace_id)
+        return False
