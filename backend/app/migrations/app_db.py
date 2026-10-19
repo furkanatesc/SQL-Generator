@@ -5,7 +5,9 @@ boot, moved here verbatim. It is idempotent (`IF NOT EXISTS` + `ensure_column`) 
 created before 32.3 are adopted without data loss. Never edit a shipped migration; add a new
 version instead (see docs/database-migrations.md).
 """
+import datetime
 import sqlite3
+import uuid
 
 from app.migrations.runner import Migration, ensure_column, validate_registry
 
@@ -249,10 +251,61 @@ def _queue(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_queue ON jobs (status, priority, created_at)")
 
 
+def _organizations(conn: sqlite3.Connection) -> None:
+    """Sprint 33.0 — organizations + org-scoped workspaces (default org backfill)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS organizations (
+            id          TEXT PRIMARY KEY,
+            name        TEXT NOT NULL,
+            slug        TEXT NOT NULL UNIQUE,
+            description TEXT,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        )
+    """)
+    row = conn.execute("SELECT id FROM organizations WHERE slug = 'default'").fetchone()
+    if row is None:
+        org_id = uuid.uuid4().hex
+        now = datetime.datetime.utcnow().isoformat()
+        conn.execute(
+            "INSERT INTO organizations (id, name, slug, description, created_at, updated_at) "
+            "VALUES (?, 'Default', 'default', NULL, ?, ?)",
+            (org_id, now, now),
+        )
+    else:
+        org_id = row[0]
+
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(workspaces)")}
+    if "organization_id" not in cols:
+        conn.execute("DROP TABLE IF EXISTS workspaces_new")
+        conn.execute("""
+            CREATE TABLE workspaces_new (
+                id              TEXT PRIMARY KEY,
+                organization_id TEXT NOT NULL,
+                name            TEXT NOT NULL,
+                slug            TEXT NOT NULL,
+                description     TEXT,
+                created_at      TEXT NOT NULL,
+                updated_at      TEXT NOT NULL,
+                UNIQUE (organization_id, slug)
+            )
+        """)
+        conn.execute(
+            "INSERT INTO workspaces_new "
+            "(id, organization_id, name, slug, description, created_at, updated_at) "
+            "SELECT id, ?, name, slug, description, created_at, updated_at FROM workspaces",
+            (org_id,),
+        )
+        conn.execute("DROP TABLE workspaces")
+        conn.execute("ALTER TABLE workspaces_new RENAME TO workspaces")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_workspaces_org ON workspaces (organization_id)")
+
+
 APP_MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline", _baseline),
     Migration(2, "job_worker", _job_worker),
     Migration(3, "queue", _queue),
+    Migration(4, "organizations", _organizations),
 )
 
 validate_registry(APP_MIGRATIONS)

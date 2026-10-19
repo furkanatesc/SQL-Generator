@@ -41,12 +41,17 @@ def create_workspace(name: str, slug: str, description: Optional[str]) -> dict:
     # race-free guard against duplicate slugs (no pre-check needed).
     try:
         with get_db_connection() as conn:
+            # Task 1 interim: workspaces are org-scoped (v4); until the public
+            # organization_id parameter lands, new workspaces go to the default org.
+            org_id = conn.execute(
+                "SELECT id FROM organizations WHERE slug = 'default'"
+            ).fetchone()[0]
             conn.execute(
                 """
-                INSERT INTO workspaces (id, name, slug, description, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO workspaces (id, organization_id, name, slug, description, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (ws_id, name, slug, description, now, now),
+                (ws_id, org_id, name, slug, description, now, now),
             )
             conn.commit()
     except sqlite3.IntegrityError as exc:  # UNIQUE(slug) backstop against races
