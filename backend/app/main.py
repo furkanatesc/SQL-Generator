@@ -314,7 +314,7 @@ def get_job_detail(job_id: str):
 # 3.1. Job SSE Log Stream API
 @app.get("/api/jobs/{job_id}/stream", dependencies=[Depends(verify_api_key)])
 async def stream_job_logs(job_id: str):
-    job = get_job(job_id)
+    job = await asyncio.to_thread(get_job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job with ID '{job_id}' not found.")
         
@@ -329,7 +329,7 @@ async def stream_job_logs(job_id: str):
                 yield f"data: {json.dumps(log_entry)}\n\n"
                 
         # Eğer iş zaten tamamlanmış, hata almış veya iptal edilmişse akışı sonlandır
-        current_job = get_job(job_id)
+        current_job = await asyncio.to_thread(get_job, job_id)
         if current_job and current_job["status"] in ["completed", "failed", "cancelled"]:
             return
             
