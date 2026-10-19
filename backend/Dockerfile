@@ -5,6 +5,13 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# Sprint 32.11 — the release workflow passes the tag version; /health reports it.
+ARG APP_VERSION=0.1.0
+ENV NL2SQL_APP_VERSION=${APP_VERSION}
+LABEL org.opencontainers.image.title="sqlgen-backend" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.source="https://github.com/furkanatesc/SQL-Generator"
+
 RUN addgroup --system app && adduser --system --ingroup app app
 
 COPY requirements.txt /app/requirements.txt

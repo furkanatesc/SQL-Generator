@@ -1,0 +1,228 @@
+# Sprint 32.11 — release pipeline.
+#
+# Runs only for a version tag (`git tag v1.2.3 && git push origin v1.2.3`) or a manual dispatch:
+#   verify -> publish (GHCR images) -> staging-smoke (pulls the *published* images) -> github-release (tags only)
+# Contract guard: backend/tests/test_release_pipeline_contract.py
+# Runbook: docs/production-runbook.md ("Releases")
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (semver, without the leading v), e.g. 1.2.3"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      registry: ${{ steps.meta.outputs.registry }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version and registry
+        id: meta
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            version="$INPUT_VERSION"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "invalid version: $version"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "registry=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Backend tests
+        working-directory: backend
+        env:
+          NL2SQL_DEBUG_ENDPOINTS_ENABLED: "true"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pytest -q
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  publish:
+    name: Publish images
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ needs.verify.outputs.version }}
+      registry: ${{ needs.verify.outputs.registry }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Backend image tags
+        id: backend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.verify.outputs.registry }}sqlgen-backend
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.verify.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.verify.outputs.version }}
+            type=sha
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          build-args: |
+            APP_VERSION=${{ needs.verify.outputs.version }}
+          tags: ${{ steps.backend-meta.outputs.tags }}
+          labels: ${{ steps.backend-meta.outputs.labels }}
+
+      - name: Frontend image tags
+        id: frontend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.verify.outputs.registry }}sqlgen-frontend
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.verify.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.verify.outputs.version }}
+            type=sha
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          build-args: |
+            APP_VERSION=${{ needs.verify.outputs.version }}
+          tags: ${{ steps.frontend-meta.outputs.tags }}
+          labels: ${{ steps.frontend-meta.outputs.labels }}
+
+  staging-smoke:
+    name: Staging smoke (published images)
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    env:
+      COMPOSE_FILE: docker-compose.prod.yml:docker-compose.staging.yml
+      SQLGEN_IMAGE_REGISTRY: ${{ needs.publish.outputs.registry }}
+      SQLGEN_IMAGE_TAG: ${{ needs.publish.outputs.version }}
+      NL2SQL_API_KEY: release-staging-smoke-key
+      SQLGEN_API_KEY_SECRET_FILE: ./secrets/nl2sql_api_key
+      NL2SQL_CORS_ALLOW_ORIGINS: '["http://localhost:8080"]'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write the API key secret
+        run: |
+          mkdir -p secrets
+          printf '%s\n' "$NL2SQL_API_KEY" > secrets/nl2sql_api_key
+          chmod 0444 secrets/nl2sql_api_key
+
+      - name: Pull and start the published images (no build)
+        run: |
+          docker compose config -q
+          docker compose pull backend worker frontend
+          docker compose up -d --no-build --wait --wait-timeout 180
+
+      - name: Smoke
+        run: |
+          curl -fsS http://localhost:8000/health \
+            | python3 -c "import json,sys,os; v=json.load(sys.stdin)['version']; sys.exit(0 if v==os.environ['SQLGEN_IMAGE_TAG'] else 1)"
+          curl -fsS http://localhost:8000/ready \
+            | python3 -c "import json,sys; c=json.load(sys.stdin)['checks']; sys.exit(0 if all(v['status']!='fail' for v in c.values()) else 1)"
+          curl -fsS http://localhost:8080/ | grep -qi "<div id=\"app\""
+          job_id=$(curl -fsS -X POST http://localhost:8000/api/jobs/without-file \
+            -H "X-API-Key: $NL2SQL_API_KEY" -H "Content-Type: application/json" \
+            -d '{"natural_query":"staging smoke"}' | python3 -c "import json,sys; print(json.load(sys.stdin)['job']['id'])")
+          for i in {1..30}; do
+            status=$(curl -fsS "http://localhost:8000/api/jobs/$job_id" -H "X-API-Key: $NL2SQL_API_KEY" \
+              | python3 -c "import json,sys; print(json.load(sys.stdin)['status'])")
+            [ "$status" = failed ] && break
+            sleep 1
+          done
+          test "$status" = failed
+          docker compose logs worker | grep -q "running job $job_id"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  github-release:
+    name: GitHub Release
+    needs: [publish, staging-smoke]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create release with generated notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGES: ${{ needs.publish.outputs.registry }}sqlgen-backend:${{ needs.publish.outputs.version }}, ${{ needs.publish.outputs.registry }}sqlgen-frontend:${{ needs.publish.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+            --notes "Images: $IMAGES"

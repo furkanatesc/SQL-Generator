@@ -1,0 +1,22 @@
+# Sprint 32.11 — staging overlay for docker-compose.prod.yml.
+#
+# Separate compose project (own volumes/network), production-like environment (every production
+# safety check stays on), normally run with released images:
+#
+#   docker compose --env-file .env.staging -f docker-compose.prod.yml -f docker-compose.staging.yml pull
+#   docker compose --env-file .env.staging -f docker-compose.prod.yml -f docker-compose.staging.yml up -d --no-build --wait
+#
+# `.env.staging` uses the same variables as `.env.prod.example` with other host ports (e.g.
+# SQLGEN_BACKEND_PORT=8100, SQLGEN_FRONTEND_PORT=8180) and its own API key file, so staging can run
+# next to production on one host. Runbook: docs/production-runbook.md ("Staging").
+# Contract guard: backend/tests/test_release_pipeline_contract.py
+
+name: sqlgen-staging
+
+services:
+  backend:
+    environment:
+      NL2SQL_ENVIRONMENT: production-staging
+  worker:
+    environment:
+      NL2SQL_ENVIRONMENT: production-staging
