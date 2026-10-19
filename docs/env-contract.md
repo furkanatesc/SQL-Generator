@@ -131,7 +131,8 @@ Docker secret: compose pins `NL2SQL_API_KEY_FILE=/run/secrets/nl2sql_api_key` an
 `SQLGEN_API_KEY_SECRET_FILE` (host path of the key file, readable by the container's non-root user,
 e.g. mode `0444`); `NL2SQL_API_KEY` is no longer passed as an env value. Compose-only
 variables: `SQLGEN_API_KEY_SECRET_FILE`, `SQLGEN_BACKEND_PORT` (default `8000`), `SQLGEN_FRONTEND_PORT`
-(default `8080`), `SQLGEN_IMAGE_TAG` (default `latest`). Every variable it references is documented in
+(default `8080`), `SQLGEN_IMAGE_TAG` (default `latest`), `SQLGEN_IMAGE_REGISTRY` (Sprint 32.11; default empty =
+locally built images, e.g. `ghcr.io/<owner>/` for released images). Every variable it references is documented in
 `.env.prod.example` (enforced by `backend/tests/test_prod_compose_contract.py`).
 
 Since Sprint 32.4 both `backend` and the new `worker` service pin `NL2SQL_JOB_EXECUTION_MODE=worker`.

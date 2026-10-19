@@ -301,7 +301,10 @@ jobs:
           chmod 0444 secrets/nl2sql_api_key
 
       - name: Validate compose file
-        run: docker compose config -q
+        run: |
+          docker compose config -q
+          # Sprint 32.11: the staging overlay must stay valid on top of the production file.
+          docker compose -f docker-compose.prod.yml -f docker-compose.staging.yml config -q
 
       - name: Build and start the stack
         run: docker compose up -d --build --wait --wait-timeout 180

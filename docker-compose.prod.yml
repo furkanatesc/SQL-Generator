@@ -5,6 +5,8 @@
 #   cp .env.prod.example .env      # fill in real values; .env is gitignored
 #   mkdir -p secrets && openssl rand -hex 32 > secrets/nl2sql_api_key && chmod 0444 secrets/nl2sql_api_key
 #   docker compose -f docker-compose.prod.yml up -d --build --wait
+#   # or run released images (Sprint 32.11): set SQLGEN_IMAGE_REGISTRY + SQLGEN_IMAGE_TAG, then
+#   docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d --no-build --wait
 #
 # Contract guard: backend/tests/test_prod_compose_contract.py
 # Runbook:        docs/production-runbook.md ("Docker Compose (Production)")
@@ -12,7 +14,7 @@
 services:
   backend:
     build: ./backend
-    image: sqlgen-backend:${SQLGEN_IMAGE_TAG:-latest}
+    image: ${SQLGEN_IMAGE_REGISTRY:-}sqlgen-backend:${SQLGEN_IMAGE_TAG:-latest}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -59,7 +61,7 @@ services:
   # (built by it). Scale with `--scale worker=N` (claims are atomic). No Qdrant volume: the
   # job pipeline does not use RAG, and the embedded Qdrant store is single-process.
   worker:
-    image: sqlgen-backend:${SQLGEN_IMAGE_TAG:-latest}
+    image: ${SQLGEN_IMAGE_REGISTRY:-}sqlgen-backend:${SQLGEN_IMAGE_TAG:-latest}
     pull_policy: never
     command: ["python", "-m", "app.jobs.worker"]
     restart: unless-stopped
@@ -90,7 +92,7 @@ services:
 
   frontend:
     build: ./frontend
-    image: sqlgen-frontend:${SQLGEN_IMAGE_TAG:-latest}
+    image: ${SQLGEN_IMAGE_REGISTRY:-}sqlgen-frontend:${SQLGEN_IMAGE_TAG:-latest}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
