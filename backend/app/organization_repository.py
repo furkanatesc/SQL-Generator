@@ -64,6 +64,8 @@ def get_default_organization() -> dict:
         row = conn.execute(
             "SELECT * FROM organizations WHERE slug = ?", (DEFAULT_ORGANIZATION_SLUG,)
         ).fetchone()
+        if row is None:
+            raise RuntimeError("default organization missing — run migrations")
         return dict(row)
 
 
@@ -107,7 +109,23 @@ def update_organization(
 
 
 def delete_organization(organization_id: str) -> bool:
+    # One conditional DELETE: the default/in-use guards and the delete are a
+    # single atomic statement, so a workspace inserted concurrently cannot be
+    # orphaned (no SQL FOREIGN KEY; this is the only guard).
     with get_db_connection() as conn:
+        cur = conn.execute(
+            """
+            DELETE FROM organizations
+            WHERE id = ? AND slug != ?
+              AND NOT EXISTS (
+                SELECT 1 FROM workspaces WHERE organization_id = organizations.id
+              )
+            """,
+            (organization_id, DEFAULT_ORGANIZATION_SLUG),
+        )
+        conn.commit()
+        if cur.rowcount > 0:
+            return True
         row = conn.execute(
             "SELECT slug FROM organizations WHERE id = ?", (organization_id,)
         ).fetchone()
@@ -115,12 +133,4 @@ def delete_organization(organization_id: str) -> bool:
             return False
         if row["slug"] == DEFAULT_ORGANIZATION_SLUG:
             raise DefaultOrganizationProtected(organization_id)
-        used = conn.execute(
-            "SELECT 1 FROM workspaces WHERE organization_id = ? LIMIT 1",
-            (organization_id,),
-        ).fetchone()
-        if used:
-            raise OrganizationInUse(organization_id)
-        cur = conn.execute("DELETE FROM organizations WHERE id = ?", (organization_id,))
-        conn.commit()
-        return cur.rowcount > 0
+        raise OrganizationInUse(organization_id)
