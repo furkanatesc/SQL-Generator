@@ -41,3 +41,16 @@ graphify-out/
 
 # Docker secret files for docker-compose.prod.yml (Sprint 32.2)
 /secrets/
+# Internal process docs (kept locally, not published)
+/ROADMAP.md
+/CHANGELOG.md
+/docs/PLANNED-SPRINTS.md
+/docs/SPRINT-PR-LOG.md
+/docs/TECH-DEBT.md
+/docs/superpowers/
+/docs/archive/
+/docs/product-v1-rc-checklist.md
+/docs/product-v1-rc-verification.md
+/docs/product-v1-release-decision.md
+/.ai-review/
+/.gemini/

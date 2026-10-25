@@ -72,7 +72,7 @@ docker compose -f docker-compose.prod.yml up -d --build --wait
 - [Environment variables](docs/env-contract.md)
 - [Production runbook](docs/production-runbook.md)
 - [Database migrations](docs/database-migrations.md)
-- [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md)
+- [Release notes](docs/product-v1-release-notes.md) · [Known limitations](docs/product-v1-known-limitations.md)
 
 ### License
 
